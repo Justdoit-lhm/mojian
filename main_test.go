@@ -216,7 +216,7 @@ func TestView(t *testing.T) {
 	}
 }
 
-func TestNewTabButton(t *testing.T) {
+func TestNewTabIsEmpty(t *testing.T) {
 	registerFonts()
 	a := newProjectApp(t)
 	tt := ui.NewTester(a.view, 1100, 700)
@@ -228,5 +228,12 @@ func TestNewTabButton(t *testing.T) {
 	tt.Frame()
 	if got := len(a.tabs); got != before+1 {
 		t.Fatalf("tabs after New Tab: %d, want %d", got, before+1)
+	}
+	tb := a.tab()
+	if tb.Root != nil || len(tb.panes()) != 0 || a.currentNote() != nil {
+		t.Fatalf("the new tab copied a scene: %+v", tb)
+	}
+	if !tt.HasText("No file open") {
+		t.Fatalf("empty tab texts: %q", tt.Texts())
 	}
 }

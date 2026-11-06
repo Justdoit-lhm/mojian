@@ -84,7 +84,10 @@ func (a *app) tabStrip(c *ui.Context, k *colors) {
 func tabWidth(c *ui.Context, t *tab) float32 {
 	name, detail := t.label()
 	w, _ := c.MeasureText(0, tabLabel(name, detail, ui.Color{}, ui.Color{})...)
-	tiles := float32(tileW + tileStep*min(len(t.panes())-1, 2) + 2)
+	tiles := float32(0)
+	if n := len(t.panes()); n > 0 {
+		tiles = float32(tileW + tileStep*min(n-1, 2) + 2)
+	}
 	return min(max(6+tiles+9+w+9+18+10, tabMinW), tabMaxW)
 }
 
@@ -226,6 +229,9 @@ func (a *app) tabMenu(m *ui.Menu, t *tab) {
 // the others peeking out behind it.
 func (a *app) tiles(c *ui.Context, k *colors, t *tab) {
 	panes := t.panes()
+	if len(panes) == 0 {
+		return
+	}
 	n := min(len(panes), 3)
 	w := float32(tileW + tileStep*(n-1))
 	b := ui.Box(c).Width(w).Height(tileH).Shrink(0)

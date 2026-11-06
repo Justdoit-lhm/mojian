@@ -23,8 +23,9 @@ workspaces hold panes, and every pane edits a file with syntax highlighting.
   instead of scrolling sideways. File rows use Material Icon Theme's
   per-language icons.
 - **Tabs and split panes.** A tab is a workspace; each pane is an editor.
-  Split right or down and choose the file for the new pane; a split never opens
-  the same file twice. A tab holds at most four panes. Drag the divider,
+  The `+` beside the tabs opens an empty workspace, not a copy of the current
+  one. Split right or down and choose the file for the new pane; a split never
+  opens the same file twice. A tab holds at most four panes. Drag the divider,
   double-click it for half and half, zoom a pane, or close it.
 - **A terminal inside the window.** `⇧⌘T` opens a terminal pane on the right,
   in the selected folder. It shares the tab's four-pane limit and the same
@@ -32,10 +33,11 @@ workspaces hold panes, and every pane edits a file with syntax highlighting.
   real terminal (the MyGo terminal plugin, libghostty-vt) with colors,
   selection and clipboard.
 - **A Git diff page.** `⇧⌘G` shows the working tree against `HEAD`: changed
-  files on the left, a colored unified diff on the right, with branch, status,
-  refresh and untracked files. Double-click a changed file to open it.
-- **Plain files, saved automatically.** Saving is atomic and automatic; the
-  layout comes back after a restart.
+  files on the left, and a line-numbered diff with tinted additions and
+  deletions on the right. The header shows the branch, file count, status,
+  change stats and an Open action; double-click a changed file to open it.
+- **Plain files, saved when you ask.** `⌘S` writes atomically; edits stay in
+  memory until you save. The layout comes back after a restart.
 - **A command palette.** `⇧⌘P` runs every command and jumps to any file or tab.
 - **Light, dark, or the system.** Both palettes are hand-tuned; the window
   follows the system by default, and View ▸ Appearance overrides it.
@@ -95,7 +97,7 @@ touched; projects, Git and terminals need the desktop app.
 | | |
 |---|---|
 | `main.go` | the app, its window, menus, commands and lifecycle |
-| `store.go` | a project folder: text files, new notes, atomic saves, autosave |
+| `store.go` | a project folder: text files, new notes and atomic saves |
 | `tree.go` | the file tree, folder creation and file search |
 | `project.go` | the project switcher and recent projects |
 | `term.go` | the terminal pane, via MyGo's terminal plugin |

@@ -48,7 +48,7 @@ func (a *app) view(c *ui.Context) {
 	a.splitPicker(c, k)
 	a.palette(c, k)
 	a.shortcuts(c)
-	a.autosave(c)
+	a.persistLayout(c)
 	a.updateTitle()
 }
 
@@ -68,6 +68,10 @@ func (a *app) titleBar(c *ui.Context, k *colors) {
 			Cursor(ui.CursorGrab).Description("Drag Window")
 		a.projectChip(c, k)
 		a.tabStrip(c, k)
+		if iconButton(c, k, "plus", "New Tab", 26, 16).
+			Tooltip(tip("New Tab", cmdNewTab)).Clicked() {
+			a.later(func() { a.newTab() })
+		}
 		// The title bar between the tabs and the buttons drags the
 		// window, and a double click on it zooms the window.
 		ui.Box(c).Grow(1).MinWidth(24)
@@ -89,10 +93,6 @@ func (a *app) titleBar(c *ui.Context, k *colors) {
 					Tooltip(tip("Toggle Terminal", cmdTerminal)).Clicked() {
 					a.later(func() { a.toggleTerminal() })
 				}
-			}
-			if iconButton(c, k, "plus", "New Tab", 30, 17).
-				Tooltip(tip("New Tab", cmdNewTab)).Clicked() {
-				a.later(func() { a.newTab() })
 			}
 		})
 	})
@@ -130,6 +130,10 @@ func iconButton(c *ui.Context, k *colors, name, label string, size, iconSize flo
 
 // tabContent lays out the panes of a tab, or the one zoomed.
 func (a *app) tabContent(c *ui.Context, k *colors, t *tab) {
+	if t.Root == nil {
+		a.emptyState(c, k)
+		return
+	}
 	if t.Zoom != nil {
 		a.paneCard(c, k, t, t.Zoom).Grow(1)
 		return
@@ -245,7 +249,6 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 			st.Font = noteFont
 			st.Label = p.Note.Title
 			st.OnInput = func(ui.InputEvent) bool {
-				a.scheduleSave()
 				return false
 			}
 			tv := editor.View(c, st).Fill()

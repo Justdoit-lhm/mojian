@@ -14,7 +14,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sync/atomic"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -100,8 +99,7 @@ type app struct {
 
 	layoutDirty bool
 	lastChange  time.Time
-	saveTimer   *time.Timer
-	saveTick    atomic.Bool
+	layoutTimer *time.Timer
 	loaded      bool
 	pending     []func()
 
@@ -173,13 +171,19 @@ func (a *app) open() {
 		a.revealTab = true
 		a.saveLayout()
 	}
+	a.win = a.createWindow("main")
+	a.updateTitle()
+}
+
+// createWindow opens a window for this app instance.
+func (a *app) createWindow(stateKey string) *mygo.Window {
 	win := mygo.NewWindow(mygo.WindowOptions{
 		Title:                "Mojian",
 		Width:                1120,
 		Height:               720,
 		MinWidth:             760,
 		MinHeight:            460,
-		StateKey:             "main",
+		StateKey:             stateKey,
 		TitleBarStyle:        mygo.TitleBarHidden,
 		TrafficLightPosition: &mygo.Point{X: 16, Y: 15},
 		BackgroundColor:      "light-dark(#efe1e6, #231e27)",
@@ -189,21 +193,26 @@ func (a *app) open() {
 	win.OnFocus(func() {
 		a.refreshProject()
 	})
-	a.updateTitle()
 	win.OnClosed(func() {
-		a.saveNow()
-		a.closeTerminals()
-		if a.saveTimer != nil {
-			a.saveTimer.Stop()
-			a.saveTimer = nil
-		}
-		a.win = nil
-		a.focusReq = nil
-		a.paletteOpen = false
-		a.projectOpen = false
-		a.treeDraft = nil
-		a.rename = nil
+		a.windowClosed()
 	})
+	return win
+}
+
+// windowClosed clears the window state, keeping the tabs for a reopen.
+func (a *app) windowClosed() {
+	a.saveNow()
+	a.closeTerminals()
+	if a.layoutTimer != nil {
+		a.layoutTimer.Stop()
+		a.layoutTimer = nil
+	}
+	a.win = nil
+	a.focusReq = nil
+	a.paletteOpen = false
+	a.projectOpen = false
+	a.treeDraft = nil
+	a.rename = nil
 }
 
 // settingsFile is what the app keeps between launches.
@@ -341,7 +350,6 @@ func (a *app) saveNow() {
 			log.Print(err)
 		}
 	}
-	a.saveTick.Store(false)
 	if a.layoutDirty {
 		a.saveLayout()
 		a.layoutDirty = false
@@ -385,57 +393,41 @@ func (a *app) runPending() {
 	}
 }
 
-// changed marks the layout for saving and schedules the redraw that lets
-// the autosave run after a pause in typing.
+// changed marks the layout for saving and schedules the frame that
+// persists it after the pointer or keyboard settles.
 func (a *app) changed() {
 	a.layoutDirty = true
 	a.lastChange = time.Now()
-	a.scheduleSave()
+	a.scheduleLayoutSave()
 }
 
-func (a *app) scheduleSave() {
+func (a *app) scheduleLayoutSave() {
 	win := a.win
 	if win == nil {
 		return
 	}
 	// The timer outlives a single frame. Recreate it for a reopened
 	// window rather than waking one that is gone.
-	if a.saveTimer == nil {
-		a.saveTimer = time.AfterFunc(800*time.Millisecond, func() {
-			a.saveTick.Store(true)
+	if a.layoutTimer == nil {
+		a.layoutTimer = time.AfterFunc(700*time.Millisecond, func() {
 			win.Update(func() {})
 		})
 		return
 	}
-	a.saveTimer.Reset(800 * time.Millisecond)
+	a.layoutTimer.Reset(700 * time.Millisecond)
 }
 
-// autosave writes the files and the layout once editing has paused. The
-// timer that wakes the frame is the only path into the vault scan, so a
-// frame that merely animates or hovers does not read every note.
-func (a *app) autosave(c *ui.Context) {
-	now := time.Now()
-	if a.saveTick.Swap(false) && a.store != nil {
-		saved := false
-		for _, n := range a.store.notes {
-			if !n.dirty() {
-				continue
-			}
-			if err := a.store.save(n); err != nil {
-				a.err = err.Error()
-				a.invalidate()
-				continue
-			}
-			saved = true
-		}
-		if saved {
-			a.invalidate()
-		}
+// persistLayout writes the window layout after a change settles. File
+// contents are written only by an explicit save.
+func (a *app) persistLayout(c *ui.Context) {
+	if !a.layoutDirty {
+		return
 	}
-	if a.layoutDirty && now.Sub(a.lastChange) > 550*time.Millisecond {
-		a.saveLayout()
-		a.layoutDirty = false
+	if time.Since(a.lastChange) < 550*time.Millisecond {
+		return
 	}
+	a.saveLayout()
+	a.layoutDirty = false
 }
 
 // tab returns the active workspace.
@@ -469,29 +461,16 @@ func (a *app) focusFirstNote() {
 	a.revealInTree(notes[0])
 }
 
-// newTab opens a workspace with the focused note.
+// newTab adds an empty workspace to the right of the tabs. It does not
+// copy the current file; picking or creating a file fills it.
 func (a *app) newTab() {
 	a.gitOpen = false
-	n := a.currentNote()
-	if n == nil {
-		if a.store == nil {
-			return
-		}
-		var err error
-		if n, err = a.store.newNote(); err != nil {
-			a.fail(err)
-			return
-		}
-	}
-	t := newTab(n)
+	t := &tab{ID: nextID("t")}
 	a.tabs = append(a.tabs, t)
 	a.active = len(a.tabs) - 1
-	a.focusReq = t.editorPane()
+	a.focusReq = nil
 	a.revealTab = true
 	a.treeDraft = nil
-	if t.Focus != nil {
-		a.revealInTree(t.Focus.Note)
-	}
 	a.changed()
 }
 
@@ -571,11 +550,6 @@ func (a *app) closeTab(t *tab) {
 		return
 	}
 	for _, p := range t.panes() {
-		if p.Note != nil && p.Note.dirty() {
-			if err := a.store.save(p.Note); err != nil {
-				a.fail(err)
-			}
-		}
 		if p.Term != nil && p.Term.Term != nil {
 			_ = p.Term.Term.Close()
 		}
@@ -613,11 +587,6 @@ func (a *app) closePane(p *pane) {
 	for _, t := range a.tabs {
 		if !t.contains(p) {
 			continue
-		}
-		if p.Note != nil && p.Note.dirty() {
-			if err := a.store.save(p.Note); err != nil {
-				a.fail(err)
-			}
 		}
 		if p.Term != nil && p.Term.Term != nil {
 			_ = p.Term.Term.Close()
@@ -787,7 +756,9 @@ func (a *app) menu() *mygo.Menu {
 			item(cmdCloseTab),
 			mygo.Separator(),
 			item(cmdTerminal),
-			{Label: "Reveal Project", Click: func(*mygo.MenuItem, *mygo.Window) { a.revealVault() }},
+			{Label: "Reveal Project", Click: func(*mygo.MenuItem, *mygo.Window) {
+				a.revealVault()
+			}},
 		}},
 		{Label: "Edit", Submenu: []*mygo.MenuItem{
 			{Role: mygo.RoleUndo},

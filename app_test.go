@@ -182,7 +182,7 @@ func TestCloseActiveTabPicksNext(t *testing.T) {
 	}
 }
 
-func TestAutosaveThroughFrame(t *testing.T) {
+func TestEditsWaitForExplicitSave(t *testing.T) {
 	registerFonts()
 	a := newProjectApp(t)
 	tt := ui.NewTester(a.view, 1100, 700)
@@ -191,22 +191,34 @@ func TestAutosaveThroughFrame(t *testing.T) {
 	if n.buf == nil {
 		t.Fatal("the editor buffer was not made")
 	}
-	body := "# Saved by autosave\n\nBody.\n"
+	body := "# Saved only on request\n\nBody.\n"
 	n.buf.Set(body)
 	if !n.dirty() {
 		t.Fatal("the edited file is not dirty")
 	}
-	a.saveTick.Store(true)
-	tt.Frame()
+	for range 2 {
+		tt.Frame()
+	}
 	data, err := os.ReadFile(n.Path)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if string(data) == body {
+		t.Fatal("editing wrote the file without an explicit save")
+	}
+	if !n.dirty() {
+		t.Fatal("the edited file is no longer dirty")
+	}
+	a.saveNow()
+	data, err = os.ReadFile(n.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if string(data) != body {
-		t.Fatalf("file: %q", data)
+		t.Fatalf("file after save: %q", data)
 	}
 	if n.dirty() {
-		t.Error("file still dirty after autosave")
+		t.Error("file still dirty after save")
 	}
 }
 
