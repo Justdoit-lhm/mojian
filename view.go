@@ -65,7 +65,7 @@ func (a *app) titleBar(c *ui.Context, k *colors) {
 		// The title bar band right of the traffic lights moves the
 		// window, and leaves the corner itself to the resize edge.
 		ui.Box(c).Width(dragW).Height(titleH).DragWindow().
-			Cursor(ui.CursorGrab).Tooltip("Drag Window")
+			Cursor(ui.CursorGrab).Description("Drag Window")
 		a.projectChip(c, k)
 		a.tabStrip(c, k)
 		// The title bar between the tabs and the buttons drags the
