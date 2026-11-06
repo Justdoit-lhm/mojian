@@ -1,6 +1,8 @@
 {
   "name": "Mojian",
-  "identifier": "com.example.mojian",
+  "identifier": "dev.mojian.app",
   "version": "0.1.0",
-  "out": "build"
+  "copyright": "Mojian, a quiet Markdown workspace built with MyGo",
+  "out": "build",
+  "macos": { "minimumSystemVersion": "13.0" }
 }
