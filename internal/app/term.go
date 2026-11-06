@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"errors"
@@ -160,7 +160,7 @@ func (a *app) addTerminalPane(tt *termTab) *pane {
 	}
 	t.Zoom = nil
 	t.Focus = p
-	a.gitOpen = false
+	a.git.Open = false
 	a.focusReq = p
 	a.changed()
 	a.invalidate()
@@ -183,7 +183,7 @@ func (a *app) startTerminal() (*termTab, error) {
 	}
 	term, err := terminal.New(terminal.Options{
 		Dir:         dir,
-		Font:        terminal.Font{Size: 12.5},
+		Font:        terminal.Font{Size: float32(a.termFontSize())},
 		Transparent: true,
 		Padding:     terminal.Padding{X: 10, Y: 8},
 		OnExit: func(int) {

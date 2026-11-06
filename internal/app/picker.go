@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"fmt"
@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+
+	"mojian/internal/icons"
 )
 
 type pickerEntry struct {
@@ -120,15 +122,15 @@ func (a *app) projectPickerModal(c *ui.Context, k *colors) {
 		return
 	}
 	ui.DialogBase(c, &a.projectPicker, func(backdrop, panel ui.Element) {
-		backdrop.Background(k.backdrop)
-		panel.Fill().Margin(18).Radius(18).Background(k.sheet).Border(1, k.panelBorder).
-			Shadow(0, 24, 70, -10, k.shadowFocused).Clip()
+		backdrop.Background(k.Backdrop)
+		panel.Fill().Margin(18).Radius(18).Background(k.Sheet).Border(1, k.PanelBorder).
+			Shadow(0, 24, 70, -10, k.ShadowFocused).Clip()
 		ui.Column(c).Fill().Children(func() {
 			a.pickerHeader(c, k)
 			ui.Divider(c)
 			ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
 				a.pickerRail(c, k)
-				ui.Box(c).Width(1).FillHeight().Background(k.panelBorder)
+				ui.Box(c).Width(1).FillHeight().Background(k.PanelBorder)
 				a.pickerMain(c, k)
 			})
 			ui.Divider(c)
@@ -139,13 +141,13 @@ func (a *app) projectPickerModal(c *ui.Context, k *colors) {
 
 func (a *app) pickerHeader(c *ui.Context, k *colors) {
 	ui.Row(c).Height(60).Padding(0, 18, 0, 12).Gap(11).AlignItems(ui.Center).Children(func() {
-		ui.Box(c).Size(34, 34).Radius(9).Background(k.hover).Center().Children(func() {
-			ui.Icon(c, folderIcon()).Size(18, 18).TextColor(k.textMuted)
+		ui.Box(c).Size(34, 34).Radius(9).Background(k.Hover).Center().Children(func() {
+			ui.Icon(c, icons.FolderIcon()).Size(18, 18).TextColor(k.TextMuted)
 		})
 		ui.Column(c).Gap(1).Children(func() {
-			ui.Text(c, "Open Folder").FontSize(15).FontWeight(650).TextColor(k.text)
+			ui.Text(c, "Open Folder").FontSize(15).FontWeight(650).TextColor(k.Text)
 			ui.Text(c, "Choose a folder to open as the project").
-				FontSize(11.5).TextColor(k.textFaint)
+				FontSize(11.5).TextColor(k.TextFaint)
 		})
 		ui.Spacer(c)
 		if iconButton(c, k, "x", "Close", 28, 15).Clicked() {
@@ -156,7 +158,7 @@ func (a *app) pickerHeader(c *ui.Context, k *colors) {
 
 func (a *app) pickerRail(c *ui.Context, k *colors) {
 	ui.Column(c).Width(190).Shrink(0).FillHeight().Padding(12, 10).Gap(2).Children(func() {
-		ui.Text(c, "PLACES").FontSize(10).FontWeight(650).TextColor(k.textFaint).
+		ui.Text(c, "PLACES").FontSize(10).FontWeight(650).TextColor(k.TextFaint).
 			Padding(2, 8, 4, 8)
 		home, _ := os.UserHomeDir()
 		for _, place := range []struct{ label, path string }{
@@ -170,7 +172,7 @@ func (a *app) pickerRail(c *ui.Context, k *colors) {
 		recent := a.recentProjects()
 		if len(recent) > 0 {
 			ui.Divider(c).Margin(6, 4)
-			ui.Text(c, "RECENT").FontSize(10).FontWeight(650).TextColor(k.textFaint).
+			ui.Text(c, "RECENT").FontSize(10).FontWeight(650).TextColor(k.TextFaint).
 				Padding(2, 8, 4, 8)
 			for i, p := range recent {
 				if i >= 5 {
@@ -193,16 +195,16 @@ func (a *app) pickerPlace(c *ui.Context, k *colors, label, path string) {
 	row := ui.Row(c.Key("place:"+path)).Height(30).Padding(0, 8).Gap(8).Radius(7).
 		AlignItems(ui.Center).Cursor(ui.CursorPointer).Role(ui.RoleButton).Label(label)
 	if current {
-		row.Background(k.panelSel)
+		row.Background(k.PanelSel)
 	} else if row.Hovered() {
-		row.Background(k.hover)
+		row.Background(k.Hover)
 	}
 	if row.Clicked() {
 		a.later(func() { a.setPickerPath(path) })
 	}
 	row.Children(func() {
-		ui.Icon(c, folderIcon()).Size(15, 15).TextColor(k.textMuted)
-		ui.Text(c, label).FontSize(12.5).TextColor(k.text)
+		ui.Icon(c, icons.FolderIcon()).Size(15, 15).TextColor(k.TextMuted)
+		ui.Text(c, label).FontSize(12.5).TextColor(k.Text)
 	})
 }
 
@@ -211,15 +213,15 @@ func (a *app) pickerRecent(c *ui.Context, k *colors, path string) {
 		AlignItems(ui.Center).Cursor(ui.CursorPointer).Role(ui.RoleButton).
 		Label(a.projectLabel(path)).Tooltip(shortPath(path))
 	if row.Hovered() {
-		row.Background(k.hover)
+		row.Background(k.Hover)
 	}
 	if row.Clicked() {
 		a.projectPicker = false
 		a.later(func() { a.openProject(path) })
 	}
 	row.Children(func() {
-		ui.Icon(c, folderIcon()).Size(15, 15).TextColor(k.textMuted)
-		ui.Text(c, a.projectLabel(path)).FontSize(12.5).TextColor(k.text).
+		ui.Icon(c, icons.FolderIcon()).Size(15, 15).TextColor(k.TextMuted)
+		ui.Text(c, a.projectLabel(path)).FontSize(12.5).TextColor(k.Text).
 			SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
 	})
 }
@@ -232,9 +234,9 @@ func (a *app) pickerMain(c *ui.Context, k *colors) {
 				a.later(func() { a.pickerUp() })
 			}
 			field := ui.Row(c).Grow(1).Height(34).Padding(0, 10).Gap(7).Radius(8).
-				Background(k.hover).AlignItems(ui.Center)
+				Background(k.Hover).AlignItems(ui.Center)
 			field.Children(func() {
-				ui.Icon(c, folderIcon()).Size(14, 14).TextColor(k.textFaint)
+				ui.Icon(c, icons.FolderIcon()).Size(14, 14).TextColor(k.TextFaint)
 				in := ui.TextInputBase(c, &a.pickerInput).Grow(1).FontSize(12.5).
 					Placeholder("Folder path").AutoFocus()
 				if in.Submitted() {
@@ -243,13 +245,13 @@ func (a *app) pickerMain(c *ui.Context, k *colors) {
 			})
 		})
 		if a.pickerErr != "" {
-			ui.Text(c, a.pickerErr).FontSize(11.5).TextColor(k.danger).
+			ui.Text(c, a.pickerErr).FontSize(11.5).TextColor(k.Danger).
 				SingleLine().Ellipsis("…")
 		}
 		list := ui.Scroll(c).Grow(1).MinHeight(0).Padding(0, 2)
 		list.Children(func() {
 			if len(a.pickerEntries) == 0 {
-				ui.Text(c, "No subfolders").FontSize(12.5).TextColor(k.textFaint).
+				ui.Text(c, "No subfolders").FontSize(12.5).TextColor(k.TextFaint).
 					Padding(10, 8)
 				return
 			}
@@ -260,9 +262,9 @@ func (a *app) pickerMain(c *ui.Context, k *colors) {
 					Radius(7).AlignItems(ui.Center).Cursor(ui.CursorPointer).
 					Role(ui.RoleButton).Focusable().FocusRing(false).Label(e.Name)
 				if selected {
-					row.Background(k.panelSel)
+					row.Background(k.PanelSel)
 				} else if row.Hovered() {
-					row.Background(k.hover)
+					row.Background(k.Hover)
 				}
 				if row.Clicked() {
 					a.pickerSel = i
@@ -274,12 +276,12 @@ func (a *app) pickerMain(c *ui.Context, k *colors) {
 					row.ScrollIntoView()
 				}
 				row.Children(func() {
-					ui.Icon(c, folderIcon()).Size(15, 15).TextColor(k.textMuted)
-					ui.Text(c, e.Name).FontSize(12.5).TextColor(k.text).
+					ui.Icon(c, icons.FolderIcon()).Size(15, 15).TextColor(k.TextMuted)
+					ui.Text(c, e.Name).FontSize(12.5).TextColor(k.Text).
 						SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
 					ui.Spacer(c)
 					if row.Hovered() {
-						ui.Icon(c, icon("chevron-right")).Size(13, 13).TextColor(k.textFaint)
+						ui.Icon(c, icons.Icon("chevron-right")).Size(13, 13).TextColor(k.TextFaint)
 					}
 				})
 			}
@@ -291,8 +293,8 @@ func (a *app) pickerFooter(c *ui.Context, k *colors) {
 	ui.Row(c).Height(58).Padding(0, 18).Gap(8).AlignItems(ui.Center).Children(func() {
 		target := a.pickerTarget()
 		ui.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {
-			ui.Text(c, "Open").FontSize(10.5).FontWeight(600).TextColor(k.textFaint)
-			ui.Text(c, shortPath(target)).FontSize(12).TextColor(k.textMuted).
+			ui.Text(c, "Open").FontSize(10.5).FontWeight(600).TextColor(k.TextFaint)
+			ui.Text(c, shortPath(target)).FontSize(12).TextColor(k.TextMuted).
 				SingleLine().Ellipsis("…")
 		})
 		a.pickerButton(c, k, "Cancel", false, func() {
@@ -308,20 +310,20 @@ func (a *app) pickerButton(c *ui.Context, k *colors, label string, primary bool,
 	b := ui.Row(c).Padding(6, 14).Radius(7).Cursor(ui.CursorPointer).
 		Role(ui.RoleButton).Label(label)
 	if primary {
-		b.Background(k.text)
+		b.Background(k.Text)
 		if b.Hovered() {
-			b.Background(k.text.Alpha(0.86))
+			b.Background(k.Text.Alpha(0.86))
 		}
 	} else if b.Hovered() {
-		b.Background(k.hover)
+		b.Background(k.Hover)
 	}
 	if b.Clicked() {
 		fn()
 	}
 	b.Children(func() {
-		col := k.text
+		col := k.Text
 		if primary {
-			col = k.panel
+			col = k.Panel
 		}
 		ui.Text(c, label).FontSize(12.5).FontWeight(600).TextColor(col)
 	})

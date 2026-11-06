@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"os"
@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+
+	"mojian/internal/icons"
 )
 
 // projectName is the last part of the open project's path.
@@ -82,9 +84,9 @@ func (a *app) openProject(dir string) {
 	}
 	a.saveNow()
 	a.closeTerminals()
-	a.gitOpen = false
-	a.gitSeq++
-	a.gitDiffSeq++
+	a.git.Open = false
+	a.git.Seq++
+	a.git.DiffSeq++
 	if a.layoutPath != "" {
 		a.saveLayout()
 	}
@@ -136,27 +138,27 @@ func (a *app) projectChip(c *ui.Context, k *colors) {
 		Cursor(ui.CursorPointer).Role(ui.RoleButton).Label("Switch project: " + a.projectName()).
 		Tooltip(a.projectPath() + "  ⌘O").MaxWidth(230).Shrink(0).ClipX()
 	if chip.Hovered() || a.projectOpen {
-		chip.Background(k.hover)
+		chip.Background(k.Hover)
 	}
 	if chip.Clicked() && !a.store.memory {
 		a.projectOpen = !a.projectOpen
 	}
 	chip.Children(func() {
-		ui.Icon(c, folderIcon()).Size(19, 19).TextColor(k.textMuted)
-		ui.Text(c, a.projectName()).FontSize(13.5).FontWeight(700).TextColor(k.text.Alpha(0.9)).
+		ui.Icon(c, icons.FolderIcon()).Size(19, 19).TextColor(k.TextMuted)
+		ui.Text(c, a.projectName()).FontSize(13.5).FontWeight(700).TextColor(k.Text.Alpha(0.9)).
 			SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
-		ui.Icon(c, icon("chevron-down")).Size(13, 13).TextColor(k.textFaint)
+		ui.Icon(c, icons.Icon("chevron-down")).Size(13, 13).TextColor(k.TextFaint)
 	})
 	if a.store.memory {
 		return
 	}
 	ui.PopoverBase(c, chip, &a.projectOpen, func(panel ui.Element) {
-		panel.Width(304).Padding(9).Radius(14).Background(k.panel).Border(1, k.panelBorder).
-			Shadow(0, 12, 32, 0, k.shadowFocused).Gap(1)
+		panel.Width(304).Padding(9).Radius(14).Background(k.Panel).Border(1, k.PanelBorder).
+			Shadow(0, 12, 32, 0, k.ShadowFocused).Gap(1)
 		ui.Row(c).Padding(4, 8, 5, 8).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, "Projects").FontSize(11).FontWeight(600).TextColor(k.textFaint)
+			ui.Text(c, "Projects").FontSize(11).FontWeight(600).TextColor(k.TextFaint)
 			ui.Spacer(c)
-			ui.Text(c, "⌘O").FontSize(11).TextColor(k.textFaint)
+			ui.Text(c, "⌘O").FontSize(11).TextColor(k.TextFaint)
 		})
 		for _, p := range a.recentProjects() {
 			a.projectRow(c, k, p)
@@ -167,7 +169,7 @@ func (a *app) projectChip(c *ui.Context, k *colors) {
 				AlignItems(ui.Center).Cursor(ui.CursorPointer).Role(ui.RoleButton).
 				Label("Open Folder…")
 			if row.Hovered() {
-				row.Background(k.hover)
+				row.Background(k.Hover)
 			}
 			row.Tooltip(tip("Open Folder", cmdOpenProject))
 			if row.Clicked() {
@@ -175,8 +177,8 @@ func (a *app) projectChip(c *ui.Context, k *colors) {
 				a.openProjectPicker()
 			}
 			row.Children(func() {
-				ui.Icon(c, icon("folder-plus")).Size(15, 15).TextColor(k.textMuted)
-				ui.Text(c, "Open Folder…").FontSize(12.5).TextColor(k.text)
+				ui.Icon(c, icons.Icon("folder-plus")).Size(15, 15).TextColor(k.TextMuted)
+				ui.Text(c, "Open Folder…").FontSize(12.5).TextColor(k.Text)
 			})
 		}
 	})
@@ -188,24 +190,24 @@ func (a *app) projectRow(c *ui.Context, k *colors, p string) {
 		AlignItems(ui.Center).Cursor(ui.CursorPointer).Role(ui.RoleButton).
 		Label(a.projectLabel(p))
 	if current {
-		row.Background(k.panelSel)
+		row.Background(k.PanelSel)
 	} else if row.Hovered() {
-		row.Background(k.hover)
+		row.Background(k.Hover)
 	}
 	if row.Clicked() {
 		a.projectOpen = false
 		a.later(func() { a.openProject(p) })
 	}
 	row.Children(func() {
-		ui.Icon(c, folderIcon()).Size(16, 16).TextColor(k.textMuted)
+		ui.Icon(c, icons.FolderIcon()).Size(16, 16).TextColor(k.TextMuted)
 		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-			ui.Text(c, a.projectLabel(p)).FontSize(12.5).FontWeight(500).TextColor(k.text).
+			ui.Text(c, a.projectLabel(p)).FontSize(12.5).FontWeight(500).TextColor(k.Text).
 				SingleLine().Ellipsis("…")
-			ui.Text(c, shortPath(p)).FontSize(11).TextColor(k.textFaint).
+			ui.Text(c, shortPath(p)).FontSize(11).TextColor(k.TextFaint).
 				SingleLine().Ellipsis("…")
 		})
 		if current {
-			ui.Icon(c, icon("check")).Size(15, 15).TextColor(k.textMuted)
+			ui.Icon(c, icons.Icon("check")).Size(15, 15).TextColor(k.TextMuted)
 		}
 	})
 }

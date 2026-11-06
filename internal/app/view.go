@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"runtime"
@@ -7,6 +7,9 @@ import (
 	"github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
+
+	"mojian/internal/icons"
+	"mojian/internal/motion"
 )
 
 const (
@@ -20,7 +23,7 @@ func (a *app) view(c *ui.Context) {
 	a.runPending()
 	a.applyTheme(c)
 	k := colorsOf(c)
-	c.Root().Background(k.bgBottom)
+	c.Root().Background(k.BgBottom)
 	ui.Column(c).Fill().
 		Draw(func(p *ui.Painter, r ui.Rect) { paintBackground(p, r, k) }).
 		Children(func() {
@@ -30,15 +33,7 @@ func (a *app) view(c *ui.Context) {
 				if a.treeOpen {
 					a.sidebar(c, k)
 				}
-				ui.Column(c).Grow(1).MinWidth(0).MinHeight(0).FillHeight().Gap(gap).Children(func() {
-					if a.gitOpen {
-						a.gitPage(c, k)
-					} else if t := a.tab(); t != nil {
-						a.tabContent(c, k, t)
-					} else {
-						a.emptyState(c, k)
-					}
-				})
+				a.workspace(c, k)
 			})
 		})
 	if a.err != "" {
@@ -50,6 +45,28 @@ func (a *app) view(c *ui.Context) {
 	a.shortcuts(c)
 	a.persistLayout(c)
 	a.updateTitle()
+}
+
+// workspace shows the Git page, the active tab or the empty state in a
+// frame keyed by what it shows: changing the key fades the old page out
+// and the new one in, so a switch never teleports.
+func (a *app) workspace(c *ui.Context, k *colors) {
+	key := "workspace:empty"
+	build := func() { a.emptyState(c, k) }
+	switch {
+	case a.settingsOpen:
+		key = "workspace:settings"
+		build = func() { a.settingsPage(c, k) }
+	case a.git.Open:
+		key = "workspace:git"
+		build = func() { a.gitPage(c, k) }
+	case a.tab() != nil:
+		t := a.tab()
+		key = "workspace:tab:" + t.ID
+		build = func() { a.tabContent(c, k, t) }
+	}
+	ui.Box(c.Key(key)).Grow(1).MinWidth(0).MinHeight(0).Clip().
+		Transition(motion.Page).Children(build)
 }
 
 // titleBar draws the room under the window's controls: the vault, the
@@ -94,6 +111,10 @@ func (a *app) titleBar(c *ui.Context, k *colors) {
 					a.later(func() { a.toggleTerminal() })
 				}
 			}
+			if iconButton(c, k, "settings", "Settings", 30, 17).
+				Tooltip(tip("Settings", cmdSettings)).Clicked() {
+				a.later(func() { a.settingsToggle() })
+			}
 		})
 	})
 }
@@ -113,17 +134,17 @@ func iconButton(c *ui.Context, k *colors, name, label string, size, iconSize flo
 	b := ui.Box(c).Size(size, size).Center().Radius(size / 2.6).
 		Cursor(ui.CursorPointer).Role(ui.RoleButton).Label(label)
 	if b.Pressed() {
-		b.Background(k.pressed)
+		b.Background(k.Pressed)
 	} else if b.Hovered() {
-		b.Background(k.hover)
+		b.Background(k.Hover)
 	}
 	b.Transition(ui.ElementTransition{Colors: true, Duration: 120 * time.Millisecond})
-	col := k.iconMuted
+	col := k.IconMuted
 	if b.Hovered() {
-		col = k.text
+		col = k.Text
 	}
 	b.Children(func() {
-		ui.Icon(c, icon(name)).Size(iconSize, iconSize).TextColor(col)
+		ui.Icon(c, icons.Icon(name)).Size(iconSize, iconSize).TextColor(col)
 	})
 	return b
 }
@@ -189,10 +210,10 @@ func (a *app) node(c *ui.Context, k *colors, t *tab, n *node) ui.Element {
 			div.Draw(func(p *ui.Painter, r ui.Rect) {
 				if n.Vertical {
 					p.Fill(ui.Rect{X: r.X + r.W/2 - 18, Y: r.Y + r.H/2 - 1.5, W: 36, H: 3},
-						k.iconMuted.Alpha(0.6), 1.5)
+						k.IconMuted.Alpha(0.6), 1.5)
 				} else {
 					p.Fill(ui.Rect{X: r.X + r.W/2 - 1.5, Y: r.Y + r.H/2 - 18, W: 3, H: 36},
-						k.iconMuted.Alpha(0.6), 1.5)
+						k.IconMuted.Alpha(0.6), 1.5)
 				}
 			})
 		}
@@ -205,14 +226,14 @@ func (a *app) node(c *ui.Context, k *colors, t *tab, n *node) ui.Element {
 func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 	focused := t.Focus == p
 	card := ui.Column(c.Key(p.ID)).Radius(cardR).Clip().MinWidth(0).MinHeight(0)
-	bg, border, shadow := k.card, k.cardBorder, k.shadow
+	bg, border, shadow := k.Card, k.CardBorder, k.Shadow
 	if focused {
-		bg, border, shadow = k.cardFocused, k.cardBorderFocused, k.shadowFocused
+		bg, border, shadow = k.CardFocused, k.CardBorderFocused, k.ShadowFocused
 	}
 	card.Background(bg).Border(1, border).
 		Shadow(0, 1, 2, 0, shadow).
 		Shadow(0, 6, 22, -2, shadow)
-	card.Transition(ui.ElementTransition{Colors: true, Duration: 160 * time.Millisecond})
+	card.Transition(motion.Pane)
 	hovered := card.Hovered()
 	width := card.Bounds().W
 	card.Children(func() {
@@ -237,7 +258,15 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 				}
 				return
 			}
+			if p.Asset != nil {
+				a.assetBody(c, k, p)
+				return
+			}
 			if p.Note == nil {
+				return
+			}
+			if p.Preview && isMarkdownPath(p.Note.Path) {
+				a.markdownBody(c, k, p)
 				return
 			}
 			st := p.state
@@ -247,7 +276,13 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 			}
 			st.Theme = a.editorTheme(c)
 			st.Font = noteFont
+			st.Font.Size = float32(a.fontSize())
 			st.Label = p.Note.Title
+			if a.hideLineNumbers {
+				st.LineNumbers = editor.LineNumbersOff
+			} else {
+				st.LineNumbers = lineNumbersFor(p.Note.Path)
+			}
 			st.OnInput = func(ui.InputEvent) bool {
 				return false
 			}
@@ -264,7 +299,9 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 	})
 	if card.Pressed() && t.Focus != p {
 		t.Focus = p
-		a.focusReq = p
+		if !p.Preview && p.Note != nil {
+			a.focusReq = p
+		}
 		a.changed()
 	}
 	return card
@@ -275,11 +312,14 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hovered bool, width float32) {
 	compact := width > 0 && width < 230
 	name := "Untitled"
-	ic := fileIcon("")
-	if p.Note != nil {
-		name, ic = p.Note.Title, fileIcon(p.Note.Path)
-	} else if p.Term != nil {
-		name, ic = "Terminal", icon("square-terminal")
+	ic := icons.FileIcon("")
+	switch {
+	case p.Note != nil:
+		name, ic = p.Note.Title, icons.FileIcon(p.Note.Path)
+	case p.Asset != nil:
+		name, ic = p.Asset.Name, icons.FileIcon(p.Asset.Path)
+	case p.Term != nil:
+		name, ic = "Terminal", icons.Icon("square-terminal")
 	}
 	hpad, hgap := float32(12), float32(7)
 	btn, isize := float32(26), float32(16)
@@ -294,7 +334,9 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hov
 	}
 	if h.Clicked() {
 		t.Focus = p
-		a.focusReq = p
+		if !p.Preview {
+			a.focusReq = p
+		}
 		a.changed()
 	}
 	h.Children(func() {
@@ -302,22 +344,37 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hov
 		if compact {
 			iconSize = 14
 		}
-		ui.Icon(c, ic).Size(iconSize, iconSize).TextColor(k.text).Tooltip(name)
+		ui.Icon(c, ic).Size(iconSize, iconSize).TextColor(k.Text).Tooltip(name)
 		if compact {
 			ui.Spacer(c)
 			if p.Note != nil && p.Note.dirty() {
-				ui.Box(c).Size(6, 6).Radius(3).Background(k.attention).
+				ui.Box(c).Size(6, 6).Radius(3).Background(k.Attention).
 					Tooltip("Unsaved edits")
 			}
 		} else {
 			ui.Row(c).Grow(1).MinWidth(0).Gap(5).AlignItems(ui.Center).ClipX().Children(func() {
-				ui.Text(c, name).FontSize(12.5).FontWeight(600).TextColor(k.text).
+				ui.Text(c, name).FontSize(12.5).FontWeight(600).TextColor(k.Text).
 					SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
 				if p.Note != nil && p.Note.dirty() {
-					ui.Box(c).Size(7, 7).Radius(4).Background(k.attention).Margin(0, 0, 0, 2).
+					ui.Box(c).Size(7, 7).Radius(4).Background(k.Attention).Margin(0, 0, 0, 2).
 						Tooltip("Unsaved edits")
 				}
 			})
+		}
+		if p.Note != nil && isMarkdownPath(p.Note.Path) {
+			glyph, label := "file-text", "Preview"
+			if p.Preview {
+				glyph, label = "pencil", "Edit"
+			}
+			if iconButton(c, k, glyph, label, btn, isize).Tooltip(label).Clicked() {
+				p.Preview = !p.Preview
+				if p.Preview {
+					a.focusReq = nil
+				} else {
+					a.focusReq = p
+				}
+				a.changed()
+			}
 		}
 		show := focused || hovered
 		ui.Row(c).Gap(1).AlignItems(ui.Center).Children(func() {
@@ -363,24 +420,24 @@ func (a *app) laterPane(p *pane) {
 // emptyState shows when no note is open.
 func (a *app) emptyState(c *ui.Context, k *colors) {
 	ui.Column(c).Grow(1).FillWidth().Center().Gap(14).Children(func() {
-		ui.Box(c).Size(54, 54).Radius(15).Background(k.cardFocused).
-			Border(1, k.cardBorderFocused).Center().Children(func() {
-			ui.Icon(c, fileIcon("")).Size(28, 28).TextColor(k.textMuted)
+		ui.Box(c).Size(54, 54).Radius(15).Background(k.CardFocused).
+			Border(1, k.CardBorderFocused).Center().Children(func() {
+			ui.Icon(c, icons.FileIcon("")).Size(28, 28).TextColor(k.TextMuted)
 		})
-		ui.Text(c, "No file open").FontSize(19).FontWeight(600).TextColor(k.text)
+		ui.Text(c, "No file open").FontSize(19).FontWeight(600).TextColor(k.Text)
 		ui.Text(c, "Write something, or pick a file in Explorer.").
-			FontSize(13).TextColor(k.textMuted)
+			FontSize(13).TextColor(k.TextMuted)
 		btn := ui.Row(c).Padding(7, 16).Radius(8).Cursor(ui.CursorPointer).
-			Role(ui.RoleButton).Label("New File").Background(k.text)
+			Role(ui.RoleButton).Label("New File").Background(k.Text)
 		if btn.Hovered() {
-			btn.Background(k.text.Alpha(0.86))
+			btn.Background(k.Text.Alpha(0.86))
 		}
 		btn.Tooltip(tip("New File", cmdNewNote))
 		if btn.Clicked() {
 			a.startNewFile()
 		}
 		btn.Children(func() {
-			ui.Text(c, "New File").FontSize(12.5).FontWeight(600).TextColor(k.panel)
+			ui.Text(c, "New File").FontSize(12.5).FontWeight(600).TextColor(k.Panel)
 		})
 	})
 }
@@ -390,11 +447,11 @@ func (a *app) errorBanner(c *ui.Context, k *colors) {
 	ui.Overlay(c, func() {
 		ui.Row(c).Absolute().Bottom(18).Left(0).Right(0).Justify(ui.Center).
 			PassThrough().Children(func() {
-			ui.Row(c).Gap(10).Padding(8, 10, 8, 14).Radius(12).Background(k.panel).
-				Border(1, k.panelBorder).Shadow(0, 8, 24, 0, k.shadowFocused).
+			ui.Row(c).Gap(10).Padding(8, 10, 8, 14).Radius(12).Background(k.Panel).
+				Border(1, k.PanelBorder).Shadow(0, 8, 24, 0, k.ShadowFocused).
 				AlignItems(ui.Center).Children(func() {
-				ui.Box(c).Size(8, 8).Radius(4).Background(k.danger)
-				ui.Text(c, a.err).FontSize(12.5).TextColor(k.text).MaxWidth(520)
+				ui.Box(c).Size(8, 8).Radius(4).Background(k.Danger)
+				ui.Text(c, a.err).FontSize(12.5).TextColor(k.Text).MaxWidth(520)
 				if iconButton(c, k, "x", "Dismiss", 22, 14).Clicked() {
 					a.err = ""
 				}

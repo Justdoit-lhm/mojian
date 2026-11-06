@@ -1,4 +1,4 @@
-package main
+package icons
 
 import "testing"
 
@@ -34,7 +34,7 @@ func TestMappedIconsExist(t *testing.T) {
 		"makefile", "cmake", "license", "readme", "markdown", "mdx",
 		"npm", "settings", "lock",
 	} {
-		if icon("material/"+name) == nil {
+		if Icon("material/"+name) == nil {
 			t.Errorf("missing Material icon %q", name)
 		}
 	}

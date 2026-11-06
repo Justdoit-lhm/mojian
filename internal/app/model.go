@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"encoding/json"
@@ -7,15 +7,37 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
+	"github.com/egoist/mygo/ui/markdown"
 )
 
 // pane is one editor view of a note in a workspace.
 type pane struct {
 	ID    string
 	Note  *note
+	Asset *assetFile
 	Term  *termTab
 	state *editor.State
+
+	// Preview shows Markdown rendered rather than as source; assetView
+	// holds what a picture or a PDF viewer has loaded.
+	Preview       bool
+	previewScroll ui.ScrollState
+	md            *markdown.Options
+	assetView     *assetView
+}
+
+// assetView is what a picture or PDF pane has loaded, and its headings.
+type assetView struct {
+	pdfPages   []string
+	pdfPage    int
+	pdfDir     string
+	pdfErr     string
+	pdfLoading bool
+	pdfStarted bool
+	pdfImage   ui.ImageSource
+	pdfImageAt int // the page pdfImage was decoded for
 }
 
 // node is a leaf pane, or two panes side by side or stacked, with the
@@ -52,6 +74,10 @@ func newTermPane(t *termTab) *pane {
 	return &pane{ID: nextID("p"), Term: t}
 }
 
+func newAssetPane(f *assetFile) *pane {
+	return &pane{ID: nextID("p"), Asset: f, assetView: &assetView{}}
+}
+
 func newTab(n *note) *tab {
 	p := newPane(n)
 	return &tab{ID: nextID("t"), Root: &node{Pane: p}, Focus: p}
@@ -81,9 +107,12 @@ func (n *node) walk(fn func(*pane)) {
 func (t *tab) label() (name, detail string) {
 	name = t.Name
 	if name == "" && t.Focus != nil {
-		if t.Focus.Note != nil {
+		switch {
+		case t.Focus.Note != nil:
 			name = t.Focus.Note.Title
-		} else if t.Focus.Term != nil {
+		case t.Focus.Asset != nil:
+			name = t.Focus.Asset.Name
+		case t.Focus.Term != nil:
 			name = "Terminal"
 		}
 	}
@@ -99,7 +128,7 @@ func (t *tab) label() (name, detail string) {
 // editorPane returns the pane to focus when the tab appears: an editor
 // if it has one, else the terminal.
 func (t *tab) editorPane() *pane {
-	if t.Focus != nil && t.Focus.Note != nil {
+	if t.Focus != nil && (t.Focus.Note != nil || t.Focus.Asset != nil) {
 		return t.Focus
 	}
 	if p := t.firstEditorPane(); p != nil {
@@ -111,7 +140,7 @@ func (t *tab) editorPane() *pane {
 // firstEditorPane returns the first pane that shows a file, not a shell.
 func (t *tab) firstEditorPane() *pane {
 	for _, p := range t.panes() {
-		if p.Note != nil {
+		if p.Note != nil || p.Asset != nil {
 			return p
 		}
 	}
@@ -269,8 +298,10 @@ type layoutNode struct {
 }
 
 type layoutPane struct {
-	ID   string `json:"id"`
-	Note string `json:"note"`
+	ID      string `json:"id"`
+	Note    string `json:"note,omitempty"`
+	Asset   string `json:"asset,omitempty"`
+	Preview bool   `json:"preview,omitempty"`
 }
 
 func layoutOf(t *tab) layoutTab {
@@ -289,13 +320,16 @@ func layoutNodeOf(n *node) *layoutNode {
 		return nil
 	}
 	if n.Pane != nil {
-		if n.Pane.Note == nil {
+		if n.Pane.Note == nil && n.Pane.Asset == nil {
 			return nil // shells are not saved; the file panes around them are
 		}
-		return &layoutNode{Pane: &layoutPane{
-			ID:   n.Pane.ID,
-			Note: n.Pane.Note.Rel,
-		}}
+		lp := &layoutPane{ID: n.Pane.ID, Preview: n.Pane.Preview}
+		if n.Pane.Note != nil {
+			lp.Note = n.Pane.Note.Rel
+		} else {
+			lp.Asset = n.Pane.Asset.Rel
+		}
+		return &layoutNode{Pane: lp}
 	}
 	return &layoutNode{
 		Vertical: n.Vertical,
@@ -356,11 +390,16 @@ func (a *app) restoreNode(ln *layoutNode, byID map[string]*pane) *node {
 		return nil
 	}
 	if ln.Pane != nil {
-		n := a.store.byRelPath(ln.Pane.Note)
-		if n == nil {
+		p := &pane{ID: nextID("p"), Preview: ln.Pane.Preview}
+		if n := a.store.byRelPath(ln.Pane.Note); n != nil {
+			p.Note = n
+		} else if f := a.store.assetByRel(ln.Pane.Asset); f != nil {
+			p.Asset = f
+			p.assetView = &assetView{}
+			p.Preview = false
+		} else {
 			return nil
 		}
-		p := &pane{ID: nextID("p"), Note: n}
 		byID[ln.Pane.ID] = p
 		return &node{Pane: p}
 	}

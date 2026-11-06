@@ -1,7 +1,11 @@
-package main
+package app
 
 import (
+	"encoding/json"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"os"
 	"path/filepath"
 	"strings"
@@ -367,5 +371,122 @@ func TestMenuBuilds(t *testing.T) {
 	a := &app{}
 	if m := a.menu(); m == nil {
 		t.Fatal("no menu")
+	}
+}
+
+func TestSettingsPageAndPersistence(t *testing.T) {
+	a := newProjectApp(t)
+	a.settingsPath = filepath.Join(t.TempDir(), "settings.json")
+	tt := ui.NewTester(a.view, 1100, 700)
+	tt.Frame()
+	a.settingsToggle()
+	tt.Frame()
+	if !tt.HasText("APPEARANCE") || !tt.HasText("Settings") {
+		t.Fatalf("settings page texts: %q", tt.Texts())
+	}
+	a.editorFontSize = 15
+	a.hideLineNumbers = true
+	a.markdownPreview = true
+	a.terminalFontSize = 14
+	a.saveSettings()
+	var saved settingsFile
+	data, err := os.ReadFile(a.settingsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, &saved); err != nil {
+		t.Fatal(err)
+	}
+	if saved.EditorFontSize != 15 || !saved.HideLineNumbers || !saved.MarkdownPreview || saved.TerminalFontSize != 14 {
+		t.Fatalf("saved settings: %+v", saved)
+	}
+}
+
+func TestMarkdownPreviewToggle(t *testing.T) {
+	a := newProjectApp(t)
+	a.openNote(a.store.byRelPath("Welcome.md"))
+	tt := ui.NewTester(a.view, 1100, 700)
+	tt.Frame()
+	if err := tt.Click("Preview"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	p := a.tab().Focus
+	if !p.Preview {
+		t.Fatal("Preview did not turn on")
+	}
+	if !tt.HasText("Welcome to Mojian") {
+		t.Fatalf("rendered Markdown texts: %q", tt.Texts())
+	}
+	if err := tt.Click("Edit"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if p.Preview {
+		t.Fatal("Edit did not return to the source")
+	}
+}
+
+func TestAssetsAppearAndOpen(t *testing.T) {
+	a := newProjectApp(t)
+	img := image.NewRGBA(image.Rect(0, 0, 12, 8))
+	for y := 0; y < 8; y++ {
+		for x := 0; x < 12; x++ {
+			img.Set(x, y, color.RGBA{uint8(x * 20), uint8(y * 20), 180, 255})
+		}
+	}
+	path := filepath.Join(a.store.dir, "cover.png")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := png.Encode(f, img); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	if err := a.store.refresh(); err != nil {
+		t.Fatal(err)
+	}
+	asset := a.store.assetByRel("cover.png")
+	if asset == nil {
+		t.Fatal("the image was not indexed")
+	}
+	a.openAsset(asset)
+	tt := ui.NewTester(a.view, 1100, 700)
+	tt.Frame()
+	if p := a.tab().Focus; p == nil || p.Asset != asset {
+		t.Fatalf("focused pane does not show the image: %+v", p)
+	}
+	if !tt.HasText("cover.png") {
+		t.Fatalf("asset pane texts: %q", tt.Texts())
+	}
+}
+
+func TestSettingsAppearanceAndEditor(t *testing.T) {
+	a := newProjectApp(t)
+	tt := ui.NewTester(a.view, 1100, 700)
+	a.settingsToggle()
+	tt.Frame()
+	if err := tt.Click("Dark"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.appearance != 2 {
+		t.Fatalf("appearance after Dark: %d", a.appearance)
+	}
+	a.editorFontSize = 16
+	a.hideLineNumbers = true
+	a.settingsOpen = false
+	a.openNote(a.store.byRelPath("scripts/tasks.py"))
+	tt.Frame()
+	p := a.tab().Focus
+	if p.state == nil {
+		t.Fatal("the editor state was not built")
+	}
+	if got := p.state.Font.Size; got != 16 {
+		t.Fatalf("editor font size: %v", got)
+	}
+	if p.state.LineNumbers != editor.LineNumbersOff {
+		t.Fatalf("line numbers: %v", p.state.LineNumbers)
 	}
 }

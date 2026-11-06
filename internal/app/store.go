@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"bytes"
@@ -10,8 +10,10 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
 )
 
@@ -27,6 +29,33 @@ type note struct {
 	Mod   time.Time
 
 	buf *editor.Buffer
+}
+
+// assetFile is a picture or a PDF in the project: a file shown by a
+// viewer rather than edited as text.
+type assetFile struct {
+	Rel  string
+	Path string
+	Name string
+	Size int64
+	Mod  time.Time
+
+	once sync.Once
+	img  ui.ImageSource
+	err  error
+}
+
+// image decodes the picture once, on the frame that first shows it.
+func (f *assetFile) image() (ui.ImageSource, error) {
+	f.once.Do(func() {
+		data, err := os.ReadFile(f.Path)
+		if err != nil {
+			f.err = err
+			return
+		}
+		f.img, f.err = ui.DecodeImage(data)
+	})
+	return f.img, f.err
 }
 
 // text is the note as it stands, including edits not yet saved.
@@ -115,6 +144,7 @@ type store struct {
 	byRel  map[string]*note
 	seq    int
 	tree   *fileNode
+	assets map[string]*assetFile
 }
 
 // openStore opens the folder at $MOJIAN_VAULT, else ~/Documents/Mojian,
@@ -122,7 +152,7 @@ type store struct {
 // is no file system: the files live in memory for the session.
 func openStore() (*store, error) {
 	if runtime.GOOS == "js" {
-		s := &store{memory: true, byPath: map[string]*note{}, byRel: map[string]*note{}}
+		s := &store{memory: true, byPath: map[string]*note{}, byRel: map[string]*note{}, assets: map[string]*assetFile{}}
 		s.add(&note{Path: "Welcome.md", Title: "Welcome to Mojian", Saved: welcomeNote, Mod: time.Now()})
 		s.add(&note{Path: "Reading notes.md", Title: "Reading notes", Saved: sampleNote, Mod: time.Now().Add(-time.Minute)})
 		s.buildTree()
@@ -166,7 +196,7 @@ func openStoreAt(dir string) (*store, error) {
 	if err := os.MkdirAll(abs, 0o755); err != nil {
 		return nil, err
 	}
-	s := &store{dir: abs, byPath: map[string]*note{}, byRel: map[string]*note{}}
+	s := &store{dir: abs, byPath: map[string]*note{}, byRel: map[string]*note{}, assets: map[string]*assetFile{}}
 	if err := s.refresh(); err != nil {
 		return nil, err
 	}
@@ -182,6 +212,7 @@ func (s *store) refresh() error {
 		return nil
 	}
 	seen := make(map[string]bool, len(s.notes))
+	s.assets = map[string]*assetFile{}
 	err := filepath.WalkDir(s.dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil // an unreadable folder is skipped, not fatal
@@ -193,6 +224,20 @@ func (s *store) refresh() error {
 			return nil
 		}
 		if !isTextFile(path) {
+			if isViewableAsset(path) {
+				info, err := d.Info()
+				if err != nil {
+					return nil
+				}
+				rel, err := filepath.Rel(s.dir, path)
+				if err != nil {
+					return nil
+				}
+				s.assets[rel] = &assetFile{
+					Rel: rel, Path: path, Name: filepath.Base(path),
+					Size: info.Size(), Mod: info.ModTime(),
+				}
+			}
 			return nil
 		}
 		seen[path] = true
@@ -271,6 +316,25 @@ var binaryExts = map[string]bool{
 	".ttf": true, ".otf": true, ".exe": true, ".dylib": true, ".so": true,
 	".a": true, ".o": true, ".class": true, ".jar": true, ".wasm": true,
 	".sqlite": true, ".db": true,
+}
+
+// viewableAssetExts are the files the viewer shows: pictures MyGo can
+// decode, and PDFs it previews through the system.
+var viewableAssetExts = map[string]bool{
+	".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true,
+	".bmp": true, ".tif": true, ".tiff": true, ".ico": true, ".svg": true,
+	".pdf": true,
+}
+
+func isViewableAsset(path string) bool {
+	return viewableAssetExts[strings.ToLower(filepath.Ext(path))]
+}
+
+func (s *store) assetByRel(rel string) *assetFile {
+	if s == nil {
+		return nil
+	}
+	return s.assets[rel]
 }
 
 // isTextFile reports whether a file in the vault opens in the editor: a

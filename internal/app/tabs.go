@@ -1,9 +1,10 @@
-package main
+package app
 
 import (
-	"time"
-
 	"github.com/egoist/mygo/ui"
+
+	"mojian/internal/icons"
+	"mojian/internal/motion"
 )
 
 const (
@@ -32,7 +33,7 @@ func (a *app) tabStrip(c *ui.Context, k *colors) {
 	// slivers: every tab keeps its name, and the active one is revealed
 	// when it changes.
 	track := ui.ScrollHorizontal(c).Basis(total).Shrink(1).MinWidth(0).Height(tabH+4).
-		Radius((tabH+4)/2).Background(k.track).Border(0.5, k.trackBorder).
+		Radius((tabH+4)/2).Background(k.Track).Border(0.5, k.TrackBorder).
 		ClipX().DragWindow().Role(ui.RoleTabList).Label("Tabs").Scrollbars(false).
 		TrackScroll(&a.tabScroll)
 	tabs := append([]*tab(nil), a.tabs...)
@@ -108,16 +109,16 @@ func (a *app) tabItem(c *ui.Context, k *colors, i int, t *tab, width float32, wh
 	name, detail := t.label()
 	e.Label(name + " " + detail)
 	if active {
-		e.Background(k.tabActive).Shadow(0, 1, 2, 0, k.shadow).Shadow(0, 2, 8, 0, k.shadow)
+		e.Background(k.TabActive).Shadow(0, 1, 2, 0, k.Shadow).Shadow(0, 2, 8, 0, k.Shadow)
 	} else if e.Hovered() {
-		e.Background(k.hover)
+		e.Background(k.Hover)
 	} else {
-		e.Background(k.tabInactive)
+		e.Background(k.TabInactive)
 	}
-	e.Transition(ui.ElementTransition{Colors: true, Position: true, Duration: 160 * time.Millisecond})
+	e.Transition(motion.Tab)
 	if e.Clicked() {
-		if a.gitOpen {
-			a.gitOpen = false
+		if a.git.Open {
+			a.git.Open = false
 			a.invalidate()
 		}
 		if !active {
@@ -142,9 +143,9 @@ func (a *app) tabItem(c *ui.Context, k *colors, i int, t *tab, width float32, wh
 				a.renameField(c, t, name)
 				return
 			}
-			nameColor, detailColor := k.text, k.textFaint
+			nameColor, detailColor := k.Text, k.TextFaint
 			if !active {
-				nameColor = k.textMuted
+				nameColor = k.TextMuted
 			}
 			label := ui.Box(c).Grow(1).MinWidth(0).Height(18).ClipX()
 			label.Children(func() {
@@ -163,7 +164,7 @@ func (a *app) tabItem(c *ui.Context, k *colors, i int, t *tab, width float32, wh
 					a.later(func() { a.closeTab(t) })
 				}
 			case t.dirty():
-				ui.Box(c).Size(7, 7).Radius(4).Background(k.attention).Margin(0, 5, 0, 5).
+				ui.Box(c).Size(7, 7).Radius(4).Background(k.Attention).Margin(0, 5, 0, 5).
 					Tooltip("Unsaved edits")
 			default:
 				ui.Box(c).Size(7, 7).Shrink(0)
@@ -238,25 +239,25 @@ func (a *app) tiles(c *ui.Context, k *colors, t *tab) {
 	b.Draw(func(p *ui.Painter, r ui.Rect) {
 		for i := n - 1; i >= 0; i-- {
 			x := r.X + float32(i)*tileStep
-			bg, rim := k.tabActive, k.tileRim
+			bg, rim := k.TabActive, k.TileRim
 			if i > 0 {
-				bg, rim = k.card, k.cardBorderFocused
+				bg, rim = k.Card, k.CardBorderFocused
 			}
 			p.Fill(ui.Rect{X: x, Y: r.Y, W: tileW, H: r.H}, bg, 4)
 			p.Stroke(ui.Rect{X: x, Y: r.Y, W: tileW, H: r.H}, rim, 4, 1)
 		}
 		s := float32(11)
-		ic := fileIcon("")
+		ic := icons.FileIcon("")
 		if t.Focus != nil {
 			switch {
 			case t.Focus.Note != nil:
-				ic = fileIcon(t.Focus.Note.Path)
+				ic = icons.FileIcon(t.Focus.Note.Path)
 			case t.Focus.Term != nil:
-				ic = icon("square-terminal")
+				ic = icons.Icon("square-terminal")
 			}
 		}
 		p.Icon(ic, ui.Rect{
 			X: r.X + (tileW-s)/2, Y: r.Y + (r.H-s)/2, W: s, H: s,
-		}, k.text)
+		}, k.Text)
 	})
 }

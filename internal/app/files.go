@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"errors"
@@ -72,6 +72,11 @@ func (s *store) forget(rel string) {
 		kept = append(kept, n)
 	}
 	s.notes = kept
+	for assetRel := range s.assets {
+		if assetRel == rel || strings.HasPrefix(assetRel, rel+string(filepath.Separator)) {
+			delete(s.assets, assetRel)
+		}
+	}
 	s.buildTree()
 }
 
@@ -93,6 +98,20 @@ func (s *store) remap(oldRel, newRel string, dir bool) {
 		if n.buf != nil {
 			n.buf.SetLanguage(editorLanguage(n.Path))
 		}
+	}
+	for assetRel, f := range s.assets {
+		switch {
+		case assetRel == oldRel:
+		case dir && strings.HasPrefix(assetRel, prefix):
+		default:
+			continue
+		}
+		rest := strings.TrimPrefix(assetRel, oldRel)
+		f.Rel = filepath.Join(newRel, rest)
+		f.Path = filepath.Join(s.dir, f.Rel)
+		f.Name = filepath.Base(f.Path)
+		delete(s.assets, assetRel)
+		s.assets[f.Rel] = f
 	}
 	s.reindex()
 	s.buildTree()
@@ -677,6 +696,9 @@ func (a *app) trash(rel string) {
 	a.closeNotes(func(n *note) bool {
 		return n.Rel == rel || strings.HasPrefix(n.Rel, rel+string(filepath.Separator))
 	})
+	a.closeAssets(func(f *assetFile) bool {
+		return f.Rel == rel || strings.HasPrefix(f.Rel, rel+string(filepath.Separator))
+	})
 	a.store.forget(rel)
 	a.treeSel = a.destinationFor(rel)
 	a.openPath(a.treeSel)
@@ -687,11 +709,21 @@ func (a *app) trash(rel string) {
 
 // closeNotes closes every pane whose note matches, then drops empty tabs.
 func (a *app) closeNotes(match func(*note) bool) {
+	a.closePanesWhere(func(p *pane) bool { return p.Note != nil && match(p.Note) })
+}
+
+// closeAssets closes every pane whose asset matches.
+func (a *app) closeAssets(match func(*assetFile) bool) {
+	a.closePanesWhere(func(p *pane) bool { return p.Asset != nil && match(p.Asset) })
+}
+
+func (a *app) closePanesWhere(match func(*pane) bool) {
 	activeTab := a.tab()
 	activeIndex := a.active
 	for _, t := range a.tabs {
 		for _, p := range append([]*pane(nil), t.panes()...) {
-			if p.Note != nil && match(p.Note) {
+			if match(p) {
+				releaseAsset(p)
 				t.closePane(p)
 				if t.Root == nil {
 					break
@@ -748,14 +780,16 @@ func (a *app) nodeMenu(m *ui.Menu, rel string, dir bool) {
 		}
 	} else {
 		if m.Item("Open in Current Window").Chosen() {
-			if n := a.store.byRelPath(rel); n != nil {
-				a.later(func() { a.openNote(n) })
-			}
+			a.later(func() { a.openRel(rel) })
 		}
 		if m.Item("Open in New Tab").Chosen() {
-			if n := a.store.byRelPath(rel); n != nil {
-				a.later(func() { a.openNoteInTab(n) })
-			}
+			a.later(func() {
+				if n := a.store.byRelPath(rel); n != nil {
+					a.openNoteInTab(n)
+				} else if f := a.store.assetByRel(rel); f != nil {
+					a.openAssetInTab(f)
+				}
+			})
 		}
 	}
 	if rel == "" {

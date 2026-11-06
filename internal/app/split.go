@@ -1,10 +1,12 @@
-package main
+package app
 
 import (
 	"fmt"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+
+	"mojian/internal/icons"
 )
 
 const maxPanes = 4 // the most editors one tab shows
@@ -20,7 +22,7 @@ func (a *app) beginSplit(down bool) {
 		a.fail(fmt.Errorf("a tab can show at most %d panes", maxPanes))
 		return
 	}
-	a.gitOpen = false
+	a.git.Open = false
 	a.paletteOpen = false
 	a.projectPicker = false
 	a.splitPick = true
@@ -117,21 +119,21 @@ func (a *app) splitPicker(c *ui.Context, k *colors) {
 		title, glyph = "Split Down", "rows-2"
 	}
 	ui.DialogBase(c, &a.splitPick, func(backdrop, panel ui.Element) {
-		backdrop.Background(k.backdrop).Justify(ui.Start).Padding(78, 0, 0, 0)
-		panel.Width(540).MaxHeight(450).Radius(16).Background(k.panel).
-			Border(1, k.panelBorder).
+		backdrop.Background(k.Backdrop).Justify(ui.Start).Padding(78, 0, 0, 0)
+		panel.Width(540).MaxHeight(450).Radius(16).Background(k.Panel).
+			Border(1, k.PanelBorder).
 			Shadow(0, 24, 60, -8, ui.RGBA(0, 0, 0, 0.28)).
 			Shadow(0, 2, 6, 0, ui.RGBA(0, 0, 0, 0.06)).Clip()
 		ui.Column(c).Children(func() {
 			ui.Row(c).Padding(14, 16).Gap(11).AlignItems(ui.Center).
-				BorderWidth(0, 0, 1, 0).BorderColor(k.panelBorder).Children(func() {
-				ui.Box(c).Size(32, 32).Radius(9).Background(k.hover).Center().Children(func() {
-					ui.Icon(c, icon(glyph)).Size(16, 16).TextColor(k.textMuted)
+				BorderWidth(0, 0, 1, 0).BorderColor(k.PanelBorder).Children(func() {
+				ui.Box(c).Size(32, 32).Radius(9).Background(k.Hover).Center().Children(func() {
+					ui.Icon(c, icons.Icon(glyph)).Size(16, 16).TextColor(k.TextMuted)
 				})
 				ui.Column(c).Gap(1).Children(func() {
-					ui.Text(c, title).FontSize(14).FontWeight(650).TextColor(k.text)
+					ui.Text(c, title).FontSize(14).FontWeight(650).TextColor(k.Text)
 					ui.Text(c, "Choose a file for the new pane").
-						FontSize(11.5).TextColor(k.textFaint)
+						FontSize(11.5).TextColor(k.TextFaint)
 				})
 				ui.Spacer(c)
 				if iconButton(c, k, "x", "Cancel", 26, 14).Clicked() {
@@ -139,7 +141,7 @@ func (a *app) splitPicker(c *ui.Context, k *colors) {
 				}
 			})
 			ui.Row(c).Padding(10, 16).Gap(9).AlignItems(ui.Center).Children(func() {
-				ui.Icon(c, icon("search")).Size(16, 16).TextColor(k.textFaint)
+				ui.Icon(c, icons.Icon("search")).Size(16, 16).TextColor(k.TextFaint)
 				in := ui.TextInputBase(c, &a.splitQuery).Grow(1).FontSize(14).
 					Placeholder("Type the name of a file…").AutoFocus()
 				if in.Changed() {
@@ -163,7 +165,7 @@ func (a *app) splitPicker(c *ui.Context, k *colors) {
 			ui.Scroll(c).Height(listH).Padding(6).Children(func() {
 				if len(notes) == 0 {
 					ui.Text(c, "No other files in this project").FontSize(13).
-						TextColor(k.textFaint).Padding(14)
+						TextColor(k.TextFaint).Padding(14)
 					return
 				}
 				for i, n := range notes {
@@ -172,21 +174,21 @@ func (a *app) splitPicker(c *ui.Context, k *colors) {
 						Radius(8).AlignItems(ui.Center).Cursor(ui.CursorPointer).
 						Role(ui.RoleButton).Label(n.Title)
 					if i == a.splitSel {
-						row.Background(k.panelSel)
+						row.Background(k.PanelSel)
 						if reveal {
 							row.ScrollIntoView()
 						}
 					} else if row.Hovered() {
-						row.Background(k.hover)
+						row.Background(k.Hover)
 					}
 					if row.Clicked() || row.DoubleClicked() {
 						a.later(func() { a.chooseSplit(n) })
 					}
 					row.Children(func() {
-						ui.Icon(c, fileIcon(n.Path)).Size(16, 16).TextColor(k.textMuted)
-						ui.Text(c, n.Title).FontSize(13).FontWeight(500).TextColor(k.text).
+						ui.Icon(c, icons.FileIcon(n.Path)).Size(16, 16).TextColor(k.TextMuted)
+						ui.Text(c, n.Title).FontSize(13).FontWeight(500).TextColor(k.Text).
 							SingleLine().Ellipsis("…").Shrink(0.3).MinWidth(0)
-						ui.Text(c, n.Rel).FontSize(12.5).TextColor(k.textFaint).
+						ui.Text(c, n.Rel).FontSize(12.5).TextColor(k.TextFaint).
 							SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
 					})
 				}

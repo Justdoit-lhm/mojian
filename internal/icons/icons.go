@@ -1,11 +1,29 @@
-package main
+package icons
 
 import (
 	"path/filepath"
 	"strings"
 
+	"mojian/internal/assets"
+
 	"github.com/egoist/mygo/ui"
 )
+
+var svgCache = map[string]*ui.SVG{}
+
+// Icon returns an embedded Lucide action icon by name.
+func Icon(name string) *ui.SVG {
+	if s, ok := svgCache[name]; ok {
+		return s
+	}
+	data, err := assets.Files.ReadFile("icons/" + name + ".svg")
+	if err != nil {
+		panic("mojian: icon " + name + ": " + err.Error())
+	}
+	s := ui.MustParseSVG(data)
+	svgCache[name] = s
+	return s
+}
 
 // fileIconAsset names the Material Icon Theme asset for a file: by its
 // exact name for special files, else by its extension.
@@ -104,11 +122,11 @@ func fileIconAsset(name string) string {
 }
 
 // fileIcon returns the file-type icon from Material Icon Theme.
-func fileIcon(name string) *ui.SVG {
-	return icon("material/" + fileIconAsset(name))
+func FileIcon(name string) *ui.SVG {
+	return Icon("material/" + fileIconAsset(name))
 }
 
 // folderIcon returns the Material Icon Theme folder.
-func folderIcon() *ui.SVG {
-	return icon("material/folder-base")
+func FolderIcon() *ui.SVG {
+	return Icon("material/folder-base")
 }
