@@ -8,7 +8,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -113,6 +115,7 @@ func (a *app) loadGitDiff(i int) {
 	a.gitDiff = ""
 	a.gitDiffErr = ""
 	a.gitDiffLoad = true
+	a.gitDiffScroll = ui.ScrollState{}
 	a.gitDiffSeq++
 	seq := a.gitDiffSeq
 	root := a.gitRoot
@@ -333,7 +336,8 @@ func (b *cappedBuffer) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// gitPage draws the working-tree diff in the editor area.
+// gitPage draws the working-tree diff in the editor area: changes on
+// the left, the selected file's unified diff on the right.
 func (a *app) gitPage(c *ui.Context, k *colors) {
 	card := ui.Column(c).Grow(1).MinWidth(0).MinHeight(0).Radius(cardR).Clip().
 		Background(k.cardFocused).Border(1, k.cardBorder).
@@ -350,52 +354,80 @@ func (a *app) gitPage(c *ui.Context, k *colors) {
 }
 
 func (a *app) gitHeader(c *ui.Context, k *colors) {
-	ui.Row(c).Height(42).Padding(0, 10, 0, 14).Gap(8).AlignItems(ui.Center).Children(func() {
-		ui.Icon(c, icon("git-branch")).Size(16, 16).TextColor(k.textMuted)
-		ui.Text(c, "Changes").FontSize(13.5).FontWeight(650).TextColor(k.text)
+	ui.Row(c).Height(headerH).Padding(0, 8, 0, 12).Gap(7).AlignItems(ui.Center).Children(func() {
+		ui.Icon(c, icon("git-branch")).Size(15, 15).TextColor(k.textMuted)
+		ui.Text(c, "Changes").FontSize(12.5).FontWeight(600).TextColor(k.text)
 		if a.gitBranch != "" {
-			ui.Row(c).Padding(2, 7).Radius(5).Background(k.hover).Gap(5).AlignItems(ui.Center).
-				Children(func() {
-					ui.Icon(c, icon("git-branch")).Size(11, 11).TextColor(k.textFaint)
-					ui.Text(c, a.gitBranch).FontSize(11).TextColor(k.textMuted)
-				})
+			ui.Row(c).Padding(2, 7).Radius(5).Background(k.hover).Gap(4).
+				AlignItems(ui.Center).Children(func() {
+				ui.Icon(c, icon("git-branch")).Size(10, 10).TextColor(k.textFaint)
+				ui.Text(c, a.gitBranch).FontSize(11).TextColor(k.textMuted)
+			})
 		}
 		if n := len(a.gitChanges); n > 0 {
-			ui.Text(c, fmt.Sprintf("%d changes", n)).FontSize(11).TextColor(k.textFaint)
+			ui.Text(c, gitFileCount(n)).FontSize(10.5).TextColor(k.textFaint)
 		}
 		ui.Spacer(c)
 		if a.gitLoading || a.gitDiffLoad {
-			ui.Text(c, "Reading…").FontSize(11).TextColor(k.textFaint)
+			ui.Text(c, "Reading…").FontSize(10.5).TextColor(k.textFaint)
 		}
-		if iconButton(c, k, "refresh-cw", "Refresh Changes", 26, 14).
+		if iconButton(c, k, "refresh-cw", "Refresh Changes", 25, 14).
 			Tooltip("Refresh Changes").Clicked() {
 			a.later(func() { a.refreshGit() })
 		}
-		if iconButton(c, k, "x", "Close Changes", 26, 13).Clicked() {
+		if iconButton(c, k, "x", "Close Changes", 25, 13).Clicked() {
 			a.later(func() { a.gitOpen = false })
 		}
 	})
 }
 
+func gitFileCount(n int) string {
+	if n == 1 {
+		return "1 file"
+	}
+	return fmt.Sprintf("%d files", n)
+}
+
 func (a *app) gitFiles(c *ui.Context, k *colors) {
-	ui.Column(c).Width(218).Shrink(0).FillHeight().Padding(8, 8).Gap(2).Children(func() {
-		ui.Text(c, "WORKING TREE").FontSize(10).FontWeight(650).TextColor(k.textFaint).
-			Padding(2, 7, 5, 7)
+	ui.Column(c).Width(248).Shrink(0).FillHeight().Children(func() {
+		ui.Row(c).Height(34).Padding(0, 10, 0, 12).Gap(6).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, "WORKING TREE").FontSize(10).FontWeight(650).TextColor(k.textFaint)
+			ui.Spacer(c)
+			if n := len(a.gitChanges); n > 0 {
+				ui.Text(c, fmt.Sprintf("%d", n)).FontSize(10).TextColor(k.textFaint).
+					Padding(2, 5).Radius(4).Background(k.hover)
+			}
+		})
+		ui.Divider(c)
 		if a.gitErr != "" {
-			ui.Text(c, a.gitErr).FontSize(11.5).TextColor(k.danger).Padding(8, 7)
-		}
-		if len(a.gitChanges) == 0 && !a.gitLoading && a.gitErr == "" {
-			ui.Text(c, "No changes").FontSize(12.5).TextColor(k.textFaint).Padding(8, 7)
+			ui.Column(c).Fill().Center().Padding(16).Children(func() {
+				ui.Icon(c, icon("git-branch")).Size(22, 22).TextColor(k.textFaint)
+				ui.Text(c, "Changes unavailable").FontSize(12).FontWeight(600).
+					TextColor(k.text).TextAlign(ui.Center)
+				ui.Text(c, a.gitErr).FontSize(11).TextColor(k.textFaint).
+					TextAlign(ui.Center).MaxWidth(210)
+			})
 			return
 		}
-		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
+		if len(a.gitChanges) == 0 {
+			ui.Column(c).Fill().Center().Padding(16).Gap(6).Children(func() {
+				ui.Icon(c, icon("check")).Size(22, 22).TextColor(k.diffAdd)
+				ui.Text(c, "No changes").FontSize(12.5).FontWeight(600).TextColor(k.text)
+				if a.gitLoading {
+					ui.Text(c, "Reading…").FontSize(11).TextColor(k.textFaint)
+				}
+			})
+			return
+		}
+		ui.Scroll(c).Grow(1).MinHeight(0).Padding(6, 7).Children(func() {
 			for i, ch := range a.gitChanges {
 				i, ch := i, ch
-				row := ui.Row(c.Key(fmt.Sprintf("git:%d", i))).Height(28).Padding(0, 7).
-					Gap(7).Radius(6).AlignItems(ui.Center).Cursor(ui.CursorPointer).
-					Role(ui.RoleButton).Label(ch.Display).Tooltip(ch.Display).
+				selected := i == a.gitSel
+				row := ui.Row(c.Key(fmt.Sprintf("git:%d", i))).Height(38).Padding(0, 7).
+					Gap(7).Radius(7).AlignItems(ui.Center).Cursor(ui.CursorPointer).
+					Role(ui.RoleButton).Label(ch.Display).Tooltip(ch.Display + " — " + gitStatusLabel(ch.Status)).
 					PopoverMenu(func(m *ui.Menu) { a.nodeMenu(m, ch.Display, false) })
-				if i == a.gitSel {
+				if selected {
 					row.Background(k.panelSel)
 				} else if row.Hovered() {
 					row.Background(k.hover)
@@ -410,20 +442,36 @@ func (a *app) gitFiles(c *ui.Context, k *colors) {
 				}
 				row.Children(func() {
 					ui.Icon(c, fileIcon(ch.Path)).Size(16, 16).TextColor(k.textMuted)
-					ui.Column(c).Grow(1).MinWidth(0).Children(func() {
+					ui.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {
 						ui.Text(c, filepath.Base(ch.Display)).FontSize(12).FontWeight(500).
 							TextColor(k.text).SingleLine().Ellipsis("…")
 						if dir := filepath.Dir(ch.Display); dir != "." {
-							ui.Text(c, dir).FontSize(10).TextColor(k.textFaint).
+							ui.Text(c, dir).FontSize(10.5).TextColor(k.textFaint).
 								SingleLine().Ellipsis("…")
 						}
 					})
-					ui.Text(c, ch.Status).FontSize(10).FontWeight(700).
-						TextColor(gitStatusColor(ch.Status, k)).Shrink(0)
+					a.gitStatusBadge(c, k, ch.Status)
 				})
 			}
 		})
 	})
+}
+
+func gitStatusLabel(status string) string {
+	switch status {
+	case "A":
+		return "Added"
+	case "D":
+		return "Deleted"
+	case "R":
+		return "Renamed"
+	case "C":
+		return "Conflict"
+	case "U":
+		return "Untracked"
+	default:
+		return "Modified"
+	}
 }
 
 func gitStatusColor(status string, k *colors) ui.Color {
@@ -439,58 +487,6 @@ func gitStatusColor(status string, k *colors) ui.Color {
 	}
 }
 
-func (a *app) gitDiffPane(c *ui.Context, k *colors) {
-	ui.Column(c).Grow(1).MinWidth(0).FillHeight().Children(func() {
-		ui.Row(c).Height(36).Padding(0, 10, 0, 14).Gap(8).AlignItems(ui.Center).Children(func() {
-			path := a.gitDiffPath
-			if path == "" {
-				path = "No file selected"
-			}
-			ui.Text(c, path).FontSize(11.5).FontWeight(550).TextColor(k.textMuted).
-				SingleLine().Ellipsis("…")
-			ui.Spacer(c)
-			if a.gitDiffPath != "" {
-				if s := a.gitChangeStatus(); s != "" {
-					ui.Text(c, s).FontSize(10).FontWeight(700).TextColor(gitStatusColor(s, k))
-				}
-			}
-		})
-		ui.Divider(c)
-		if a.gitErr != "" {
-			ui.Column(c).Fill().Center().Padding(20).Children(func() {
-				ui.Icon(c, icon("git-branch")).Size(24, 24).TextColor(k.textFaint)
-				ui.Text(c, a.gitErr).FontSize(12.5).TextColor(k.textMuted)
-			})
-			return
-		}
-		if len(a.gitChanges) == 0 && !a.gitLoading {
-			ui.Column(c).Fill().Center().Gap(7).Children(func() {
-				ui.Icon(c, icon("check")).Size(24, 24).TextColor(k.diffAdd)
-				ui.Text(c, "Working tree clean").FontSize(13).FontWeight(600).TextColor(k.text)
-				ui.Text(c, "There are no changes to review.").FontSize(11.5).TextColor(k.textFaint)
-			})
-			return
-		}
-		if a.gitDiffLoad {
-			ui.Column(c).Fill().Center().Children(func() {
-				ui.Text(c, "Reading diff…").FontSize(12.5).TextColor(k.textFaint)
-			})
-			return
-		}
-		if a.gitDiffErr != "" {
-			ui.Text(c, a.gitDiffErr).FontSize(12).TextColor(k.danger).Padding(12, 10)
-			return
-		}
-		if strings.TrimSpace(a.gitDiff) == "" {
-			ui.Column(c).Fill().Center().Children(func() {
-				ui.Text(c, "No changes in this file").FontSize(12.5).TextColor(k.textFaint)
-			})
-			return
-		}
-		a.gitDiffLines(c, k)
-	})
-}
-
 func (a *app) gitChangeStatus() string {
 	if a.gitSel >= 0 && a.gitSel < len(a.gitChanges) {
 		return a.gitChanges[a.gitSel].Status
@@ -498,23 +494,250 @@ func (a *app) gitChangeStatus() string {
 	return ""
 }
 
-func (a *app) gitDiffLines(c *ui.Context, k *colors) {
-	lines := strings.Split(strings.TrimRight(a.gitDiff, "\n"), "\n")
-	const maxLines = 3000
+func (a *app) gitStatusBadge(c *ui.Context, k *colors, status string) {
+	col := gitStatusColor(status, k)
+	ui.Text(c, gitStatusLabel(status)).FontSize(9.5).FontWeight(700).
+		TextColor(col).Padding(2, 5).Radius(4).Background(col.Alpha(0.11)).
+		Shrink(0).Tooltip(gitStatusLabel(status))
+}
+
+func (a *app) gitDiffPane(c *ui.Context, k *colors) {
+	ui.Column(c).Grow(1).MinWidth(0).FillHeight().Children(func() {
+		a.gitDiffHeader(c, k)
+		ui.Divider(c)
+		a.gitDiffBody(c, k)
+	})
+}
+
+func (a *app) gitDiffHeader(c *ui.Context, k *colors) {
+	ui.Row(c).Height(34).Padding(0, 10, 0, 12).Gap(7).AlignItems(ui.Center).Children(func() {
+		path := a.gitDiffPath
+		if path == "" {
+			ui.Text(c, "No file selected").FontSize(11.5).TextColor(k.textMuted)
+			ui.Spacer(c)
+			return
+		}
+		ui.Icon(c, fileIcon(path)).Size(15, 15).TextColor(k.textMuted)
+		ui.Text(c, filepath.Base(path)).FontSize(12).FontWeight(550).TextColor(k.text).
+			SingleLine().Shrink(0)
+		if dir := filepath.Dir(path); dir != "." {
+			ui.Text(c, dir).FontSize(10.5).TextColor(k.textFaint).
+				SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
+		}
+		ui.Spacer(c)
+		if status := a.gitChangeStatus(); status != "" {
+			a.gitStatusBadge(c, k, status)
+		}
+		if add, del := gitDiffStat(a.gitDiff); add > 0 || del > 0 {
+			ui.Text(c, fmt.Sprintf("+%d", add)).FontSize(10.5).FontWeight(600).
+				TextColor(k.diffAdd).Shrink(0)
+			ui.Text(c, fmt.Sprintf("−%d", del)).FontSize(10.5).FontWeight(600).
+				TextColor(k.diffDel).Shrink(0)
+		}
+		if n := a.store.byRelPath(path); n != nil {
+			open := ui.Row(c).Padding(4, 9).Radius(6).Cursor(ui.CursorPointer).
+				Role(ui.RoleButton).Label("Open File")
+			if open.Hovered() {
+				open.Background(k.hover)
+			}
+			if open.Clicked() {
+				a.later(func() { a.openNote(n) })
+			}
+			open.Children(func() {
+				ui.Text(c, "Open").FontSize(11.5).FontWeight(550).TextColor(k.text)
+			})
+		}
+	})
+}
+
+func (a *app) gitDiffBody(c *ui.Context, k *colors) {
+	switch {
+	case a.gitErr != "":
+		a.gitState(c, k, "git-branch", k.danger, "Changes unavailable", a.gitErr)
+	case len(a.gitChanges) == 0 && !a.gitLoading:
+		a.gitState(c, k, "check", k.diffAdd, "Working tree clean",
+			"There are no changes to review.")
+	case a.gitDiffLoad:
+		a.gitState(c, k, "git-branch", k.textFaint, "Reading diff…", "")
+	case a.gitDiffPath == "":
+		a.gitState(c, k, "git-branch", k.textFaint, "Select a change",
+			"Pick a changed file on the left to see its diff.")
+	case a.gitDiffErr != "":
+		a.gitState(c, k, "git-branch", k.danger, "Could not read this diff", a.gitDiffErr)
+	case strings.TrimSpace(a.gitDiff) == "":
+		a.gitState(c, k, "file-text", k.textFaint, "No text changes",
+			"This file has no textual diff.")
+	default:
+		lines := parseGitDiff(a.gitDiff)
+		if len(lines) == 0 {
+			a.gitState(c, k, "file-text", k.textFaint, "No text changes",
+				"This file has no textual diff.")
+			return
+		}
+		a.gitDiffLines(c, k, lines)
+	}
+}
+
+func (a *app) gitState(c *ui.Context, k *colors, glyph string, col ui.Color, title, detail string) {
+	ui.Column(c).Fill().Center().Padding(20).Gap(8).Children(func() {
+		ui.Box(c).Size(42, 42).Radius(12).Background(col.Alpha(0.10)).Center().Children(func() {
+			ui.Icon(c, icon(glyph)).Size(21, 21).TextColor(col)
+		})
+		ui.Text(c, title).FontSize(13).FontWeight(600).TextColor(k.text).
+			TextAlign(ui.Center)
+		if detail != "" {
+			ui.Text(c, detail).FontSize(11.5).TextColor(k.textFaint).
+				TextAlign(ui.Center).MaxWidth(460)
+		}
+	})
+}
+
+// gitDiffLine is one parsed line of a unified diff, with the old and new
+// line numbers its hunk gives it.
+type gitDiffLine struct {
+	text string
+	old  int
+	new  int
+	kind byte // ' ', '+', '-', '@', 'm' or '\\'
+}
+
+var gitHunkPattern = regexp.MustCompile(`^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@`)
+
+func parseGitDiff(diff string) []gitDiffLine {
+	var out []gitDiffLine
+	oldNo, newNo := 0, 0
+	for _, line := range strings.Split(strings.TrimRight(diff, "\n"), "\n") {
+		if strings.HasPrefix(line, "\\") {
+			out = append(out, gitDiffLine{text: line, kind: '\\'})
+			continue
+		}
+		if strings.HasPrefix(line, "@@") {
+			if m := gitHunkPattern.FindStringSubmatch(line); len(m) == 3 {
+				oldNo, _ = strconv.Atoi(m[1])
+				newNo, _ = strconv.Atoi(m[2])
+			}
+			out = append(out, gitDiffLine{text: line, kind: '@'})
+			continue
+		}
+		if gitDiffMeta(line) {
+			continue
+		}
+		if line == "" {
+			out = append(out, gitDiffLine{old: oldNo, new: newNo})
+			oldNo++
+			newNo++
+			continue
+		}
+		kind := line[0]
+		dl := gitDiffLine{text: line, kind: kind}
+		switch kind {
+		case '+':
+			dl.new = newNo
+			newNo++
+		case '-':
+			dl.old = oldNo
+			oldNo++
+		default:
+			dl.old, dl.new = oldNo, newNo
+			oldNo++
+			newNo++
+		}
+		out = append(out, dl)
+	}
+	return out
+}
+
+func gitDiffMeta(line string) bool {
+	for _, prefix := range []string{
+		"diff --git ", "index ", "new file mode ", "deleted file mode ",
+		"similarity index ", "rename from ", "rename to ", "old mode ",
+		"new mode ", "--- a/", "+++ b/", "--- /dev/null", "+++ /dev/null",
+	} {
+		if strings.HasPrefix(line, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func gitDiffStat(diff string) (add, del int) {
+	for _, line := range strings.Split(diff, "\n") {
+		if gitDiffMeta(line) || strings.HasPrefix(line, "@@") {
+			continue
+		}
+		switch {
+		case strings.HasPrefix(line, "+"):
+			add++
+		case strings.HasPrefix(line, "-"):
+			del++
+		}
+	}
+	return add, del
+}
+
+func (a *app) gitDiffLines(c *ui.Context, k *colors, lines []gitDiffLine) {
+	const maxLines = 2500
 	truncated := len(lines) > maxLines
 	if truncated {
 		lines = lines[:maxLines]
 	}
-	scroll := ui.Scroll(c).Grow(1).MinHeight(0).Padding(8, 12).TrackScroll(&a.gitDiffScroll)
+	scroll := ui.Scroll(c).Grow(1).MinHeight(0).Padding(0, 0, 4, 0).
+		TrackScroll(&a.gitDiffScroll)
 	scroll.Children(func() {
 		for _, line := range lines {
-			ui.Text(c, diffLineText(line)).Font(noteFont.Family).FontSize(11.5).
-				TextColor(diffLineColor(line, k))
+			switch line.kind {
+			case '@':
+				ui.Row(c).Height(24).FillWidth().Padding(0, 10).AlignItems(ui.Center).
+					Background(k.diffHunk.Alpha(0.08)).Children(func() {
+					ui.Text(c, diffLineText(line.text)).Font(noteFont.Family).FontSize(11).
+						TextColor(k.diffHunk).SingleLine()
+				})
+			case 'm', '\\':
+				ui.Row(c).Height(18).FillWidth().Padding(0, 10).AlignItems(ui.Center).Children(func() {
+					ui.Text(c, diffLineText(line.text)).Font(noteFont.Family).FontSize(11).
+						TextColor(k.textFaint).SingleLine()
+				})
+			default:
+				row := ui.Row(c).Height(18).FillWidth().ClipX().AlignItems(ui.Center)
+				switch line.kind {
+				case '+':
+					row.Background(k.diffAdd.Alpha(0.10))
+				case '-':
+					row.Background(k.diffDel.Alpha(0.09))
+				}
+				row.Children(func() {
+					gitGutter(c, k, line.old)
+					gitGutter(c, k, line.new)
+					ui.Text(c, diffLineText(line.text)).Font(noteFont.Family).FontSize(11.5).
+						TextColor(diffLineKindColor(line.kind, k)).SingleLine().Ellipsis("…").
+						Shrink(1).MinWidth(0).Padding(0, 0, 0, 8)
+				})
+			}
 		}
 		if truncated {
-			ui.Text(c, "… diff truncated").FontSize(11).TextColor(k.textFaint).Padding(6, 0)
+			ui.Text(c, "… diff truncated").FontSize(11).TextColor(k.textFaint).Padding(6, 10)
 		}
 	})
+}
+
+func gitGutter(c *ui.Context, k *colors, n int) {
+	text := ""
+	if n > 0 {
+		text = strconv.Itoa(n)
+	}
+	ui.Text(c, text).Font(noteFont.Family).FontSize(10).TextColor(k.textFaint).
+		Width(38).TextAlign(ui.End).Shrink(0).Padding(0, 5)
+}
+
+func diffLineKindColor(kind byte, k *colors) ui.Color {
+	switch kind {
+	case '+':
+		return k.diffAdd
+	case '-':
+		return k.diffDel
+	default:
+		return k.textMuted
+	}
 }
 
 func diffLineText(line string) string {
@@ -524,21 +747,4 @@ func diffLineText(line string) string {
 		return "\u00a0"
 	}
 	return line
-}
-
-func diffLineColor(line string, k *colors) ui.Color {
-	switch {
-	case strings.HasPrefix(line, "+++") || strings.HasPrefix(line, "---"):
-		return k.textFaint
-	case strings.HasPrefix(line, "@@"):
-		return k.diffHunk
-	case strings.HasPrefix(line, "diff --git") || strings.HasPrefix(line, "index "):
-		return k.textMuted
-	case strings.HasPrefix(line, "+"):
-		return k.diffAdd
-	case strings.HasPrefix(line, "-"):
-		return k.diffDel
-	default:
-		return k.textMuted
-	}
 }
