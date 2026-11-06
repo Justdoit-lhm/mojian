@@ -27,25 +27,27 @@ func newTestApp(t *testing.T) *app {
 }
 
 func TestSplitAndClose(t *testing.T) {
-	a := newTestApp(t)
+	a := newProjectApp(t)
 	t0 := a.tab()
-	note := t0.Focus.Note
+	first := t0.Focus.Note
+	second := a.store.byRelPath("Reading notes.md")
+	third := a.store.byRelPath(filepath.Join("scripts", "tasks.py"))
 
-	a.split(false)
+	a.splitWith(second, false)
 	if got := len(t0.panes()); got != 2 {
 		t.Fatalf("panes after split: %d", got)
 	}
-	if t0.Focus.Note != note {
-		t.Error("split changed the focused note")
+	if t0.Focus.Note != second {
+		t.Error("split did not focus the chosen file")
 	}
-	if got := t0.panes()[1].Note; got != note {
-		t.Error("the new pane shows another note")
+	if t0.panes()[1].Note != second || t0.panes()[0].Note != first {
+		t.Error("the split panes show the wrong files")
 	}
 	if t0.Root.Vertical {
 		t.Error("split right made a stacked split")
 	}
 
-	a.split(true)
+	a.splitWith(third, true)
 	if got := len(t0.panes()); got != 3 {
 		t.Fatalf("panes after second split: %d", got)
 	}
@@ -65,6 +67,27 @@ func TestSplitAndClose(t *testing.T) {
 	}
 	if a.tab() != nil {
 		t.Fatal("closing every pane should close the tab")
+	}
+}
+
+func TestSplitStopsAtFourPanes(t *testing.T) {
+	a := newProjectApp(t)
+	t0 := a.tab()
+	for i, n := range a.store.sorted() {
+		if i == 0 {
+			continue
+		}
+		a.splitWith(n, false)
+	}
+	if got := len(t0.panes()); got != min(len(a.store.sorted()), maxPanes) {
+		t.Fatalf("panes: %d", got)
+	}
+	if len(t0.panes()) < maxPanes {
+		t.Skip("the fixture has too few files")
+	}
+	a.beginSplit(false)
+	if !strings.Contains(a.err, "at most 4 panes") {
+		t.Fatalf("the fifth pane was allowed: %q", a.err)
 	}
 }
 
@@ -146,7 +169,7 @@ func TestNoteSave(t *testing.T) {
 }
 
 func TestView(t *testing.T) {
-	a := newTestApp(t)
+	a := newProjectApp(t)
 	tt := ui.NewTester(a.view, 1100, 700)
 	if !tt.HasText("Welcome to Mojian") {
 		t.Fatalf("texts: %q", tt.Texts())
@@ -154,15 +177,27 @@ func TestView(t *testing.T) {
 	if err := tt.Click("Split Right"); err != nil {
 		t.Fatal(err)
 	}
+	tt.Frame()
+	if !a.splitPick || !tt.HasText("Choose a file for the new pane") {
+		t.Fatalf("Split Right did not ask for a file: %q", tt.Texts())
+	}
+	a.chooseSplit(a.store.byRelPath("Reading notes.md"))
+	tt.Frame()
 	if got := len(a.tab().panes()); got != 2 {
-		t.Fatalf("panes after clicking Split Right: %d", got)
+		t.Fatalf("panes after choosing a file: %d", got)
 	}
 	a.openPalette()
 	tt.Frame()
 	tt.Type("Split Down")
 	tt.Key(0, ui.KeyEnter)
+	tt.Frame()
+	if !a.splitPick {
+		t.Fatal("the Split Down palette command did not ask for a file")
+	}
+	a.chooseSplit(a.store.byRelPath(filepath.Join("scripts", "tasks.py")))
+	tt.Frame()
 	if got := len(a.tab().panes()); got != 3 {
-		t.Fatalf("panes after the palette: %d", got)
+		t.Fatalf("panes after the second choice: %d", got)
 	}
 	if err := tt.Click("New File"); err != nil {
 		t.Fatal(err)

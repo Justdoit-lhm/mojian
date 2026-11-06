@@ -239,8 +239,12 @@ func (a *app) tiles(c *ui.Context, k *colors, t *tab) {
 			p.Fill(ui.Rect{X: x, Y: r.Y, W: tileW, H: r.H}, bg, 4)
 			p.Stroke(ui.Rect{X: x, Y: r.Y, W: tileW, H: r.H}, rim, 4, 1)
 		}
-		s := float32(9)
-		p.Icon(icon("file-text"), ui.Rect{
+		s := float32(11)
+		ic := fileIcon("")
+		if t.Focus != nil && t.Focus.Note != nil {
+			ic = fileIcon(t.Focus.Note.Path)
+		}
+		p.Icon(ic, ui.Rect{
 			X: r.X + (tileW-s)/2, Y: r.Y + (r.H-s)/2, W: s, H: s,
 		}, k.text)
 	})

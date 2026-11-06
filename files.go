@@ -747,7 +747,7 @@ func (a *app) nodeMenu(m *ui.Menu, rel string, dir bool) {
 			a.later(func() { a.pasteInto(rel) })
 		}
 	} else {
-		if m.Item("Open").Chosen() {
+		if m.Item("Open in Current Window").Chosen() {
 			if n := a.store.byRelPath(rel); n != nil {
 				a.later(func() { a.openNote(n) })
 			}

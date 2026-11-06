@@ -45,6 +45,13 @@ type app struct {
 
 	focusReq *pane
 
+	splitPick  bool
+	splitDown  bool
+	splitFrom  *pane
+	splitTab   *tab
+	splitQuery string
+	splitSel   int
+
 	treeOpen        bool
 	treeQuery       string
 	treeFocusSearch bool
@@ -614,24 +621,6 @@ func (a *app) closePane(p *pane) {
 		a.changed()
 		return
 	}
-}
-
-// split adds another editor view of the note beside or below the
-// focused one. Both panes edit the note's one buffer, with their own
-// caret and scroll.
-func (a *app) split(down bool) {
-	t := a.tab()
-	if t == nil || t.Focus == nil {
-		return
-	}
-	p := t.Focus
-	with := newPane(p.Note)
-	if !t.split(p, with, down) {
-		return
-	}
-	t.Focus = p
-	a.focusReq = p
-	a.changed()
 }
 
 func (a *app) toggleZoom() {

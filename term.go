@@ -12,7 +12,7 @@ import (
 
 const (
 	maxTerms = 4
-	termH    = 260
+	termW    = 360
 )
 
 // termTab is one shell in the terminal panel.
@@ -157,15 +157,17 @@ func (a *app) closeTerminals() {
 	a.termFocus = false
 }
 
-// terminalPanel draws the shell in a panel under the editor.
+// terminalPanel draws the shells as a card on the right of the editors,
+// with the same header and corners as a file pane.
 func (a *app) terminalPanel(c *ui.Context, k *colors) {
-	card := ui.Column(c).Height(termH).FillWidth().Radius(cardR).Clip().
-		Background(k.cardFocused).Border(1, k.cardBorder).
-		Shadow(0, 1, 2, 0, k.shadow)
+	card := ui.Column(c).Width(termW).Basis(termW).Shrink(0).MinWidth(280).MinHeight(0).FillHeight().
+		Radius(cardR).Clip().Background(k.card).Border(1, k.cardBorder).
+		Shadow(0, 1, 2, 0, k.shadow).Shadow(0, 6, 22, -2, k.shadow)
 	card.Children(func() {
 		a.terminalHeader(c, k)
+		a.terminalSessions(c, k)
 		ui.Divider(c)
-		body := ui.Box(c).Grow(1).MinHeight(0).Padding(0, 6, 6, 6)
+		body := ui.Box(c).Grow(1).MinHeight(0).Padding(0, 0, 4, 0)
 		body.Children(func() {
 			t := a.activeTermTab()
 			if t == nil || t.Term == nil {
@@ -185,16 +187,40 @@ func (a *app) terminalPanel(c *ui.Context, k *colors) {
 }
 
 func (a *app) terminalHeader(c *ui.Context, k *colors) {
-	ui.Row(c).Height(34).Padding(0, 6, 0, 12).Gap(4).AlignItems(ui.Center).Children(func() {
-		ui.Icon(c, icon("square-terminal")).Size(14, 14).TextColor(k.textMuted).
-			Margin(0, 4, 0, 4)
+	ui.Row(c).Height(headerH).Padding(0, 8, 0, 8).Gap(6).AlignItems(ui.Center).Children(func() {
+		ui.Icon(c, icon("square-terminal")).Size(14.5, 14.5).TextColor(k.text)
+		ui.Text(c, "Terminal").FontSize(12.5).FontWeight(600).TextColor(k.text).
+			SingleLine().Shrink(0)
+		ui.Spacer(c)
+		if n := len(a.terms); n > 1 {
+			ui.Text(c, fmt.Sprintf("%d/%d", n, maxTerms)).FontSize(10.5).
+				TextColor(k.textFaint).Shrink(0)
+		}
+		if b := iconButton(c, k, "plus", "New Terminal", 23, 13).
+			Tooltip("New Terminal  ⇧⌘T").Disabled(len(a.terms) >= maxTerms); b.Clicked() {
+			a.later(func() { a.newTerminal() })
+		}
+		if iconButton(c, k, "x", "Hide Terminal", 23, 13).
+			Tooltip(tip("Hide Terminal", cmdTerminal)).Clicked() {
+			a.later(func() { a.toggleTerminal() })
+		}
+	})
+}
+
+// terminalSessions is the row of shells under the terminal header when
+// there is more than one. A single shell needs no tab of its own.
+func (a *app) terminalSessions(c *ui.Context, k *colors) {
+	if len(a.terms) <= 1 {
+		return
+	}
+	ui.Row(c).Height(31).Padding(0, 8, 0, 8).Gap(3).AlignItems(ui.Center).Children(func() {
 		for i, t := range a.terms {
 			i, t := i, t
 			active := i == a.activeTerm
-			tab := ui.Row(c.Key(fmt.Sprintf("term:%d", t.ID))).Height(24).
-				Padding(0, 7, 0, 4).Gap(5).Radius(6).AlignItems(ui.Center).
+			tab := ui.Row(c.Key(fmt.Sprintf("term:%d", t.ID))).Height(23).
+				Padding(0, 6, 0, 4).Gap(5).Radius(6).AlignItems(ui.Center).
 				Role(ui.RoleTab).Selected(active).FocusRing(false).Label(t.Title).
-				MaxWidth(132).Shrink(0)
+				Grow(1).Shrink(1).MinWidth(0).Tooltip(t.Dir)
 			if active {
 				tab.Background(k.tabActive).Border(1, k.cardBorder)
 			} else if tab.Hovered() {
@@ -212,25 +238,13 @@ func (a *app) terminalHeader(c *ui.Context, k *colors) {
 				ui.Text(c, t.Title).FontSize(11.5).TextColor(k.textMuted).
 					SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
 				if hovered {
-					if iconButton(c, k, "x", "Close Terminal", 17, 10).Clicked() {
+					if iconButton(c, k, "x", "Close Terminal", 15, 9).Clicked() {
 						a.later(func() { a.closeTerminal(i) })
 					}
 				} else {
-					ui.Box(c).Size(17, 17).Shrink(0)
+					ui.Box(c).Size(15, 15).Shrink(0)
 				}
 			})
-		}
-		if b := iconButton(c, k, "plus", "New Terminal", 23, 13).
-			Tooltip("New Terminal  ⇧⌘T").Disabled(len(a.terms) >= maxTerms); b.Clicked() {
-			a.later(func() { a.newTerminal() })
-		}
-		if len(a.terms) >= maxTerms {
-			ui.Text(c, "4/4").FontSize(10).TextColor(k.textFaint)
-		}
-		ui.Spacer(c)
-		if t := a.activeTermTab(); t != nil && t.Dir != "" {
-			ui.Text(c, shortPath(t.Dir)).FontSize(10).TextColor(k.textFaint).
-				SingleLine().Ellipsis("…").MaxWidth(220).Tooltip(t.Dir)
 		}
 	})
 }

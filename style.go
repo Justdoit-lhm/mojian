@@ -148,12 +148,13 @@ func editorThemeOf(t *ui.Theme) *editor.Theme {
 	return th
 }
 
-//go:embed assets/icons/*.svg
+//go:embed assets/icons/*.svg assets/icons/material/*.svg
 var iconAssets embed.FS
 
 var svgCache = map[string]*ui.SVG{}
 
-// icon returns an embedded Lucide icon by name.
+// icon returns an embedded icon by name. UI actions are Lucide; files and
+// folders come from Material Icon Theme (assets/icons/material).
 func icon(name string) *ui.SVG {
 	if s, ok := svgCache[name]; ok {
 		return s

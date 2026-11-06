@@ -25,6 +25,7 @@ func (a *app) openProjectPicker() {
 	}
 	a.projectOpen = false
 	a.paletteOpen = false
+	a.splitPick = false
 	a.projectPicker = true
 	a.pickerSel = -1
 	a.pickerErr = ""
@@ -139,7 +140,7 @@ func (a *app) projectPickerModal(c *ui.Context, k *colors) {
 func (a *app) pickerHeader(c *ui.Context, k *colors) {
 	ui.Row(c).Height(60).Padding(0, 18, 0, 12).Gap(11).AlignItems(ui.Center).Children(func() {
 		ui.Box(c).Size(34, 34).Radius(9).Background(k.hover).Center().Children(func() {
-			ui.Icon(c, icon("folder-open")).Size(18, 18).TextColor(k.textMuted)
+			ui.Icon(c, folderIcon()).Size(18, 18).TextColor(k.textMuted)
 		})
 		ui.Column(c).Gap(1).Children(func() {
 			ui.Text(c, "Open Folder").FontSize(15).FontWeight(650).TextColor(k.text)
@@ -200,7 +201,7 @@ func (a *app) pickerPlace(c *ui.Context, k *colors, label, path string) {
 		a.later(func() { a.setPickerPath(path) })
 	}
 	row.Children(func() {
-		ui.Icon(c, icon("folder")).Size(14, 14).TextColor(k.textMuted)
+		ui.Icon(c, folderIcon()).Size(15, 15).TextColor(k.textMuted)
 		ui.Text(c, label).FontSize(12.5).TextColor(k.text)
 	})
 }
@@ -217,7 +218,7 @@ func (a *app) pickerRecent(c *ui.Context, k *colors, path string) {
 		a.later(func() { a.openProject(path) })
 	}
 	row.Children(func() {
-		ui.Icon(c, icon("folder")).Size(14, 14).TextColor(k.textMuted)
+		ui.Icon(c, folderIcon()).Size(15, 15).TextColor(k.textMuted)
 		ui.Text(c, a.projectLabel(path)).FontSize(12.5).TextColor(k.text).
 			SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
 	})
@@ -233,7 +234,7 @@ func (a *app) pickerMain(c *ui.Context, k *colors) {
 			field := ui.Row(c).Grow(1).Height(34).Padding(0, 10).Gap(7).Radius(8).
 				Background(k.hover).AlignItems(ui.Center)
 			field.Children(func() {
-				ui.Icon(c, icon("folder-open")).Size(14, 14).TextColor(k.textFaint)
+				ui.Icon(c, folderIcon()).Size(14, 14).TextColor(k.textFaint)
 				in := ui.TextInputBase(c, &a.pickerInput).Grow(1).FontSize(12.5).
 					Placeholder("Folder path").AutoFocus()
 				if in.Submitted() {
@@ -273,7 +274,7 @@ func (a *app) pickerMain(c *ui.Context, k *colors) {
 					row.ScrollIntoView()
 				}
 				row.Children(func() {
-					ui.Icon(c, icon("folder")).Size(15, 15).TextColor(k.textMuted)
+					ui.Icon(c, folderIcon()).Size(15, 15).TextColor(k.textMuted)
 					ui.Text(c, e.Name).FontSize(12.5).TextColor(k.text).
 						SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
 					ui.Spacer(c)

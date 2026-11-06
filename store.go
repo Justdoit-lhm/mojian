@@ -25,7 +25,6 @@ type note struct {
 	Title string
 	Saved string // the text as last read or written
 	Mod   time.Time
-	words int
 
 	buf *editor.Buffer
 }
@@ -84,10 +83,6 @@ func wrapFor(path string) bool {
 	}
 	return false
 }
-
-// wordCount counts what a reader would call words, near enough: runs of
-// text between spaces. Markdown punctuation counts with them.
-func wordCount(s string) int { return len(strings.Fields(s)) }
 
 // noteTitle is the first heading of the note, else its file name without
 // the extension.
@@ -217,9 +212,6 @@ func (s *store) refresh() error {
 			Saved: string(data),
 			Mod:   info.ModTime(),
 		}
-		if isMarkdownPath(path) {
-			n.words = wordCount(n.Saved)
-		}
 		n.Title = noteTitle(n.Saved, path)
 		s.add(n)
 		return nil
@@ -257,7 +249,7 @@ func skipDir(name string) bool {
 }
 
 // isMarkdownPath reports whether a file is Markdown: prose, with soft
-// wrap and a word count, rather than source code.
+// wrap, rather than source code.
 func isMarkdownPath(path string) bool {
 	l := editor.LanguageFor(path)
 	return l != nil && l.Name == "Markdown"
@@ -327,9 +319,6 @@ func (s *store) add(n *note) {
 		n.Path = fmt.Sprintf("Untitled %d.md", s.seq)
 	}
 	n.Rel = relPath(s.dir, n.Path)
-	if n.words == 0 && n.Saved != "" && isMarkdownPath(n.Path) {
-		n.words = wordCount(n.Saved)
-	}
 	s.notes = append(s.notes, n)
 	s.byPath[n.Path] = n
 	s.byRel[n.Rel] = n
@@ -388,9 +377,6 @@ func (s *store) newFileIn(rel, name, body string) (*note, error) {
 		}
 	}
 	n := &note{Path: path, Title: noteTitle(body, path), Saved: body, Mod: time.Now()}
-	if isMarkdownPath(path) {
-		n.words = wordCount(body)
-	}
 	s.add(n)
 	s.buildTree()
 	return n, nil
@@ -445,10 +431,6 @@ func (s *store) save(n *note) error {
 	}
 	n.Saved = body
 	n.Title = noteTitle(body, n.Path)
-	n.words = 0
-	if isMarkdownPath(n.Path) {
-		n.words = wordCount(body)
-	}
 	n.Mod = time.Now()
 	if n.buf != nil {
 		n.buf.MarkSaved()
@@ -543,7 +525,7 @@ Mojian is a quiet text editor for plain files, built with [MyGo](https://mygo.eg
 - **⌘N** names a new file; **⇧⌘N** makes a folder.
 - **⇧⌘D** splits the editor, so you can work in two places at once.
 - **⇧⌘O** searches the files of the project.
-- **⇧⌘T** opens a terminal under the editor, in the folder you are in.
+- **⇧⌘T** opens a terminal on the right, in the folder you are in.
 - **⇧⌘P** opens the command palette.
 
 Mojian edits text and code, with syntax highlighting for Python, JavaScript,

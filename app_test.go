@@ -62,19 +62,46 @@ func TestCodeFilesLoad(t *testing.T) {
 	}
 }
 
-func TestSplitSharesOneBuffer(t *testing.T) {
+func TestSplitChoosesAnotherFile(t *testing.T) {
 	registerFonts()
 	a := newProjectApp(t)
 	py := a.store.byRelPath(filepath.Join("scripts", "tasks.py"))
 	a.openNote(py)
 	tt := ui.NewTester(a.view, 1100, 700)
 	tt.Frame()
-	a.split(false)
+	a.beginSplit(false)
 	tt.Frame()
+	if !a.splitPick {
+		t.Fatal("Split Right did not open the file chooser")
+	}
+	if !tt.HasText("Choose a file for the new pane") {
+		t.Fatalf("split chooser texts: %q", tt.Texts())
+	}
+	var other *note
+	for _, n := range a.splitCandidates() {
+		if n != py {
+			other = n
+			break
+		}
+	}
+	if other == nil {
+		t.Fatal("the split chooser has no other file")
+	}
+	a.chooseSplit(other)
+	tt.Frame()
+	if a.splitPick {
+		t.Fatal("the split chooser stayed open")
+	}
 	tb := a.tab()
 	panes := tb.panes()
 	if len(panes) != 2 {
 		t.Fatalf("panes: %d", len(panes))
+	}
+	if panes[0].Note == panes[1].Note {
+		t.Fatal("a split opened the same file twice")
+	}
+	if tb.Focus != panes[1] || panes[1].Note != other {
+		t.Fatal("the new pane did not receive the chosen file and focus")
 	}
 	for _, p := range panes {
 		if p.state == nil {
@@ -84,11 +111,8 @@ func TestSplitSharesOneBuffer(t *testing.T) {
 	if panes[0].state == panes[1].state {
 		t.Error("the panes share one caret and scroll state")
 	}
-	if panes[0].state.Buffer != panes[1].state.Buffer {
-		t.Error("the panes do not share the file's buffer")
-	}
-	if tb.Focus != panes[0] {
-		t.Error("split moved the focus away from the editor being written")
+	if panes[0].state.Buffer == panes[1].state.Buffer {
+		t.Error("different files share one buffer")
 	}
 }
 

@@ -409,11 +409,7 @@ func (a *app) gitFiles(c *ui.Context, k *colors) {
 					}
 				}
 				row.Children(func() {
-					ui.Box(c).Size(17, 17).Radius(4).Center().
-						Background(k.hover).Children(func() {
-						ui.Text(c, ch.Status).FontSize(10).FontWeight(700).
-							TextColor(gitStatusColor(ch.Status, k))
-					})
+					ui.Icon(c, fileIcon(ch.Path)).Size(16, 16).TextColor(k.textMuted)
 					ui.Column(c).Grow(1).MinWidth(0).Children(func() {
 						ui.Text(c, filepath.Base(ch.Display)).FontSize(12).FontWeight(500).
 							TextColor(k.text).SingleLine().Ellipsis("…")
@@ -422,6 +418,8 @@ func (a *app) gitFiles(c *ui.Context, k *colors) {
 								SingleLine().Ellipsis("…")
 						}
 					})
+					ui.Text(c, ch.Status).FontSize(10).FontWeight(700).
+						TextColor(gitStatusColor(ch.Status, k)).Shrink(0)
 				})
 			}
 		})

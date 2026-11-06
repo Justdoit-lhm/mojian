@@ -1,0 +1,114 @@
+package main
+
+import (
+	"path/filepath"
+	"strings"
+
+	"github.com/egoist/mygo/ui"
+)
+
+// fileIconAsset names the Material Icon Theme asset for a file: by its
+// exact name for special files, else by its extension.
+func fileIconAsset(name string) string {
+	base := strings.ToLower(filepath.Base(name))
+	switch base {
+	case "dockerfile", "containerfile":
+		return "docker"
+	case "makefile":
+		return "makefile"
+	case "cmakelists.txt":
+		return "cmake"
+	case ".gitignore", ".gitattributes", ".gitmodules":
+		return "git"
+	case "package.json", "package-lock.json", "npm-shrinkwrap.json":
+		return "npm"
+	case "tsconfig.json":
+		return "typescript"
+	case "go.mod", "go.sum":
+		return "go"
+	case "cargo.toml":
+		return "rust"
+	case "license", "license.md", "license.txt", "copying":
+		return "license"
+	case "readme", "readme.md", "readme.txt", "readme.rst":
+		return "readme"
+	case ".env", ".env.local", ".env.example":
+		return "settings"
+	}
+	switch strings.TrimPrefix(strings.ToLower(filepath.Ext(base)), ".") {
+	case "py", "pyw", "pyi":
+		return "python"
+	case "js", "mjs", "cjs":
+		return "javascript"
+	case "jsx", "tsx":
+		return "react"
+	case "ts", "mts", "cts":
+		return "typescript"
+	case "go":
+		return "go"
+	case "rs":
+		return "rust"
+	case "c", "h":
+		return "c"
+	case "cc", "cpp", "cxx", "hpp", "hh", "hxx":
+		return "cpp"
+	case "swift":
+		return "swift"
+	case "kt", "kts":
+		return "kotlin"
+	case "java":
+		return "java"
+	case "rb", "erb":
+		return "ruby"
+	case "php":
+		return "php"
+	case "cs":
+		return "csharp"
+	case "sh", "bash", "zsh", "fish":
+		return "console"
+	case "ps1", "psm1":
+		return "powershell"
+	case "json", "jsonc", "json5":
+		return "json"
+	case "yaml", "yml":
+		return "yaml"
+	case "toml":
+		return "toml"
+	case "xml", "plist":
+		return "xml"
+	case "sql", "sqlite", "db":
+		return "database"
+	case "html", "htm":
+		return "html"
+	case "css":
+		return "css"
+	case "scss", "sass":
+		return "sass"
+	case "less":
+		return "less"
+	case "vue":
+		return "vue"
+	case "svelte":
+		return "svelte"
+	case "astro":
+		return "astro"
+	case "md", "markdown":
+		return "markdown"
+	case "mdx":
+		return "mdx"
+	case "lock":
+		return "lock"
+	default:
+		return "document"
+	}
+}
+
+// fileIcon returns the file-type icon from Material Icon Theme.
+func fileIcon(name string) *ui.SVG {
+	return icon("material/" + fileIconAsset(name))
+}
+
+// folderIcon returns the Material Icon Theme folder.
+func folderIcon() *ui.SVG {
+	return icon("material/folder-base")
+}

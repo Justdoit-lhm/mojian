@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 
@@ -329,7 +328,6 @@ func (a *app) sidebar(c *ui.Context, k *colors) {
 			}
 			a.treeChildren(c, k, a.store.tree, 0)
 		})
-		a.sidebarFooter(c, k)
 	})
 	if a.treeReveal != "" {
 		a.treeReveal = ""
@@ -339,7 +337,7 @@ func (a *app) sidebar(c *ui.Context, k *colors) {
 func (a *app) sidebarHeader(c *ui.Context, k *colors) {
 	ui.Row(c).Height(headerH).Padding(0, 7, 0, 11).Gap(6).AlignItems(ui.Center).
 		PopoverMenu(func(m *ui.Menu) { a.nodeMenu(m, "", true) }).Children(func() {
-		ui.Icon(c, icon("folder-open")).Size(15, 15).TextColor(k.textMuted)
+		ui.Icon(c, folderIcon()).Size(16, 16).TextColor(k.textMuted)
 		ui.Text(c, "Explorer").FontSize(12.5).FontWeight(600).TextColor(k.text)
 		ui.Spacer(c)
 		if iconButton(c, k, "file-plus", "New File", 24, 14).
@@ -380,27 +378,6 @@ func (a *app) sidebarSearch(c *ui.Context, k *colors) {
 			if iconButton(c, k, "x", "Clear Search", 20, 11).Clicked() {
 				a.treeQuery = ""
 				a.treeFocusSearch = true
-			}
-		}
-	})
-}
-
-func (a *app) sidebarFooter(c *ui.Context, k *colors) {
-	ui.Divider(c)
-	ui.Row(c).Height(34).Padding(0, 7, 0, 11).Gap(1).AlignItems(ui.Center).Children(func() {
-		ui.Spacer(c)
-		if iconButton(c, k, "git-branch", "Git Diff", 24, 14).
-			Tooltip(tip("Git Diff", cmdGit)).Clicked() {
-			a.later(func() { a.toggleGit() })
-		}
-		if runtime.GOOS != "js" {
-			if iconButton(c, k, "square-terminal", "Toggle Terminal", 24, 14).
-				Tooltip(tip("Toggle Terminal", cmdTerminal)).Clicked() {
-				a.later(func() { a.toggleTerminal() })
-			}
-			if iconButton(c, k, "folder-open", "Reveal Project", 24, 14).
-				Tooltip("Reveal Project").Clicked() {
-				a.revealVault()
 			}
 		}
 	})
@@ -455,11 +432,7 @@ func (a *app) treeFolder(c *ui.Context, k *colors, n *fileNode, depth int) {
 				arrow = "chevron-down"
 			}
 			ui.Icon(c, icon(arrow)).Size(12, 12).TextColor(k.textFaint)
-			folder := "folder"
-			if open {
-				folder = "folder-open"
-			}
-			ui.Icon(c, icon(folder)).Size(14, 14).TextColor(k.textMuted)
+			ui.Icon(c, folderIcon()).Size(15, 15).TextColor(k.textMuted)
 			ui.Text(c, n.Name).FontSize(12.5).FontWeight(550).TextColor(k.text).
 				SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
 		})
@@ -507,7 +480,7 @@ func (a *app) treeFile(c *ui.Context, k *colors, n *fileNode, depth int) {
 	}
 	row.Children(func() {
 		ui.Box(c).Size(12, 12).Shrink(0)
-		ui.Icon(c, icon("file-text")).Size(14, 14).TextColor(k.textMuted)
+		ui.Icon(c, fileIcon(n.Note.Path)).Size(15, 15).TextColor(k.textMuted)
 		ui.Text(c, n.Name).FontSize(12.5).FontWeight(500).TextColor(k.text).
 			SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
 		ui.Spacer(c)
@@ -548,11 +521,11 @@ func (a *app) treeDraftRow(c *ui.Context, k *colors, depth int, dir bool) {
 		AlignItems(ui.Center).Background(k.panelSel)
 	row.Children(func() {
 		ui.Box(c).Size(12, 12).Shrink(0)
-		name := "file-text"
+		ic := fileIcon(d.name)
 		if dir {
-			name = "folder"
+			ic = folderIcon()
 		}
-		ui.Icon(c, icon(name)).Size(14, 14).TextColor(k.textMuted)
+		ui.Icon(c, ic).Size(15, 15).TextColor(k.textMuted)
 		placeholder := "Folder name"
 		switch d.kind {
 		case draftFile:
@@ -623,7 +596,7 @@ func (a *app) searchResults(c *ui.Context, k *colors) {
 		}
 		a.treeRowKeys(row, n.Rel)
 		row.Children(func() {
-			ui.Icon(c, icon("file-text")).Size(14, 14).TextColor(k.textMuted)
+			ui.Icon(c, fileIcon(n.Path)).Size(15, 15).TextColor(k.textMuted)
 			ui.Column(c).Grow(1).MinWidth(0).Children(func() {
 				ui.Text(c, n.Title).FontSize(12.5).FontWeight(500).TextColor(k.text).
 					SingleLine().Ellipsis("…")

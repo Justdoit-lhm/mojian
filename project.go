@@ -107,6 +107,9 @@ func (a *app) openProject(dir string) {
 	a.treeDraft = nil
 	a.rename = nil
 	a.paletteOpen = false
+	a.splitPick = false
+	a.splitFrom = nil
+	a.splitTab = nil
 	a.projectOpen = false
 	a.err = ""
 	a.rememberProject(s.dir)
@@ -139,7 +142,7 @@ func (a *app) projectChip(c *ui.Context, k *colors) {
 		a.projectOpen = !a.projectOpen
 	}
 	chip.Children(func() {
-		ui.Icon(c, icon("folder-open")).Size(19, 19).TextColor(k.textMuted)
+		ui.Icon(c, folderIcon()).Size(19, 19).TextColor(k.textMuted)
 		ui.Text(c, a.projectName()).FontSize(13.5).FontWeight(700).TextColor(k.text.Alpha(0.9)).
 			SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
 		ui.Icon(c, icon("chevron-down")).Size(13, 13).TextColor(k.textFaint)
@@ -194,7 +197,7 @@ func (a *app) projectRow(c *ui.Context, k *colors, p string) {
 		a.later(func() { a.openProject(p) })
 	}
 	row.Children(func() {
-		ui.Icon(c, icon("folder")).Size(16, 16).TextColor(k.textMuted)
+		ui.Icon(c, folderIcon()).Size(16, 16).TextColor(k.textMuted)
 		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
 			ui.Text(c, a.projectLabel(p)).FontSize(12.5).FontWeight(500).TextColor(k.text).
 				SingleLine().Ellipsis("…")

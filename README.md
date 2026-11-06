@@ -14,21 +14,23 @@ workspaces hold panes, and every pane edits a file with syntax highlighting.
   rest of the window. Each project keeps its own tabs and layout.
 - **An Explorer, not a file list.** `⇧⌘B` shows the project's folders and text
   files. New File and New Folder live in its header; right-click an entry for
-  Open, Open in New Tab, Rename, Duplicate, Copy, Cut, Paste, Copy Path,
-  Reveal in Finder, and Move to Trash. The tree reloads when the window
+  Open in Current Window, Open in New Tab, Rename, Duplicate, Copy, Cut,
+  Paste, Copy Path, Reveal in Finder, and Move to Trash. The tree reloads when the window
   regains focus, so a file made in the terminal appears.
 - **Code, not only Markdown.** Python, JavaScript, TypeScript, Go, Rust, C, C++,
   Swift, Kotlin, JSON, YAML, TOML, SQL, HTML, CSS, Markdown and the rest of
-  MyGo's languages are highlighted. Code files get line numbers; a Markdown
-  note gets a word count instead.
+  MyGo's languages are highlighted. Code files get line numbers; prose wraps
+  instead of scrolling sideways. File rows use Material Icon Theme's
+  per-language icons.
 - **Tabs and split panes.** A tab is a workspace; each pane is an editor.
-  Split right or down, drag the divider, double-click it for half and half,
-  zoom a pane, or close it. Two panes of one file share its buffer, each with
-  its own caret and scroll.
-- **A terminal inside the window.** `⇧⌘T` opens a shell under the editor, in the
-  selected folder. Up to four terminal tabs stay in the panel; `+` starts
-  another, and its close button ends that shell. It is a real terminal (the
-  MyGo terminal plugin, libghostty-vt) with colors, selection and clipboard.
+  Split right or down and choose the file for the new pane; a split never opens
+  the same file twice. A tab holds at most four panes. Drag the divider,
+  double-click it for half and half, zoom a pane, or close it.
+- **A terminal inside the window.** `⇧⌘T` opens a terminal card on the right of
+  the editor, in the selected folder. Up to four sessions share the card; `+`
+  starts another, and its close button ends that shell. It is a real terminal
+  (the MyGo terminal plugin, libghostty-vt) with colors, selection and
+  clipboard.
 - **A Git diff page.** `⇧⌘G` shows the working tree against `HEAD`: changed
   files on the left, a colored unified diff on the right, with branch, status,
   refresh and untracked files. Double-click a changed file to open it.
@@ -96,20 +98,22 @@ touched; projects, Git and terminals need the desktop app.
 | `store.go` | a project folder: text files, new notes, atomic saves, autosave |
 | `tree.go` | the file tree, folder creation and file search |
 | `project.go` | the project switcher and recent projects |
-| `term.go` | the in-app terminal panel, via MyGo's terminal plugin |
+| `term.go` | the in-app terminal card, via MyGo's terminal plugin |
 | `git.go` | the working-tree diff page |
 | `files.go` | file operations: rename, copy, move, trash and the context menu |
 | `picker.go` | the in-window project folder chooser |
+| `split.go` | the split file chooser and the four-pane limit |
 | `model.go` | files, tabs, panes, the split tree and the saved layout |
 | `view.go` | the title bar, pane cards and splitters |
 | `tabs.go` | the tab strip and tab menu |
 | `palette.go` | the command palette |
 | `style.go` | palettes, the window gradient, fonts and icons |
-| `assets/` | Lucide icons (ISC) and JetBrains Mono (OFL) |
+| `assets/` | Lucide action icons (ISC), Material Icon Theme file icons (MIT), and JetBrains Mono (OFL) |
 
 ## Credits
 
-Icons: [Lucide](https://lucide.dev), ISC (`assets/icons/LICENSE`).
+Action icons: [Lucide](https://lucide.dev), ISC (`assets/icons/LICENSE`).
+File and folder icons: [Material Icon Theme](https://github.com/PKief/vscode-material-icon-theme), MIT (`assets/icons/material/LICENSE`).
 Font: [JetBrains Mono](https://www.jetbrains.com/lp/mono/), OFL
 (`assets/fonts/OFL.txt`).
 The window's shape and interaction follow [GoRex](https://github.com/egoist/gorex),

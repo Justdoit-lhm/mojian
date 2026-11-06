@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"runtime"
 	"time"
 
@@ -38,16 +37,17 @@ func (a *app) view(c *ui.Context) {
 					} else {
 						a.emptyState(c, k)
 					}
-					if a.termOpen {
-						a.terminalPanel(c, k)
-					}
 				})
+				if a.termOpen {
+					a.terminalPanel(c, k)
+				}
 			})
 		})
 	if a.err != "" {
 		a.errorBanner(c, k)
 	}
 	a.projectPickerModal(c, k)
+	a.splitPicker(c, k)
 	a.palette(c, k)
 	a.shortcuts(c)
 	a.autosave(c)
@@ -208,7 +208,7 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 	hovered := card.Hovered()
 	card.Children(func() {
 		a.paneHeader(c, k, t, p, focused, hovered)
-		body := ui.Box(c).Grow(1).MinHeight(0).Padding(0, 5, 6, 5)
+		body := ui.Box(c).Grow(1).MinHeight(0).Padding(0, 0, 6, 0)
 		body.Children(func() {
 			if p.Note == nil {
 				return
@@ -221,15 +221,11 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 			st.Theme = a.editorTheme(c)
 			st.Font = noteFont
 			st.Label = p.Note.Title
-			note := p.Note
 			st.OnInput = func(ui.InputEvent) bool {
-				if isMarkdownPath(note.Path) {
-					note.words = wordCount(note.text())
-				}
 				a.scheduleSave()
 				return false
 			}
-			tv := editor.View(c, st).Fill().MaxWidth(900).AlignSelf(ui.Center)
+			tv := editor.View(c, st).Fill()
 			if a.focusReq == p {
 				tv.Focus()
 				a.focusReq = nil
@@ -251,16 +247,9 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 // paneHeader draws a note's icon, title and size, its unsaved dot, and
 // its buttons.
 func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hovered bool) {
-	name, detail := "Untitled", ""
+	name := "Untitled"
 	if p.Note != nil {
 		name = p.Note.Title
-		if isMarkdownPath(p.Note.Path) {
-			detail = fmt.Sprintf("%d words", p.Note.words)
-		} else if l := editor.LanguageFor(p.Note.Path); l != nil {
-			detail = l.Name
-		} else {
-			detail = "Text"
-		}
 	}
 	h := ui.Row(c).Height(headerH).Padding(0, 8, 0, 12).Gap(7).
 		AlignItems(ui.Center).MinWidth(0)
@@ -274,14 +263,14 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hov
 		a.changed()
 	}
 	h.Children(func() {
-		ui.Icon(c, icon("file-text")).Size(14.5, 14.5).TextColor(k.text)
+		ic := fileIcon("")
+		if p.Note != nil {
+			ic = fileIcon(p.Note.Path)
+		}
+		ui.Icon(c, ic).Size(16, 16).TextColor(k.text)
 		ui.Row(c).Grow(1).MinWidth(0).Gap(5).AlignItems(ui.Center).ClipX().Children(func() {
 			ui.Text(c, name).FontSize(12.5).FontWeight(600).TextColor(k.text).
-				SingleLine().Ellipsis("…").Shrink(0).MaxWidthPercent(80)
-			if detail != "" {
-				ui.Text(c, detail).FontSize(12.5).FontWeight(500).TextColor(k.text.Alpha(0.86)).
-					SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
-			}
+				SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
 			if p.Note != nil && p.Note.dirty() {
 				ui.Box(c).Size(7, 7).Radius(4).Background(k.attention).Margin(0, 0, 0, 2).
 					Tooltip("Unsaved edits")
@@ -293,17 +282,17 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hov
 				return
 			}
 			if iconButton(c, k, "columns-2", "Split Right", 26, 16).
-				Tooltip(tip("Split Right", cmdSplitRight)).Clicked() {
+				Tooltip(tip("Split Right", cmdSplitRight)).Disabled(len(t.panes()) >= maxPanes).Clicked() {
 				a.later(func() {
 					t.Focus = p
-					a.split(false)
+					a.beginSplit(false)
 				})
 			}
 			if iconButton(c, k, "rows-2", "Split Down", 26, 16).
-				Tooltip(tip("Split Down", cmdSplitDown)).Clicked() {
+				Tooltip(tip("Split Down", cmdSplitDown)).Disabled(len(t.panes()) >= maxPanes).Clicked() {
 				a.later(func() {
 					t.Focus = p
-					a.split(true)
+					a.beginSplit(true)
 				})
 			}
 			zoom, label := "maximize-2", "Zoom"
@@ -333,7 +322,7 @@ func (a *app) emptyState(c *ui.Context, k *colors) {
 	ui.Column(c).Grow(1).FillWidth().Center().Gap(14).Children(func() {
 		ui.Box(c).Size(54, 54).Radius(15).Background(k.cardFocused).
 			Border(1, k.cardBorderFocused).Center().Children(func() {
-			ui.Icon(c, icon("file-text")).Size(26, 26).TextColor(k.textMuted)
+			ui.Icon(c, fileIcon("")).Size(28, 28).TextColor(k.textMuted)
 		})
 		ui.Text(c, "No file open").FontSize(19).FontWeight(600).TextColor(k.text)
 		ui.Text(c, "Write something, or pick a file in Explorer.").
