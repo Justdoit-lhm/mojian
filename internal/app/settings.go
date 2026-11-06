@@ -101,13 +101,9 @@ func (a *app) settingsRail(c *ui.Context, k *colors) {
 func (a *app) settingsBody(c *ui.Context, k *colors) {
 	cat := settingsCats[a.settingsCat]
 	ui.Column(c).Grow(1).MinWidth(0).MinHeight(0).FillHeight().Children(func() {
-		ui.Row(c).Height(64).Padding(0, 28, 0, 24).Gap(12).
-			AlignItems(ui.Center).Children(func() {
-			ui.Box(c).Size(32, 32).Radius(9).Background(k.Hover).Center().Children(func() {
-				ui.Icon(c, icons.Icon(cat.glyph)).Size(16, 16).TextColor(k.TextMuted)
-			})
+		ui.Row(c).Height(64).Padding(0, 30).AlignItems(ui.Center).Children(func() {
 			ui.Column(c).Gap(1).Children(func() {
-				ui.Text(c, cat.title).FontSize(15).FontWeight(650).TextColor(k.Text)
+				ui.Text(c, cat.title).FontSize(16).FontWeight(650).TextColor(k.Text)
 				ui.Text(c, cat.detail).FontSize(11.5).TextColor(k.TextFaint)
 			})
 		})
