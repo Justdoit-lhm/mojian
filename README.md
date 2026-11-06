@@ -26,11 +26,11 @@ workspaces hold panes, and every pane edits a file with syntax highlighting.
   Split right or down and choose the file for the new pane; a split never opens
   the same file twice. A tab holds at most four panes. Drag the divider,
   double-click it for half and half, zoom a pane, or close it.
-- **A terminal inside the window.** `⇧⌘T` opens a terminal card on the right of
-  the editor, in the selected folder. Up to four sessions share the card; `+`
-  starts another, and its close button ends that shell. It is a real terminal
-  (the MyGo terminal plugin, libghostty-vt) with colors, selection and
-  clipboard.
+- **A terminal inside the window.** `⇧⌘T` opens a terminal pane on the right,
+  in the selected folder. It shares the tab's four-pane limit and the same
+  split, zoom and close controls as a file pane; `⇧⌘T` again closes it. It is a
+  real terminal (the MyGo terminal plugin, libghostty-vt) with colors,
+  selection and clipboard.
 - **A Git diff page.** `⇧⌘G` shows the working tree against `HEAD`: changed
   files on the left, a colored unified diff on the right, with branch, status,
   refresh and untracked files. Double-click a changed file to open it.
@@ -50,7 +50,7 @@ workspaces hold panes, and every pane edits a file with syntax highlighting.
 | `⇧⌘N` | New folder |
 | `⌘T` | New tab |
 | `⇧⌘B` | Show or hide the Explorer |
-| `⇧⌘T` | Show the terminal panel |
+| `⇧⌘T` | Open or close the terminal pane |
 | `⇧⌘G` | Show the Git diff page |
 | `⇧⌘D` / `⇧⌘E` | Split right / down |
 | `⌘W` / `⇧⌘W` | Close pane / tab |
@@ -98,7 +98,7 @@ touched; projects, Git and terminals need the desktop app.
 | `store.go` | a project folder: text files, new notes, atomic saves, autosave |
 | `tree.go` | the file tree, folder creation and file search |
 | `project.go` | the project switcher and recent projects |
-| `term.go` | the in-app terminal card, via MyGo's terminal plugin |
+| `term.go` | the terminal pane, via MyGo's terminal plugin |
 | `git.go` | the working-tree diff page |
 | `files.go` | file operations: rename, copy, move, trash and the context menu |
 | `picker.go` | the in-window project folder chooser |

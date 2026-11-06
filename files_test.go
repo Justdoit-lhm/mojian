@@ -167,27 +167,42 @@ func TestProjectPickerIsInApp(t *testing.T) {
 	}
 }
 
-func TestTerminalLimitAndEmptyPanel(t *testing.T) {
+func TestTerminalPaneAndSharedLimit(t *testing.T) {
 	registerFonts()
 	a := newProjectApp(t)
-	a.termOpen = true
+	a.shellStarter = func() (*termTab, error) { return &termTab{}, nil }
+	a.addTerminalPane(&termTab{})
 	tt := ui.NewTester(a.view, 1100, 700)
 	tt.Frame()
-	if !tt.HasText("No terminal") {
-		t.Fatalf("empty terminal panel missing: %q", tt.Texts())
+	if got := len(a.tab().panes()); got != 2 {
+		t.Fatalf("panes: %d", got)
 	}
-	a.terms = []*termTab{
-		{ID: 1, Title: "Terminal 1"}, {ID: 2, Title: "Terminal 2"},
-		{ID: 3, Title: "Terminal 3"}, {ID: 4, Title: "Terminal 4"},
+	if !tt.HasText("Terminal") {
+		t.Fatalf("terminal title missing: %q", tt.Texts())
 	}
-	a.activeTerm = 0
-	a.newTerminal()
-	if a.err == "" || !strings.Contains(a.err, "at most 4") {
-		t.Fatalf("the fifth terminal was allowed: %q", a.err)
+	if tt.HasText("zsh") || tt.HasText("1/4") {
+		t.Fatalf("the terminal still has a shell tab: %q", tt.Texts())
+	}
+	if err := tt.Click("Split Right"); err != nil {
+		t.Fatal(err)
 	}
 	tt.Frame()
-	if !tt.HasText("4/4") {
-		t.Fatalf("terminal count missing: %q", tt.Texts())
+	if a.splitPick {
+		t.Fatal("splitting a terminal opened the file chooser")
+	}
+	if got := len(a.tab().panes()); got != 3 {
+		t.Fatalf("panes after terminal split: %d", got)
+	}
+	if a.tab().Focus.Term == nil {
+		t.Fatal("the new terminal pane is not focused")
+	}
+	a.splitTerminal(a.tab().Focus, true)
+	if got := len(a.tab().panes()); got != 4 {
+		t.Fatalf("panes after fourth: %d", got)
+	}
+	a.splitFocused(false)
+	if !strings.Contains(a.err, "at most 4 panes") {
+		t.Fatalf("the terminal did not share the four-pane limit: %q", a.err)
 	}
 }
 

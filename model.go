@@ -14,6 +14,7 @@ import (
 type pane struct {
 	ID    string
 	Note  *note
+	Term  *termTab
 	state *editor.State
 }
 
@@ -47,6 +48,10 @@ func newPane(n *note) *pane {
 	return &pane{ID: nextID("p"), Note: n}
 }
 
+func newTermPane(t *termTab) *pane {
+	return &pane{ID: nextID("p"), Term: t}
+}
+
 func newTab(n *note) *tab {
 	p := newPane(n)
 	return &tab{ID: nextID("t"), Root: &node{Pane: p}, Focus: p}
@@ -75,8 +80,12 @@ func (n *node) walk(fn func(*pane)) {
 // tab's own name, and how many panes it holds.
 func (t *tab) label() (name, detail string) {
 	name = t.Name
-	if name == "" && t.Focus != nil && t.Focus.Note != nil {
-		name = t.Focus.Note.Title
+	if name == "" && t.Focus != nil {
+		if t.Focus.Note != nil {
+			name = t.Focus.Note.Title
+		} else if t.Focus.Term != nil {
+			name = "Terminal"
+		}
 	}
 	if name == "" {
 		name = "Untitled"
@@ -87,12 +96,36 @@ func (t *tab) label() (name, detail string) {
 	return name, detail
 }
 
-// editorPane returns the pane to focus when the tab appears.
+// editorPane returns the pane to focus when the tab appears: an editor
+// if it has one, else the terminal.
 func (t *tab) editorPane() *pane {
-	if t.Focus != nil {
+	if t.Focus != nil && t.Focus.Note != nil {
 		return t.Focus
 	}
+	if p := t.firstEditorPane(); p != nil {
+		return p
+	}
 	return firstPane(t.Root)
+}
+
+// firstEditorPane returns the first pane that shows a file, not a shell.
+func (t *tab) firstEditorPane() *pane {
+	for _, p := range t.panes() {
+		if p.Note != nil {
+			return p
+		}
+	}
+	return nil
+}
+
+// terminalPane returns the tab's terminal, if it has one.
+func (t *tab) terminalPane() *pane {
+	for _, p := range t.panes() {
+		if p.Term != nil {
+			return p
+		}
+	}
+	return nil
 }
 
 // dirty reports whether any note of the tab has unsaved edits.
@@ -256,6 +289,9 @@ func layoutNodeOf(n *node) *layoutNode {
 		return nil
 	}
 	if n.Pane != nil {
+		if n.Pane.Note == nil {
+			return nil // shells are not saved; the file panes around them are
+		}
 		return &layoutNode{Pane: &layoutPane{
 			ID:   n.Pane.ID,
 			Note: n.Pane.Note.Rel,

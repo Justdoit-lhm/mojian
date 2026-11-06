@@ -34,9 +34,9 @@ var (
 	cmdSave = &command{title: "Save", accel: "CmdOrCtrl+S", keys: "⌘S", glyph: "save",
 		run: func(a *app) { a.saveNow() }}
 	cmdSplitRight = &command{title: "Split Right", accel: "CmdOrCtrl+Shift+D", keys: "⇧⌘D", glyph: "columns-2",
-		run: func(a *app) { a.beginSplit(false) }}
+		run: func(a *app) { a.splitFocused(false) }}
 	cmdSplitDown = &command{title: "Split Down", accel: "CmdOrCtrl+Shift+E", keys: "⇧⌘E", glyph: "rows-2",
-		run: func(a *app) { a.beginSplit(true) }}
+		run: func(a *app) { a.splitFocused(true) }}
 	cmdZoom = &command{title: "Zoom Pane", accel: "CmdOrCtrl+Shift+M", keys: "⇧⌘M", glyph: "maximize-2",
 		run: func(a *app) { a.toggleZoom() }}
 	cmdEqualize = &command{title: "Equalize Panes", accel: "CmdOrCtrl+Ctrl+=", keys: "⌃⌘=", glyph: "columns-2",

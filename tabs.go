@@ -241,8 +241,13 @@ func (a *app) tiles(c *ui.Context, k *colors, t *tab) {
 		}
 		s := float32(11)
 		ic := fileIcon("")
-		if t.Focus != nil && t.Focus.Note != nil {
-			ic = fileIcon(t.Focus.Note.Path)
+		if t.Focus != nil {
+			switch {
+			case t.Focus.Note != nil:
+				ic = fileIcon(t.Focus.Note.Path)
+			case t.Focus.Term != nil:
+				ic = icon("square-terminal")
+			}
 		}
 		p.Icon(ic, ui.Rect{
 			X: r.X + (tileW-s)/2, Y: r.Y + (r.H-s)/2, W: s, H: s,

@@ -4,6 +4,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
 )
@@ -38,9 +39,6 @@ func (a *app) view(c *ui.Context) {
 						a.emptyState(c, k)
 					}
 				})
-				if a.termOpen {
-					a.terminalPanel(c, k)
-				}
 			})
 		})
 	if a.err != "" {
@@ -61,11 +59,12 @@ func (a *app) titleBar(c *ui.Context, k *colors) {
 	left := bar.Left
 	if left == 0 {
 		left = 12 // in full screen, or beside no controls
-	} else {
-		left += 14
 	}
-	ui.Row(c).Height(titleH).Padding(0, max(bar.Right, 10), 0, left).Gap(14).
+	ui.Row(c).Height(titleH).Padding(0, max(bar.Right, 10), 0, 0).Gap(14).
 		AlignItems(ui.Center).DragWindow().Children(func() {
+		// The band under the traffic lights drags the window from the
+		// top-left corner; the system controls stay above it.
+		ui.Box(c).Width(left).Height(titleH).DragWindow().Cursor(ui.CursorGrab)
 		a.projectChip(c, k)
 		a.tabStrip(c, k)
 		// The title bar between the tabs and the buttons drags the
@@ -206,10 +205,29 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 		Shadow(0, 6, 22, -2, shadow)
 	card.Transition(ui.ElementTransition{Colors: true, Duration: 160 * time.Millisecond})
 	hovered := card.Hovered()
+	width := card.Bounds().W
 	card.Children(func() {
-		a.paneHeader(c, k, t, p, focused, hovered)
+		a.paneHeader(c, k, t, p, focused, hovered, width)
 		body := ui.Box(c).Grow(1).MinHeight(0).Padding(0, 0, 6, 0)
 		body.Children(func() {
+			if p.Term != nil {
+				if p.Term.Term == nil {
+					return
+				}
+				tv := terminal.View(c, p.Term.Term).Fill()
+				if a.focusReq == p {
+					tv.Focus()
+					a.focusReq = nil
+				}
+				if tv.Focused() && t.Focus != p {
+					t.Focus = p
+					a.changed()
+				}
+				if tv.Focused() && p.Term.Exited {
+					p.Term.Exited = false
+				}
+				return
+			}
 			if p.Note == nil {
 				return
 			}
@@ -246,12 +264,21 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 
 // paneHeader draws a note's icon, title and size, its unsaved dot, and
 // its buttons.
-func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hovered bool) {
+func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hovered bool, width float32) {
+	compact := width > 0 && width < 230
 	name := "Untitled"
+	ic := fileIcon("")
 	if p.Note != nil {
-		name = p.Note.Title
+		name, ic = p.Note.Title, fileIcon(p.Note.Path)
+	} else if p.Term != nil {
+		name, ic = "Terminal", icon("square-terminal")
 	}
-	h := ui.Row(c).Height(headerH).Padding(0, 8, 0, 12).Gap(7).
+	hpad, hgap := float32(12), float32(7)
+	btn, isize := float32(26), float32(16)
+	if compact {
+		hpad, hgap, btn, isize = 4, 5, 21, 13
+	}
+	h := ui.Row(c).Height(headerH).Padding(0, 6, 0, hpad).Gap(hgap).
 		AlignItems(ui.Center).MinWidth(0)
 	if h.DoubleClicked() {
 		t.Focus = p
@@ -263,47 +290,55 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hov
 		a.changed()
 	}
 	h.Children(func() {
-		ic := fileIcon("")
-		if p.Note != nil {
-			ic = fileIcon(p.Note.Path)
+		iconSize := float32(16)
+		if compact {
+			iconSize = 14
 		}
-		ui.Icon(c, ic).Size(16, 16).TextColor(k.text)
-		ui.Row(c).Grow(1).MinWidth(0).Gap(5).AlignItems(ui.Center).ClipX().Children(func() {
-			ui.Text(c, name).FontSize(12.5).FontWeight(600).TextColor(k.text).
-				SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
+		ui.Icon(c, ic).Size(iconSize, iconSize).TextColor(k.text).Tooltip(name)
+		if compact {
+			ui.Spacer(c)
 			if p.Note != nil && p.Note.dirty() {
-				ui.Box(c).Size(7, 7).Radius(4).Background(k.attention).Margin(0, 0, 0, 2).
+				ui.Box(c).Size(6, 6).Radius(3).Background(k.attention).
 					Tooltip("Unsaved edits")
 			}
-		})
+		} else {
+			ui.Row(c).Grow(1).MinWidth(0).Gap(5).AlignItems(ui.Center).ClipX().Children(func() {
+				ui.Text(c, name).FontSize(12.5).FontWeight(600).TextColor(k.text).
+					SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
+				if p.Note != nil && p.Note.dirty() {
+					ui.Box(c).Size(7, 7).Radius(4).Background(k.attention).Margin(0, 0, 0, 2).
+						Tooltip("Unsaved edits")
+				}
+			})
+		}
 		show := focused || hovered
 		ui.Row(c).Gap(1).AlignItems(ui.Center).Children(func() {
 			if !show {
 				return
 			}
-			if iconButton(c, k, "columns-2", "Split Right", 26, 16).
+			if iconButton(c, k, "columns-2", "Split Right", btn, isize).
 				Tooltip(tip("Split Right", cmdSplitRight)).Disabled(len(t.panes()) >= maxPanes).Clicked() {
 				a.later(func() {
 					t.Focus = p
-					a.beginSplit(false)
+					a.splitFocused(false)
 				})
 			}
-			if iconButton(c, k, "rows-2", "Split Down", 26, 16).
+			if iconButton(c, k, "rows-2", "Split Down", btn, isize).
 				Tooltip(tip("Split Down", cmdSplitDown)).Disabled(len(t.panes()) >= maxPanes).Clicked() {
 				a.later(func() {
 					t.Focus = p
-					a.beginSplit(true)
+					a.splitFocused(true)
 				})
 			}
 			zoom, label := "maximize-2", "Zoom"
 			if t.Zoom == p {
 				zoom, label = "minimize-2", "Unzoom"
 			}
-			if iconButton(c, k, zoom, label, 26, 16).Tooltip(tip(label, cmdZoom)).Clicked() {
+			if iconButton(c, k, zoom, label, btn, isize).Tooltip(tip(label, cmdZoom)).Clicked() {
 				t.Focus = p
 				a.toggleZoom()
 			}
-			if iconButton(c, k, "x", "Close Pane", 26, 17).
+			if iconButton(c, k, "x", "Close Pane", btn, isize+1).
 				Tooltip(tip("Close Pane", cmdClosePane)).Clicked() {
 				a.laterPane(p)
 			}

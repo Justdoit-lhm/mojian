@@ -66,11 +66,7 @@ type app struct {
 	fileClip []string
 	fileCut  bool
 
-	terms      []*termTab
-	activeTerm int
-	termOpen   bool
-	termFocus  bool
-	termSeq    int
+	shellStarter func() (*termTab, error) // tests replace this
 
 	gitOpen       bool
 	gitLoading    bool
@@ -537,6 +533,13 @@ func (a *app) openNote(n *note) {
 		return
 	}
 	p := t.Focus
+	if p != nil && p.Term != nil {
+		p = t.firstEditorPane()
+		if p == nil {
+			a.openNoteInTab(n)
+			return
+		}
+	}
 	if p == nil {
 		p = firstPane(t.Root)
 	}
@@ -572,6 +575,9 @@ func (a *app) closeTab(t *tab) {
 			if err := a.store.save(p.Note); err != nil {
 				a.fail(err)
 			}
+		}
+		if p.Term != nil && p.Term.Term != nil {
+			_ = p.Term.Term.Close()
 		}
 	}
 	a.tabs = append(a.tabs[:i], a.tabs[i+1:]...)
@@ -612,6 +618,9 @@ func (a *app) closePane(p *pane) {
 			if err := a.store.save(p.Note); err != nil {
 				a.fail(err)
 			}
+		}
+		if p.Term != nil && p.Term.Term != nil {
+			_ = p.Term.Term.Close()
 		}
 		if !t.closePane(p) {
 			a.closeTab(t)
