@@ -112,13 +112,19 @@ func (a *app) tabItem(c *ui.Context, k *colors, i int, t *tab, width float32, wh
 		e.Background(k.tabInactive)
 	}
 	e.Transition(ui.ElementTransition{Colors: true, Position: true, Duration: 160 * time.Millisecond})
-	if e.Clicked() && !active {
-		a.active = i
-		a.focusReq = t.Focus
-		if t.Focus != nil {
-			a.revealInTree(t.Focus.Note)
+	if e.Clicked() {
+		if a.gitOpen {
+			a.gitOpen = false
+			a.invalidate()
 		}
-		a.changed()
+		if !active {
+			a.active = i
+			a.focusReq = t.Focus
+			if t.Focus != nil {
+				a.revealInTree(t.Focus.Note)
+			}
+			a.changed()
+		}
 	}
 	if e.DoubleClicked() {
 		a.active = i

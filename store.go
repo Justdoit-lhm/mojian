@@ -186,6 +186,7 @@ func (s *store) refresh() error {
 		s.buildTree()
 		return nil
 	}
+	seen := make(map[string]bool, len(s.notes))
 	err := filepath.WalkDir(s.dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil // an unreadable folder is skipped, not fatal
@@ -199,6 +200,7 @@ func (s *store) refresh() error {
 		if !isTextFile(path) {
 			return nil
 		}
+		seen[path] = true
 		if _, ok := s.byPath[path]; ok {
 			return nil
 		}
@@ -225,6 +227,18 @@ func (s *store) refresh() error {
 	if err != nil {
 		return err
 	}
+	// A file removed or moved outside the app leaves the store. Dirty
+	// notes stay: their text is still in memory and may be saved again.
+	kept := s.notes[:0]
+	for _, n := range s.notes {
+		if !seen[n.Path] && !n.dirty() {
+			delete(s.byPath, n.Path)
+			delete(s.byRel, n.Rel)
+			continue
+		}
+		kept = append(kept, n)
+	}
+	s.notes = kept
 	sort.SliceStable(s.notes, func(i, j int) bool { return s.notes[i].Mod.After(s.notes[j].Mod) })
 	s.buildTree()
 	return nil
@@ -332,14 +346,18 @@ func relPath(dir, p string) string {
 	return filepath.Base(p)
 }
 
-// newNote writes a new untitled note in the root of the vault.
+// newNote writes a new untitled Markdown note in the root of the vault.
 func (s *store) newNote() (*note, error) { return s.newNoteIn("") }
 
-// newNoteIn writes a new untitled note in the folder rel, or at the root
-// for an empty rel, and returns it.
+// newNoteIn writes a new untitled Markdown note in the folder rel, or at
+// the root for an empty rel.
 func (s *store) newNoteIn(rel string) (*note, error) {
-	title := "Untitled"
-	body := "# Untitled\n\n"
+	return s.newFileIn(rel, "Untitled.md", "# Untitled\n\n")
+}
+
+// newFileIn writes a text file with the given name and body in the folder
+// rel, or at the root for an empty rel. It returns the loaded note.
+func (s *store) newFileIn(rel, name, body string) (*note, error) {
 	dir := s.dir
 	if s.memory {
 		rel = ""
@@ -351,30 +369,68 @@ func (s *store) newNoteIn(rel string) (*note, error) {
 			return nil, err
 		}
 	}
-	s.seq++
-	var name string
+	name = fileName(name, "untitled.txt")
+	var path string
 	if s.memory {
-		name = fmt.Sprintf("Untitled %d.md", s.seq)
-	} else {
-		name = "Untitled.md"
+		s.seq++
+		stem, ext := splitExt(name)
+		path = name
 		for i := 2; ; i++ {
-			if _, err := os.Stat(filepath.Join(dir, name)); errors.Is(err, os.ErrNotExist) {
+			if _, ok := s.byPath[path]; !ok {
 				break
 			}
-			name = fmt.Sprintf("Untitled %d.md", i)
+			path = fmt.Sprintf("%s %d%s", stem, i, ext)
 		}
-	}
-	path := name
-	if !s.memory {
-		path = filepath.Join(dir, name)
+	} else {
+		path = uniquePath(dir, name)
 		if err := s.write(path, body); err != nil {
 			return nil, err
 		}
 	}
-	n := &note{Path: path, Title: title, Saved: body, Mod: time.Now(), words: wordCount(body)}
+	n := &note{Path: path, Title: noteTitle(body, path), Saved: body, Mod: time.Now()}
+	if isMarkdownPath(path) {
+		n.words = wordCount(body)
+	}
 	s.add(n)
 	s.buildTree()
 	return n, nil
+}
+
+// splitExt separates a file name's extension for a numbered sibling.
+func splitExt(name string) (stem, ext string) {
+	ext = filepath.Ext(name)
+	stem = strings.TrimSuffix(name, ext)
+	if stem == "" {
+		stem = "untitled"
+	}
+	return stem, ext
+}
+
+// uniquePath returns dir/name, numbered before its extension when that
+// name is taken.
+func uniquePath(dir, name string) string {
+	path := filepath.Join(dir, name)
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		return path
+	}
+	stem, ext := splitExt(name)
+	for i := 2; ; i++ {
+		path = filepath.Join(dir, fmt.Sprintf("%s %d%s", stem, i, ext))
+		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+			return path
+		}
+	}
+}
+
+// fileName keeps a typed name a single file name.
+func fileName(name, fallback string) string {
+	name = strings.TrimSpace(name)
+	name = strings.ReplaceAll(name, "/", "-")
+	name = strings.ReplaceAll(name, "\\", "-")
+	if name == "" || name == "." || name == ".." {
+		return fallback
+	}
+	return name
 }
 
 // save writes the note if it changed, atomically, so that a crash leaves
@@ -484,14 +540,15 @@ Mojian is a quiet text editor for plain files, built with [MyGo](https://mygo.eg
 
 - **⌘O** opens a project folder, and the name at the top left switches between them.
 - **⇧⌘B** shows the file tree.
-- **⌘N** writes a new note; **⇧⌘N** makes a folder.
+- **⌘N** names a new file; **⇧⌘N** makes a folder.
 - **⇧⌘D** splits the editor, so you can work in two places at once.
 - **⇧⌘O** searches the files of the project.
-- **⇧⌘T** opens a terminal in the folder you are in.
+- **⇧⌘T** opens a terminal under the editor, in the folder you are in.
 - **⇧⌘P** opens the command palette.
 
 Mojian edits text and code, with syntax highlighting for Python, JavaScript,
-TypeScript, Go, Rust, Swift, Markdown and more. Files stay ordinary files in
+TypeScript, Go, Rust, Swift, Markdown and more. The Explorer copies, cuts,
+pastes and renames files like a code editor; files stay ordinary files in
 ` + "`~/Documents/Mojian`" + `, or wherever the project lives.
 `
 

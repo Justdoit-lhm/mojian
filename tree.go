@@ -17,7 +17,7 @@ const (
 	rowH  = 26
 )
 
-// fileNode is one entry of the vault's tree: a folder, or a Markdown note.
+// fileNode is one entry of the project tree: a folder, or a text file.
 type fileNode struct {
 	Name     string
 	Rel      string
@@ -26,15 +26,26 @@ type fileNode struct {
 	Children []*fileNode
 }
 
-// folderDraft is a folder being named in the tree.
-type folderDraft struct {
+type draftKind int
+
+const (
+	draftFile draftKind = iota
+	draftFolder
+	draftRename
+)
+
+// treeDraft is a name being typed in the tree: a new file, a new folder,
+// or the new name of an existing entry.
+type treeDraft struct {
+	kind    draftKind
 	parent  string
+	target  string
 	name    string
 	gen     int
 	focused bool
 }
 
-// buildTree caches the vault as a tree, so every frame reads what a
+// buildTree caches the project as a tree, so every frame reads what a
 // refresh left instead of the disk.
 func (s *store) buildTree() {
 	if s.memory {
@@ -53,8 +64,7 @@ func (s *store) buildTree() {
 	s.tree = s.readDirTree(s.dir, "")
 }
 
-// readDirTree reads the folders and the notes they hold, skipping hidden
-// folders and anything that is not Markdown.
+// readDirTree reads the folders and the text files they hold.
 func (s *store) readDirTree(dir, rel string) *fileNode {
 	n := &fileNode{Name: filepath.Base(dir), Rel: rel, Dir: true}
 	entries, err := os.ReadDir(dir)
@@ -94,13 +104,12 @@ func sortNodes(ns []*fileNode) {
 	})
 }
 
-// dirPath resolves a folder within the vault, refusing anything outside
+// dirPath resolves a folder within the project, refusing anything outside
 // it.
 func (s *store) dirPath(rel string) (string, error) {
-	p := filepath.Join(s.dir, rel)
-	r, err := filepath.Rel(s.dir, p)
-	if err != nil || r == ".." || strings.HasPrefix(r, ".."+string(filepath.Separator)) {
-		return "", errors.New("folder is outside the vault")
+	p, err := s.absRel(rel)
+	if err != nil {
+		return "", err
 	}
 	info, err := os.Stat(p)
 	if err != nil {
@@ -118,12 +127,8 @@ func (s *store) dirExists(rel string) bool {
 }
 
 // newFolder makes a folder in parent and returns its path within the
-// vault. An existing name takes the next number, so naming a folder twice
-// never fails.
+// project. An existing name takes the next number.
 func (s *store) newFolder(parent, name string) (string, error) {
-	if s.memory {
-		return "", errors.New("folders need the desktop app")
-	}
 	dir, err := s.dirPath(parent)
 	if err != nil {
 		return "", err
@@ -165,6 +170,15 @@ func (a *app) dirOpen(rel string) bool {
 
 // openPath opens every folder on the way to rel.
 func (a *app) openPath(rel string) {
+	if a.store == nil || rel == "" {
+		return
+	}
+	if !a.store.dirExists(rel) {
+		rel = filepath.Dir(rel)
+	}
+	if rel == "." {
+		return
+	}
 	if a.openDirs == nil {
 		a.openDirs = map[string]bool{}
 	}
@@ -178,6 +192,25 @@ func (a *app) openPath(rel string) {
 	}
 }
 
+// remapOpenDirs moves the open folders under oldRel to newRel.
+func (a *app) remapOpenDirs(oldRel, newRel string) {
+	if oldRel == "" || a.openDirs == nil {
+		return
+	}
+	next := make(map[string]bool, len(a.openDirs))
+	prefix := oldRel + string(filepath.Separator)
+	for dir, open := range a.openDirs {
+		switch {
+		case dir == oldRel:
+			dir = newRel
+		case strings.HasPrefix(dir, prefix):
+			dir = newRel + strings.TrimPrefix(dir, oldRel)
+		}
+		next[dir] = open
+	}
+	a.openDirs = next
+}
+
 func (a *app) toggleDir(rel string) {
 	if rel == "" {
 		return
@@ -187,11 +220,11 @@ func (a *app) toggleDir(rel string) {
 	}
 	a.openDirs[rel] = !a.openDirs[rel]
 	a.treeSel = rel
-	a.folderDraft = nil
+	a.treeDraft = nil
 }
 
-// refreshProject reads the project from disk, so files made in a
-// terminal appear in the tree.
+// refreshProject reads the project from disk, so files made in a terminal
+// appear in the tree, and closes editors whose file disappeared.
 func (a *app) refreshProject() {
 	if a.store == nil || a.store.memory {
 		return
@@ -200,10 +233,37 @@ func (a *app) refreshProject() {
 		a.fail(err)
 		return
 	}
+	a.closeOrphanPanes()
+	a.keepTreeSelection()
+	a.invalidate()
+}
+
+func (a *app) closeOrphanPanes() {
+	if a.store == nil {
+		return
+	}
+	live := make(map[*note]bool, len(a.store.notes))
+	for _, n := range a.store.notes {
+		live[n] = true
+	}
+	a.closeNotes(func(n *note) bool { return !live[n] && !n.dirty() })
+}
+
+// keepTreeSelection keeps the selected row if it still exists; otherwise
+// it falls back to the open note's folder.
+func (a *app) keepTreeSelection() {
+	if a.store == nil || a.treeSel == "" {
+		return
+	}
+	if abs, err := a.store.absRel(a.treeSel); err == nil {
+		if _, err := os.Stat(abs); err == nil {
+			return
+		}
+	}
+	a.treeSel = ""
 	if n := a.currentNote(); n != nil {
 		a.revealInTree(n)
 	}
-	a.invalidate()
 }
 
 // toggleTree shows or hides the tree, reading the project when it
@@ -213,14 +273,13 @@ func (a *app) toggleTree() {
 	if a.treeOpen {
 		a.refreshProject()
 	} else {
-		a.folderDraft = nil
+		a.treeDraft = nil
 		a.treeFocusSearch = false
 	}
 	a.invalidate()
 }
 
-// openTreeSearch shows the tree with the search field focused, for the
-// Open Note command.
+// openTreeSearch shows the tree with the search field focused.
 func (a *app) openTreeSearch() {
 	a.paletteOpen = false
 	a.treeOpen = true
@@ -230,7 +289,7 @@ func (a *app) openTreeSearch() {
 	a.invalidate()
 }
 
-// revealInTree opens the folders of n and selects its folder.
+// revealInTree opens the folders of n and selects its row.
 func (a *app) revealInTree(n *note) {
 	if n == nil {
 		return
@@ -238,79 +297,12 @@ func (a *app) revealInTree(n *note) {
 	if a.openDirs == nil {
 		a.openDirs = map[string]bool{}
 	}
-	dir := filepath.Dir(n.Rel)
-	if dir == "." {
-		dir = ""
-	}
-	a.treeSel = dir
-	a.openPath(dir)
+	a.treeSel = n.Rel
+	a.openPath(n.Rel)
 	a.treeReveal = n.Rel
 }
 
-// selectedDir is the folder new notes and folders go into.
-func (a *app) selectedDir() string {
-	if a.store == nil || a.treeSel == "" {
-		return ""
-	}
-	if !a.store.dirExists(a.treeSel) {
-		return ""
-	}
-	return a.treeSel
-}
-
-// newFolder starts naming a folder in the selected folder.
-func (a *app) newFolder() {
-	if a.store == nil {
-		return
-	}
-	if a.store.memory {
-		a.fail(errors.New("folders need the desktop app"))
-		return
-	}
-	a.treeOpen = true
-	parent := a.selectedDir()
-	if a.openDirs == nil {
-		a.openDirs = map[string]bool{}
-	}
-	a.openPath(parent)
-	a.draftSeq++
-	a.folderDraft = &folderDraft{parent: parent, gen: a.draftSeq}
-	a.treeQuery = ""
-	a.invalidate()
-}
-
-func (a *app) cancelFolder() {
-	a.folderDraft = nil
-	a.invalidate()
-}
-
-// createFolder makes the folder the draft names, then shows it.
-func (a *app) createFolder() {
-	d := a.folderDraft
-	if d == nil || a.store == nil {
-		return
-	}
-	rel, err := a.store.newFolder(d.parent, d.name)
-	if err != nil {
-		a.fail(err)
-		return
-	}
-	a.folderDraft = nil
-	if a.openDirs == nil {
-		a.openDirs = map[string]bool{}
-	}
-	a.openDirs[rel] = true
-	a.treeSel = rel
-	if err := a.store.refresh(); err != nil {
-		a.fail(err)
-	}
-	if p := a.focusPane(); p != nil {
-		a.focusReq = p
-	}
-	a.invalidate()
-}
-
-// sidebar draws the vault's tree beside the panes.
+// sidebar draws the project tree beside the panes.
 func (a *app) sidebar(c *ui.Context, k *colors) {
 	if a.store == nil {
 		return
@@ -321,7 +313,9 @@ func (a *app) sidebar(c *ui.Context, k *colors) {
 	card.Children(func() {
 		a.sidebarHeader(c, k)
 		a.sidebarSearch(c, k)
-		ui.Scroll(c).Grow(1).MinHeight(0).Padding(2, 6).Children(func() {
+		scroll := ui.Scroll(c).Grow(1).MinHeight(0).Padding(2, 6)
+		scroll.PopoverMenu(func(m *ui.Menu) { a.nodeMenu(m, "", true) })
+		scroll.Children(func() {
 			if strings.TrimSpace(a.treeQuery) != "" {
 				a.searchResults(c, k)
 				return
@@ -329,8 +323,11 @@ func (a *app) sidebar(c *ui.Context, k *colors) {
 			if a.store.tree == nil {
 				return
 			}
-			a.treeRoot(c, k)
-			a.treeFolder(c, k, a.store.tree, 0)
+			if len(a.store.tree.Children) == 0 && a.treeDraft == nil {
+				a.emptyTree(c, k)
+				return
+			}
+			a.treeChildren(c, k, a.store.tree, 0)
 		})
 		a.sidebarFooter(c, k)
 	})
@@ -340,17 +337,22 @@ func (a *app) sidebar(c *ui.Context, k *colors) {
 }
 
 func (a *app) sidebarHeader(c *ui.Context, k *colors) {
-	ui.Row(c).Height(headerH).Padding(0, 7, 0, 11).Gap(6).AlignItems(ui.Center).Children(func() {
+	ui.Row(c).Height(headerH).Padding(0, 7, 0, 11).Gap(6).AlignItems(ui.Center).
+		PopoverMenu(func(m *ui.Menu) { a.nodeMenu(m, "", true) }).Children(func() {
 		ui.Icon(c, icon("folder-open")).Size(15, 15).TextColor(k.textMuted)
-		ui.Text(c, "Files").FontSize(12.5).FontWeight(600).TextColor(k.text)
+		ui.Text(c, "Explorer").FontSize(12.5).FontWeight(600).TextColor(k.text)
 		ui.Spacer(c)
-		if iconButton(c, k, "refresh-cw", "Refresh Project", 26, 14).
-			Tooltip("Refresh Project").Clicked() {
-			a.refreshProject()
+		if iconButton(c, k, "file-plus", "New File", 24, 14).
+			Tooltip(tip("New File", cmdNewNote)).Clicked() {
+			a.later(func() { a.startNewFile() })
 		}
-		if iconButton(c, k, "file-plus", "New Note", 26, 15).
-			Tooltip(tip("New Note", cmdNewNote)).Clicked() {
-			a.later(func() { a.newNote() })
+		if iconButton(c, k, "folder-plus", "New Folder", 24, 14).
+			Tooltip(tip("New Folder", cmdNewFolder)).Clicked() {
+			a.later(func() { a.startNewFolder() })
+		}
+		if iconButton(c, k, "refresh-cw", "Refresh Project", 24, 14).
+			Tooltip("Refresh Project").Clicked() {
+			a.later(func() { a.refreshProject() })
 		}
 	})
 }
@@ -370,6 +372,7 @@ func (a *app) sidebarSearch(c *ui.Context, k *colors) {
 		}
 		if in.Submitted() {
 			if notes := a.filteredNotes(); len(notes) > 0 {
+				a.treeSel = notes[0].Rel
 				a.openNote(notes[0])
 			}
 		}
@@ -386,10 +389,14 @@ func (a *app) sidebarFooter(c *ui.Context, k *colors) {
 	ui.Divider(c)
 	ui.Row(c).Height(34).Padding(0, 7, 0, 11).Gap(1).AlignItems(ui.Center).Children(func() {
 		ui.Spacer(c)
+		if iconButton(c, k, "git-branch", "Git Diff", 24, 14).
+			Tooltip(tip("Git Diff", cmdGit)).Clicked() {
+			a.later(func() { a.toggleGit() })
+		}
 		if runtime.GOOS != "js" {
-			if iconButton(c, k, "square-terminal", "Open Terminal", 24, 14).
-				Tooltip(tip("Open Terminal", cmdTerminal)).Clicked() {
-				a.openTerminal()
+			if iconButton(c, k, "square-terminal", "Toggle Terminal", 24, 14).
+				Tooltip(tip("Toggle Terminal", cmdTerminal)).Clicked() {
+				a.later(func() { a.toggleTerminal() })
 			}
 			if iconButton(c, k, "folder-open", "Reveal Project", 24, 14).
 				Tooltip("Reveal Project").Clicked() {
@@ -399,51 +406,49 @@ func (a *app) sidebarFooter(c *ui.Context, k *colors) {
 	})
 }
 
-// treeRoot is the vault itself, the folder new things go in when nothing
-// else is chosen.
-func (a *app) treeRoot(c *ui.Context, k *colors) {
-	name := "Mojian"
-	if !a.store.memory {
-		name = filepath.Base(a.store.dir)
+// treeChildren draws the children of n, and a draft that goes in it.
+func (a *app) treeChildren(c *ui.Context, k *colors, n *fileNode, depth int) {
+	if n == nil {
+		return
 	}
-	row := ui.Row(c.Key("dir:")).Height(rowH).PaddingStart(5).PaddingEnd(6).Gap(5).
-		Radius(7).AlignItems(ui.Center).Cursor(ui.CursorPointer).Role(ui.RoleTreeItem).
-		Label(name).Tooltip(a.store.displayDir()).ClipX()
-	if a.treeSel == "" || row.Hovered() {
-		row.Background(k.hover)
+	if d := a.treeDraft; d != nil && d.kind != draftRename && d.parent == n.Rel {
+		a.treeDraftRow(c, k, depth, n.Dir)
 	}
-	if row.Clicked() {
-		a.treeSel = ""
-		a.folderDraft = nil
+	for _, child := range n.Children {
+		if child.Dir {
+			a.treeFolder(c, k, child, depth)
+		} else {
+			a.treeFile(c, k, child, depth)
+		}
 	}
-	row.Children(func() {
-		ui.Box(c).Size(12, 12).Shrink(0)
-		ui.Icon(c, icon("folder-open")).Size(14, 14).TextColor(k.textMuted)
-		ui.Text(c, name).FontSize(12.5).FontWeight(600).TextColor(k.text).
-			SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
-	})
 }
 
-// treeFolder draws a folder's children, and the folder's row unless it is
-// the root.
+// treeFolder draws a folder and, when open, its children.
 func (a *app) treeFolder(c *ui.Context, k *colors, n *fileNode, depth int) {
 	if n == nil {
 		return
 	}
-	if n.Rel != "" {
-		open := a.dirOpen(n.Rel)
+	open := a.dirOpen(n.Rel)
+	if d := a.treeDraft; d != nil && d.kind == draftRename && d.target == n.Rel {
+		a.treeDraftRow(c, k, depth, true)
+	} else {
 		row := ui.Row(c.Key("dir:" + n.Rel)).Height(rowH).
 			PaddingStart(5 + float32(depth)*13).PaddingEnd(6).Gap(5).Radius(7).
 			AlignItems(ui.Center).Cursor(ui.CursorPointer).Role(ui.RoleTreeItem).
-			Label(n.Name).ClipX()
+			Focusable().FocusRing(false).Label(n.Name).ClipX().
+			PopoverMenu(func(m *ui.Menu) { a.nodeMenu(m, n.Rel, true) })
 		if n.Rel == a.treeSel {
-			row.Background(k.hover)
+			row.Background(k.panelSel)
 		} else if row.Hovered() {
 			row.Background(k.hover)
 		}
 		if row.Clicked() {
 			a.toggleDir(n.Rel)
 		}
+		if row.Shortcut(0, ui.KeyEnter) || row.Shortcut(0, ui.KeySpace) {
+			a.toggleDir(n.Rel)
+		}
+		a.treeRowKeys(row, n.Rel)
 		row.Children(func() {
 			arrow := "chevron-right"
 			if open {
@@ -455,42 +460,48 @@ func (a *app) treeFolder(c *ui.Context, k *colors, n *fileNode, depth int) {
 				folder = "folder-open"
 			}
 			ui.Icon(c, icon(folder)).Size(14, 14).TextColor(k.textMuted)
-			ui.Text(c, n.Name).FontSize(12.5).TextColor(k.text).
+			ui.Text(c, n.Name).FontSize(12.5).FontWeight(550).TextColor(k.text).
 				SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
 		})
-		if !open {
-			return
-		}
 	}
-	if a.folderDraft != nil && a.folderDraft.parent == n.Rel {
-		a.folderDraftRow(c, k, depth+1)
+	if !open {
+		return
 	}
-	for _, child := range n.Children {
-		if child.Dir {
-			a.treeFolder(c, k, child, depth+1)
-		} else {
-			a.treeFile(c, k, child, depth+1)
-		}
-	}
+	a.treeChildren(c, k, n, depth+1)
 }
 
-// treeFile draws one note in the tree.
+// treeFile draws one text file in the tree.
 func (a *app) treeFile(c *ui.Context, k *colors, n *fileNode, depth int) {
 	if n.Note == nil {
 		return
 	}
-	row := ui.Row(c.Key("note:" + n.Rel)).Height(rowH).
+	if d := a.treeDraft; d != nil && d.kind == draftRename && d.target == n.Rel {
+		a.treeDraftRow(c, k, depth, false)
+		return
+	}
+	row := ui.Row(c.Key("file:" + n.Rel)).Height(rowH).
 		PaddingStart(5 + float32(depth)*13).PaddingEnd(6).Gap(5).Radius(7).
-		AlignItems(ui.Center).Cursor(ui.CursorPointer).Role(ui.RoleButton).
-		Label(n.Note.Title).Tooltip(n.Note.Title + " — " + n.Rel).ClipX()
-	if a.currentNote() == n.Note {
+		AlignItems(ui.Center).Cursor(ui.CursorPointer).Role(ui.RoleTreeItem).
+		Focusable().FocusRing(false).Label(n.Note.Title).
+		Tooltip(n.Note.Title + " — " + n.Rel).ClipX().
+		PopoverMenu(func(m *ui.Menu) { a.nodeMenu(m, n.Rel, false) })
+	if n.Rel == a.treeSel {
 		row.Background(k.panelSel)
+	} else if a.currentNote() == n.Note {
+		row.Background(k.hover)
 	} else if row.Hovered() {
 		row.Background(k.hover)
 	}
 	if row.Clicked() {
+		a.treeSel = n.Rel
+		a.treeDraft = nil
 		a.openNote(n.Note)
 	}
+	if row.Shortcut(0, ui.KeyEnter) || row.Shortcut(0, ui.KeySpace) {
+		a.treeSel = n.Rel
+		a.openNote(n.Note)
+	}
+	a.treeRowKeys(row, n.Rel)
 	if n.Rel == a.treeReveal {
 		row.ScrollIntoView()
 	}
@@ -506,32 +517,89 @@ func (a *app) treeFile(c *ui.Context, k *colors, n *fileNode, depth int) {
 	})
 }
 
-// folderDraftRow is the field naming a new folder.
-func (a *app) folderDraftRow(c *ui.Context, k *colors, depth int) {
-	d := a.folderDraft
+// treeRowKeys gives a focused row the keyboard commands of the Explorer.
+func (a *app) treeRowKeys(row ui.Element, rel string) {
+	if row.Shortcut(0, ui.KeyF2) {
+		a.later(func() { a.startRenameNode(rel) })
+	}
+	if row.Shortcut(ui.Cmd, ui.KeyC) {
+		a.copySelectionTo(rel, false)
+	}
+	if row.Shortcut(ui.Cmd, ui.KeyX) {
+		a.copySelectionTo(rel, true)
+	}
+	if row.Shortcut(ui.Cmd, ui.KeyV) {
+		a.later(func() { a.pasteInto(rel) })
+	}
+	if row.Shortcut(ui.Cmd, ui.KeyBackspace) {
+		a.later(func() { a.trash(rel) })
+	}
+}
+
+// treeDraftRow is the field naming a new file or folder, or renaming an
+// entry in place.
+func (a *app) treeDraftRow(c *ui.Context, k *colors, depth int, dir bool) {
+	d := a.treeDraft
+	if d == nil {
+		return
+	}
 	row := ui.Row(c.Key(fmt.Sprintf("draft:%d", d.gen))).Height(rowH).
 		PaddingStart(5 + float32(depth)*13).PaddingEnd(6).Gap(5).Radius(7).
 		AlignItems(ui.Center).Background(k.panelSel)
 	row.Children(func() {
 		ui.Box(c).Size(12, 12).Shrink(0)
-		ui.Icon(c, icon("folder")).Size(14, 14).TextColor(k.textMuted)
+		name := "file-text"
+		if dir {
+			name = "folder"
+		}
+		ui.Icon(c, icon(name)).Size(14, 14).TextColor(k.textMuted)
+		placeholder := "Folder name"
+		switch d.kind {
+		case draftFile:
+			placeholder = "file name, e.g. app.py"
+		case draftRename:
+			placeholder = "New name"
+		}
 		in := ui.TextInputBase(c, &d.name).Grow(1).MinWidth(0).FontSize(12.5).
-			Placeholder("New Folder").AutoFocus()
+			Placeholder(placeholder).AutoFocus()
 		if in.Focused() {
 			d.focused = true
 		}
 		switch {
 		case in.Shortcut(0, ui.KeyEscape):
-			a.cancelFolder()
+			a.cancelTreeDraft()
 		case in.Submitted():
-			a.later(func() { a.createFolder() })
+			a.later(func() { a.submitTreeDraft() })
 		case d.focused && !in.Focused():
-			a.cancelFolder()
+			if d.kind == draftRename {
+				a.later(func() { a.submitTreeDraft() })
+			} else {
+				a.cancelTreeDraft()
+			}
 		}
 	})
 }
 
-// searchResults lists the notes matching the search field.
+// emptyTree is shown for a project or folder with no text files yet.
+func (a *app) emptyTree(c *ui.Context, k *colors) {
+	ui.Column(c).Padding(18, 8).Gap(8).Center().Children(func() {
+		ui.Icon(c, icon("file-plus")).Size(20, 20).TextColor(k.textFaint)
+		ui.Text(c, "No files here").FontSize(12.5).FontWeight(600).TextColor(k.textMuted)
+		btn := ui.Row(c).Padding(5, 10).Radius(7).Cursor(ui.CursorPointer).
+			Role(ui.RoleButton).Label("New File").Background(k.hover)
+		if btn.Hovered() {
+			btn.Background(k.pressed)
+		}
+		if btn.Clicked() {
+			a.later(func() { a.startNewFile() })
+		}
+		btn.Children(func() {
+			ui.Text(c, "New File").FontSize(12).FontWeight(500).TextColor(k.text)
+		})
+	})
+}
+
+// searchResults lists the files matching the search field.
 func (a *app) searchResults(c *ui.Context, k *colors) {
 	notes := a.filteredNotes()
 	if len(notes) == 0 {
@@ -541,16 +609,19 @@ func (a *app) searchResults(c *ui.Context, k *colors) {
 	for _, n := range notes {
 		n := n
 		row := ui.Row(c.Key("result:"+n.Rel)).Padding(6, 7).Gap(8).Radius(7).
-			AlignItems(ui.Center).Cursor(ui.CursorPointer).Role(ui.RoleButton).
-			Label(n.Title)
-		if a.currentNote() == n {
+			AlignItems(ui.Center).Cursor(ui.CursorPointer).Role(ui.RoleTreeItem).
+			Focusable().FocusRing(false).Label(n.Title).
+			PopoverMenu(func(m *ui.Menu) { a.nodeMenu(m, n.Rel, false) })
+		if n.Rel == a.treeSel {
 			row.Background(k.panelSel)
 		} else if row.Hovered() {
 			row.Background(k.hover)
 		}
 		if row.Clicked() {
+			a.treeSel = n.Rel
 			a.openNote(n)
 		}
+		a.treeRowKeys(row, n.Rel)
 		row.Children(func() {
 			ui.Icon(c, icon("file-text")).Size(14, 14).TextColor(k.textMuted)
 			ui.Column(c).Grow(1).MinWidth(0).Children(func() {

@@ -1,13 +1,11 @@
 package main
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 
-	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -83,6 +81,10 @@ func (a *app) openProject(dir string) {
 		return
 	}
 	a.saveNow()
+	a.closeTerminals()
+	a.gitOpen = false
+	a.gitSeq++
+	a.gitDiffSeq++
 	if a.layoutPath != "" {
 		a.saveLayout()
 	}
@@ -102,7 +104,7 @@ func (a *app) openProject(dir string) {
 	a.treeReveal = ""
 	a.openDirs = map[string]bool{}
 	a.tabScroll = ui.ScrollState{}
-	a.folderDraft = nil
+	a.treeDraft = nil
 	a.rename = nil
 	a.paletteOpen = false
 	a.projectOpen = false
@@ -119,38 +121,6 @@ func (a *app) openProject(dir string) {
 	a.saveSettings()
 	a.updateTitle()
 	a.invalidate()
-}
-
-// chooseProject asks for a folder and opens it as the project.
-func (a *app) chooseProject() {
-	if runtime.GOOS == "js" {
-		a.fail(errors.New("projects need the desktop app"))
-		return
-	}
-	a.projectOpen = false
-	win := a.win
-	go func() {
-		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{
-			Parent:            win,
-			Title:             "Open Project",
-			Message:           "Choose a folder to edit",
-			ButtonLabel:       "Open",
-			Directory:         true,
-			CreateDirectories: true,
-		})
-		if err != nil {
-			if win != nil {
-				win.Update(func() { a.fail(err) })
-			}
-			return
-		}
-		if len(paths) == 0 {
-			return
-		}
-		if win != nil {
-			win.Update(func() { a.openProject(paths[0]) })
-		}
-	}()
 }
 
 // projectChip is the title bar's left end: the open project, and the
@@ -199,7 +169,7 @@ func (a *app) projectChip(c *ui.Context, k *colors) {
 			row.Tooltip(tip("Open Folder", cmdOpenProject))
 			if row.Clicked() {
 				a.projectOpen = false
-				a.chooseProject()
+				a.openProjectPicker()
 			}
 			row.Children(func() {
 				ui.Icon(c, icon("folder-plus")).Size(15, 15).TextColor(k.textMuted)

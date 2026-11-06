@@ -30,9 +30,15 @@ type app struct {
 	layoutPath   string
 	settingsPath string
 
-	project     string
-	projects    []string
-	projectOpen bool
+	project       string
+	projects      []string
+	projectOpen   bool
+	projectPicker bool
+	pickerPath    string
+	pickerInput   string
+	pickerEntries []pickerEntry
+	pickerSel     int
+	pickerErr     string
 
 	tabs   []*tab
 	active int
@@ -45,10 +51,35 @@ type app struct {
 	treeSel         string
 	treeReveal      string
 	openDirs        map[string]bool
-	folderDraft     *folderDraft
+	treeDraft       *treeDraft
 	draftSeq        int
 	revealTab       bool
 	tabScroll       ui.ScrollState
+
+	fileClip []string
+	fileCut  bool
+
+	terms      []*termTab
+	activeTerm int
+	termOpen   bool
+	termFocus  bool
+	termSeq    int
+
+	gitOpen       bool
+	gitLoading    bool
+	gitErr        string
+	gitRoot       string
+	gitPrefix     string
+	gitBranch     string
+	gitChanges    []gitChange
+	gitSel        int
+	gitDiff       string
+	gitDiffPath   string
+	gitDiffErr    string
+	gitDiffLoad   bool
+	gitSeq        int
+	gitDiffSeq    int
+	gitDiffScroll ui.ScrollState
 
 	paletteOpen  bool
 	paletteQuery string
@@ -92,6 +123,7 @@ func main() {
 	})
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
 		a.saveNow()
+		a.closeTerminals()
 	})
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)
@@ -157,6 +189,7 @@ func (a *app) open() {
 	a.updateTitle()
 	win.OnClosed(func() {
 		a.saveNow()
+		a.closeTerminals()
 		if a.saveTimer != nil {
 			a.saveTimer.Stop()
 			a.saveTimer = nil
@@ -165,7 +198,7 @@ func (a *app) open() {
 		a.focusReq = nil
 		a.paletteOpen = false
 		a.projectOpen = false
-		a.folderDraft = nil
+		a.treeDraft = nil
 		a.rename = nil
 	})
 }
@@ -433,23 +466,9 @@ func (a *app) focusFirstNote() {
 	a.revealInTree(notes[0])
 }
 
-// newNote writes a note and shows it in the focused pane, or a new tab
-// when none is open.
-func (a *app) newNote() {
-	if a.store == nil {
-		return
-	}
-	n, err := a.store.newNoteIn(a.selectedDir())
-	if err != nil {
-		a.fail(err)
-		return
-	}
-	a.openNote(n)
-	a.changed()
-}
-
 // newTab opens a workspace with the focused note.
 func (a *app) newTab() {
+	a.gitOpen = false
 	n := a.currentNote()
 	if n == nil {
 		if a.store == nil {
@@ -466,10 +485,27 @@ func (a *app) newTab() {
 	a.active = len(a.tabs) - 1
 	a.focusReq = t.editorPane()
 	a.revealTab = true
-	a.folderDraft = nil
+	a.treeDraft = nil
 	if t.Focus != nil {
 		a.revealInTree(t.Focus.Note)
 	}
+	a.changed()
+}
+
+// openNoteInTab shows n in a tab of its own.
+func (a *app) openNoteInTab(n *note) {
+	if n == nil {
+		return
+	}
+	a.gitOpen = false
+	t := newTab(n)
+	a.tabs = append(a.tabs, t)
+	a.active = len(a.tabs) - 1
+	a.focusReq = t.Focus
+	a.revealTab = true
+	a.treeSel = n.Rel
+	a.openPath(n.Rel)
+	a.treeReveal = n.Rel
 	a.changed()
 }
 
@@ -479,7 +515,8 @@ func (a *app) openNote(n *note) {
 	if n == nil {
 		return
 	}
-	a.folderDraft = nil
+	a.gitOpen = false
+	a.treeDraft = nil
 	a.treeQuery = ""
 	t := a.tab()
 	if t == nil {
@@ -622,9 +659,10 @@ func (a *app) cycleTab(delta int) {
 	if len(a.tabs) == 0 {
 		return
 	}
+	a.gitOpen = false
 	a.active = (a.active + delta + len(a.tabs)) % len(a.tabs)
 	a.revealTab = true
-	a.folderDraft = nil
+	a.treeDraft = nil
 	if t := a.tab(); t != nil {
 		a.focusReq = t.editorPane()
 		if t.Focus != nil {
@@ -639,13 +677,14 @@ func (a *app) showTab(n int) {
 	if len(a.tabs) == 0 {
 		return
 	}
+	a.gitOpen = false
 	i := n - 1
 	if n >= 9 {
 		i = len(a.tabs) - 1
 	}
 	a.active = min(max(i, 0), len(a.tabs)-1)
 	a.revealTab = true
-	a.folderDraft = nil
+	a.treeDraft = nil
 	if t := a.tab(); t != nil {
 		a.focusReq = t.editorPane()
 		if t.Focus != nil {
@@ -744,6 +783,9 @@ func (a *app) menu() *mygo.Menu {
 			item(cmdNewTab),
 			item(cmdSave),
 			mygo.Separator(),
+			item(cmdRenameNode),
+			item(cmdTrashNode),
+			mygo.Separator(),
 			item(cmdCloseTab),
 			mygo.Separator(),
 			item(cmdTerminal),
@@ -760,6 +802,8 @@ func (a *app) menu() *mygo.Menu {
 		}},
 		{Label: "View", Submenu: []*mygo.MenuItem{
 			item(cmdTree),
+			item(cmdTerminal),
+			item(cmdGit),
 			item(cmdPalette),
 			mygo.Separator(),
 			{Label: "Appearance", Submenu: []*mygo.MenuItem{

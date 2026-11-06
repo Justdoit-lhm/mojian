@@ -30,11 +30,16 @@ func (a *app) view(c *ui.Context) {
 				if a.treeOpen {
 					a.sidebar(c, k)
 				}
-				ui.Column(c).Grow(1).MinWidth(0).MinHeight(0).FillHeight().Children(func() {
-					if t := a.tab(); t != nil {
+				ui.Column(c).Grow(1).MinWidth(0).MinHeight(0).FillHeight().Gap(gap).Children(func() {
+					if a.gitOpen {
+						a.gitPage(c, k)
+					} else if t := a.tab(); t != nil {
 						a.tabContent(c, k, t)
 					} else {
 						a.emptyState(c, k)
+					}
+					if a.termOpen {
+						a.terminalPanel(c, k)
 					}
 				})
 			})
@@ -42,6 +47,7 @@ func (a *app) view(c *ui.Context) {
 	if a.err != "" {
 		a.errorBanner(c, k)
 	}
+	a.projectPickerModal(c, k)
 	a.palette(c, k)
 	a.shortcuts(c)
 	a.autosave(c)
@@ -74,10 +80,14 @@ func (a *app) titleBar(c *ui.Context, k *colors) {
 				Tooltip(tip("Command Palette", cmdPalette)).Clicked() {
 				a.openPalette()
 			}
+			if iconButton(c, k, "git-branch", "Git Diff", 30, 17).
+				Tooltip(tip("Git Diff", cmdGit)).Clicked() {
+				a.later(func() { a.toggleGit() })
+			}
 			if runtime.GOOS != "js" {
-				if iconButton(c, k, "folder-plus", "New Folder", 30, 19).
-					Tooltip(tip("New Folder", cmdNewFolder)).Clicked() {
-					a.later(func() { a.newFolder() })
+				if iconButton(c, k, "square-terminal", "Toggle Terminal", 30, 17).
+					Tooltip(tip("Toggle Terminal", cmdTerminal)).Clicked() {
+					a.later(func() { a.toggleTerminal() })
 				}
 			}
 		})
@@ -320,25 +330,25 @@ func (a *app) laterPane(p *pane) {
 
 // emptyState shows when no note is open.
 func (a *app) emptyState(c *ui.Context, k *colors) {
-	ui.Column(c).Fill().Center().Gap(14).Children(func() {
+	ui.Column(c).Grow(1).FillWidth().Center().Gap(14).Children(func() {
 		ui.Box(c).Size(54, 54).Radius(15).Background(k.cardFocused).
 			Border(1, k.cardBorderFocused).Center().Children(func() {
 			ui.Icon(c, icon("file-text")).Size(26, 26).TextColor(k.textMuted)
 		})
 		ui.Text(c, "No file open").FontSize(19).FontWeight(600).TextColor(k.text)
-		ui.Text(c, "Write something, or pick a file in Files.").
+		ui.Text(c, "Write something, or pick a file in Explorer.").
 			FontSize(13).TextColor(k.textMuted)
 		btn := ui.Row(c).Padding(7, 16).Radius(8).Cursor(ui.CursorPointer).
-			Role(ui.RoleButton).Label("New Note").Background(k.text)
+			Role(ui.RoleButton).Label("New File").Background(k.text)
 		if btn.Hovered() {
 			btn.Background(k.text.Alpha(0.86))
 		}
-		btn.Tooltip(tip("New Note", cmdNewNote))
+		btn.Tooltip(tip("New File", cmdNewNote))
 		if btn.Clicked() {
-			a.newNote()
+			a.startNewFile()
 		}
 		btn.Children(func() {
-			ui.Text(c, "New Note").FontSize(12.5).FontWeight(600).TextColor(k.panel)
+			ui.Text(c, "New File").FontSize(12.5).FontWeight(600).TextColor(k.panel)
 		})
 	})
 }

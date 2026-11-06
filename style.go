@@ -24,9 +24,10 @@ type colors struct {
 
 	track, trackBorder, tabActive, tabInactive, tileRim ui.Color
 
-	danger, attention ui.Color
+	danger, attention          ui.Color
+	diffAdd, diffDel, diffHunk ui.Color
 
-	panel, panelBorder, panelSel, backdrop ui.Color
+	panel, sheet, panelBorder, panelSel, backdrop ui.Color
 }
 
 var lightColors = colors{
@@ -58,8 +59,12 @@ var lightColors = colors{
 
 	danger:    ui.Hex("#d92d20"),
 	attention: ui.Hex("#f59e0b"),
+	diffAdd:   ui.Hex("#1a7f37"),
+	diffDel:   ui.Hex("#cf222e"),
+	diffHunk:  ui.Hex("#0969da"),
 
 	panel:       ui.RGBA(252, 252, 253, 0.97),
+	sheet:       ui.Hex("#fbfbfc"),
 	panelBorder: ui.RGBA(0, 0, 0, 0.08),
 	panelSel:    ui.RGBA(46, 111, 208, 0.12),
 	backdrop:    ui.RGBA(30, 15, 25, 0.18),
@@ -94,8 +99,12 @@ var darkColors = colors{
 
 	danger:    ui.Hex("#f97066"),
 	attention: ui.Hex("#fbbf24"),
+	diffAdd:   ui.Hex("#7ee787"),
+	diffDel:   ui.Hex("#ff7b72"),
+	diffHunk:  ui.Hex("#79c0ff"),
 
 	panel:       ui.RGBA(38, 38, 42, 0.97),
+	sheet:       ui.Hex("#1f1f23"),
 	panelBorder: ui.RGBA(255, 255, 255, 0.1),
 	panelSel:    ui.RGBA(108, 178, 255, 0.18),
 	backdrop:    ui.RGBA(0, 0, 0, 0.45),

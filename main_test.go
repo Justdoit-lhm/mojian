@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -163,10 +164,19 @@ func TestView(t *testing.T) {
 	if got := len(a.tab().panes()); got != 3 {
 		t.Fatalf("panes after the palette: %d", got)
 	}
-	if err := tt.Click("New Note"); err != nil {
+	if err := tt.Click("New File"); err != nil {
 		t.Fatal(err)
 	}
-	if a.currentNote() == nil || a.currentNote().Title != "Untitled" {
+	tt.Frame()
+	if a.treeDraft == nil {
+		t.Fatal("clicking New File did not start a name field")
+	}
+	tt.Type("Untitled.py")
+	tt.Frame()
+	tt.Key(0, ui.KeyEnter)
+	tt.Frame()
+	tt.Frame()
+	if a.currentNote() == nil || !strings.HasSuffix(a.currentNote().Title, "Untitled.py") {
 		t.Errorf("current note: %+v", a.currentNote())
 	}
 }

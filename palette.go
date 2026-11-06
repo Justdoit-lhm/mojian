@@ -20,11 +20,15 @@ type command struct {
 
 var (
 	cmdOpenProject = &command{title: "Open Project…", accel: "CmdOrCtrl+O", keys: "⌘O", glyph: "folder-open",
-		run: func(a *app) { a.chooseProject() }}
-	cmdNewNote = &command{title: "New Note", accel: "CmdOrCtrl+N", keys: "⌘N", glyph: "file-plus",
-		run: func(a *app) { a.newNote() }}
-	cmdNewFolder = &command{title: "New Folder", accel: "CmdOrCtrl+Shift+N", keys: "⇧⌘N", glyph: "folder-plus",
-		run: func(a *app) { a.newFolder() }}
+		run: func(a *app) { a.openProjectPicker() }}
+	cmdNewNote = &command{title: "New File…", accel: "CmdOrCtrl+N", keys: "⌘N", glyph: "file-plus",
+		run: func(a *app) { a.startNewFile() }}
+	cmdNewFolder = &command{title: "New Folder…", accel: "CmdOrCtrl+Shift+N", keys: "⇧⌘N", glyph: "folder-plus",
+		run: func(a *app) { a.startNewFolder() }}
+	cmdRenameNode = &command{title: "Rename…", accel: "F2", keys: "F2", glyph: "pencil",
+		run: func(a *app) { a.renameSelection() }}
+	cmdTrashNode = &command{title: "Move to Trash", keys: "⌘⌫", glyph: "trash-2",
+		run: func(a *app) { a.trashSelection() }}
 	cmdNewTab = &command{title: "New Tab", accel: "CmdOrCtrl+T", keys: "⌘T", glyph: "plus",
 		run: func(a *app) { a.newTab() }}
 	cmdSave = &command{title: "Save", accel: "CmdOrCtrl+S", keys: "⌘S", glyph: "save",
@@ -53,13 +57,16 @@ var (
 		run: func(a *app) { a.openTreeSearch() }}
 	cmdTree = &command{title: "Toggle File Tree", accel: "CmdOrCtrl+Shift+B", keys: "⇧⌘B", glyph: "panel-left",
 		run: func(a *app) { a.toggleTree() }}
-	cmdTerminal = &command{title: "Open Terminal", accel: "CmdOrCtrl+Shift+T", keys: "⇧⌘T", glyph: "square-terminal",
-		run: func(a *app) { a.openTerminal() }}
+	cmdTerminal = &command{title: "Toggle Terminal", accel: "CmdOrCtrl+Shift+T", keys: "⇧⌘T", glyph: "square-terminal",
+		run: func(a *app) { a.toggleTerminal() }}
+	cmdGit = &command{title: "Git Diff", accel: "CmdOrCtrl+Shift+G", keys: "⇧⌘G", glyph: "git-branch",
+		run: func(a *app) { a.toggleGit() }}
 )
 
 // paletteCommands are the commands the palette lists.
 var paletteCommands = []*command{
-	cmdOpenProject, cmdNewNote, cmdNewFolder, cmdNewTab, cmdSave, cmdPalette, cmdNotes, cmdTree, cmdTerminal,
+	cmdOpenProject, cmdNewNote, cmdNewFolder, cmdNewTab, cmdSave, cmdPalette, cmdNotes, cmdTree, cmdTerminal, cmdGit,
+	cmdRenameNode, cmdTrashNode,
 	cmdSplitRight, cmdSplitDown, cmdZoom, cmdEqualize,
 	cmdClosePane, cmdCloseTab, cmdRenameTab, cmdNextTab, cmdPrevTab,
 }
@@ -73,6 +80,7 @@ func (a *app) focusPane() *pane {
 }
 
 func (a *app) openPalette() {
+	a.projectPicker = false
 	a.paletteOpen = true
 	a.paletteQuery = ""
 	a.paletteSel = 0
@@ -264,6 +272,7 @@ func (a *app) shortcuts(c *ui.Context) {
 		{ui.Cmd, ui.KeyW, func() { a.run(cmdClosePane) }},
 		{ui.Cmd | ui.Shift, ui.KeyW, func() { a.run(cmdCloseTab) }},
 		{ui.Cmd | ui.Shift, ui.KeyR, func() { a.run(cmdRenameTab) }},
+		{ui.Cmd | ui.Shift, ui.KeyG, func() { a.run(cmdGit) }},
 	} {
 		b := b
 		c.OnShortcut(b.mods, b.key, b.run)

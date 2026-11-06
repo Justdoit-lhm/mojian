@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -188,13 +189,13 @@ func TestAutosaveThroughFrame(t *testing.T) {
 func TestFolderCreation(t *testing.T) {
 	a := newProjectApp(t)
 	a.treeSel = "Ideas"
-	a.newFolder()
-	if a.folderDraft == nil || a.folderDraft.parent != "Ideas" {
-		t.Fatalf("draft: %+v", a.folderDraft)
+	a.startNewFolder()
+	if a.treeDraft == nil || a.treeDraft.kind != draftFolder || a.treeDraft.parent != "Ideas" {
+		t.Fatalf("draft: %+v", a.treeDraft)
 	}
-	a.folderDraft.name = "Field Notes"
-	a.createFolder()
-	if a.folderDraft != nil {
+	a.treeDraft.name = "Field Notes"
+	a.submitTreeDraft()
+	if a.treeDraft != nil {
 		t.Fatal("the draft is still open")
 	}
 	if !a.store.dirExists(filepath.Join("Ideas", "Field Notes")) {
@@ -203,7 +204,7 @@ func TestFolderCreation(t *testing.T) {
 	if a.treeSel != filepath.Join("Ideas", "Field Notes") {
 		t.Errorf("selection: %q", a.treeSel)
 	}
-	n, err := a.store.newNoteIn(a.treeSel)
+	n, err := a.store.newFileIn(a.treeSel, "note.md", "# Note\n")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,22 +222,54 @@ func TestFolderThroughUI(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.folderDraft == nil {
-		t.Fatal("clicking New Folder did not start a draft")
+	if a.treeDraft == nil || a.treeDraft.kind != draftFolder {
+		t.Fatalf("clicking New Folder did not start a draft: %+v", a.treeDraft)
 	}
 	tt.Type("Field Notes")
 	tt.Frame()
-	if a.folderDraft == nil || a.folderDraft.name != "Field Notes" {
-		t.Fatalf("draft after typing: %+v", a.folderDraft)
+	if a.treeDraft == nil || a.treeDraft.name != "Field Notes" {
+		t.Fatalf("draft after typing: %+v", a.treeDraft)
 	}
 	tt.Key(0, ui.KeyEnter)
 	tt.Frame()
 	tt.Frame()
-	if a.folderDraft != nil {
-		t.Fatalf("the draft is still open: %+v", a.folderDraft)
+	if a.treeDraft != nil {
+		t.Fatalf("the draft is still open: %+v", a.treeDraft)
 	}
 	if !a.store.dirExists("Field Notes") {
 		t.Fatalf("the folder was not created (treeSel=%q err=%q)", a.treeSel, a.err)
+	}
+}
+
+func TestNewFileThroughUI(t *testing.T) {
+	registerFonts()
+	a := newProjectApp(t)
+	a.treeSel = "scripts"
+	tt := ui.NewTester(a.view, 1100, 700)
+	if err := tt.Click("New File"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.treeDraft == nil || a.treeDraft.kind != draftFile || a.treeDraft.parent != "scripts" {
+		t.Fatalf("draft: %+v", a.treeDraft)
+	}
+	tt.Type("worker.py")
+	tt.Frame()
+	tt.Key(0, ui.KeyEnter)
+	tt.Frame()
+	tt.Frame()
+	if a.treeDraft != nil {
+		t.Fatalf("the draft is still open: %+v", a.treeDraft)
+	}
+	n := a.store.byRelPath(filepath.Join("scripts", "worker.py"))
+	if n == nil {
+		t.Fatalf("the file was not created (treeSel=%q err=%q)", a.treeSel, a.err)
+	}
+	if a.currentNote() != n {
+		t.Fatal("the new file did not open")
+	}
+	if !strings.HasSuffix(n.Title, "worker.py") {
+		t.Errorf("title: %q", n.Title)
 	}
 }
 
