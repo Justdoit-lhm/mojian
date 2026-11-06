@@ -6,13 +6,15 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+
+	"github.com/egoist/mygo/ui/editor"
 )
 
-// pane is one note in a workspace: the editor, or its preview.
+// pane is one editor view of a note in a workspace.
 type pane struct {
-	ID      string
-	Note    *note
-	Preview bool
+	ID    string
+	Note  *note
+	state *editor.State
 }
 
 // node is a leaf pane, or two panes side by side or stacked, with the
@@ -41,12 +43,12 @@ func nextID(prefix string) string {
 	return fmt.Sprintf("%s%d", prefix, idSeq)
 }
 
-func newPane(n *note, preview bool) *pane {
-	return &pane{ID: nextID("p"), Note: n, Preview: preview}
+func newPane(n *note) *pane {
+	return &pane{ID: nextID("p"), Note: n}
 }
 
 func newTab(n *note) *tab {
-	p := newPane(n, false)
+	p := newPane(n)
 	return &tab{ID: nextID("t"), Root: &node{Pane: p}, Focus: p}
 }
 
@@ -83,6 +85,14 @@ func (t *tab) label() (name, detail string) {
 		detail = fmt.Sprintf("· %d", n)
 	}
 	return name, detail
+}
+
+// editorPane returns the pane to focus when the tab appears.
+func (t *tab) editorPane() *pane {
+	if t.Focus != nil {
+		return t.Focus
+	}
+	return firstPane(t.Root)
 }
 
 // dirty reports whether any note of the tab has unsaved edits.
@@ -226,9 +236,8 @@ type layoutNode struct {
 }
 
 type layoutPane struct {
-	ID      string `json:"id"`
-	Note    string `json:"note"`
-	Preview bool   `json:"preview,omitempty"`
+	ID   string `json:"id"`
+	Note string `json:"note"`
 }
 
 func layoutOf(t *tab) layoutTab {
@@ -248,9 +257,8 @@ func layoutNodeOf(n *node) *layoutNode {
 	}
 	if n.Pane != nil {
 		return &layoutNode{Pane: &layoutPane{
-			ID:      n.Pane.ID,
-			Note:    n.Pane.Note.Rel,
-			Preview: n.Pane.Preview,
+			ID:   n.Pane.ID,
+			Note: n.Pane.Note.Rel,
 		}}
 	}
 	return &layoutNode{
@@ -316,7 +324,7 @@ func (a *app) restoreNode(ln *layoutNode, byID map[string]*pane) *node {
 		if n == nil {
 			return nil
 		}
-		p := &pane{ID: nextID("p"), Note: n, Preview: ln.Pane.Preview}
+		p := &pane{ID: nextID("p"), Note: n}
 		byID[ln.Pane.ID] = p
 		return &node{Pane: p}
 	}

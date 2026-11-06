@@ -17,7 +17,7 @@ func newTestApp(t *testing.T) *app {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := &app{store: s}
+	a := &app{store: s, treeOpen: true}
 	a.focusFirstNote()
 	if a.tab() == nil {
 		t.Fatal("no tab after opening the vault")
@@ -35,10 +35,10 @@ func TestSplitAndClose(t *testing.T) {
 		t.Fatalf("panes after split: %d", got)
 	}
 	if t0.Focus.Note != note {
-		t.Error("split changed the note")
+		t.Error("split changed the focused note")
 	}
-	if !t0.Focus.Preview {
-		t.Error("the new pane of an editor should show the preview")
+	if got := t0.panes()[1].Note; got != note {
+		t.Error("the new pane shows another note")
 	}
 	if t0.Root.Vertical {
 		t.Error("split right made a stacked split")
@@ -87,7 +87,7 @@ func TestLayoutRoundTrip(t *testing.T) {
 	t1 := newTab(notes[0])
 	a.tabs = []*tab{t1}
 	a.active = 0
-	second := newPane(notes[1], true)
+	second := newPane(notes[1])
 	if !t1.split(t1.Focus, second, false) {
 		t.Fatal("split failed")
 	}
@@ -102,9 +102,6 @@ func TestLayoutRoundTrip(t *testing.T) {
 	}
 	if got := len(b.tabs[0].panes()); got != 2 {
 		t.Fatalf("panes: %d", got)
-	}
-	if !b.tabs[0].Focus.Preview {
-		t.Error("the layout lost the preview pane's focus")
 	}
 	if b.tabs[0].Root.Vertical {
 		t.Error("the layout lost the side by side split")
@@ -123,7 +120,9 @@ func TestNoteSave(t *testing.T) {
 		t.Fatal(err)
 	}
 	body := "# Edited\n\nThe new text.\n"
-	n.state = &editor.State{Buffer: editor.NewBuffer(body)}
+	buf := editor.NewBuffer(n.Saved)
+	buf.Set(body)
+	n.buf = buf
 	if !n.dirty() {
 		t.Fatal("a new buffer should be dirty")
 	}

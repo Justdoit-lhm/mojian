@@ -1,6 +1,6 @@
-// Mojian is a quiet workspace for Markdown notes, in MyGo's native UI.
-// Tabs hold workspaces, workspaces hold panes, and every pane shows a note
-// as source or as its rendered preview.
+// Mojian is a quiet text editor in MyGo's native UI. Tabs hold
+// workspaces, workspaces hold editors, and every editor shows a file's
+// source with syntax highlighting.
 //
 //	go tool mygo dev    the app, rebuilt as the code changes
 //	go test ./...       the model, the store and the view, without a window
@@ -8,16 +8,18 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
+	"hash/fnv"
 	"log"
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync/atomic"
 	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
-	"github.com/egoist/mygo/ui/markdown"
 )
 
 type app struct {
@@ -28,13 +30,26 @@ type app struct {
 	layoutPath   string
 	settingsPath string
 
+	project     string
+	projects    []string
+	projectOpen bool
+
 	tabs   []*tab
 	active int
 
 	focusReq *pane
 
-	notesOpen    bool
-	noteQuery    string
+	treeOpen        bool
+	treeQuery       string
+	treeFocusSearch bool
+	treeSel         string
+	treeReveal      string
+	openDirs        map[string]bool
+	folderDraft     *folderDraft
+	draftSeq        int
+	revealTab       bool
+	tabScroll       ui.ScrollState
+
 	paletteOpen  bool
 	paletteQuery string
 	paletteSel   int
@@ -52,12 +67,10 @@ type app struct {
 	layoutDirty bool
 	lastChange  time.Time
 	saveTimer   *time.Timer
+	saveTick    atomic.Bool
 	loaded      bool
 	pending     []func()
 
-	md      markdown.Options
-	mdDark  bool
-	mdTheme *markdown.Theme
 	edDark  bool
 	edTheme *editor.Theme
 }
@@ -91,25 +104,39 @@ func (a *app) open() {
 		a.loaded = true
 		if dir, err := mygo.App.Path(mygo.PathUserData); err == nil {
 			a.dataDir = dir
-			a.layoutPath = filepath.Join(dir, "layout.json")
 			a.settingsPath = filepath.Join(dir, "settings.json")
 		}
-		s, err := openStore()
+		a.loadSettings()
+		firstProject := a.project == ""
+		s, err := a.initialStore()
 		if err != nil {
 			log.Print(err)
 			mygo.Dialog.Message(mygo.MessageOptions{
 				Type:    mygo.MessageError,
-				Title:   "Mojian could not open its notes",
+				Title:   "Mojian could not open the project",
 				Message: err.Error(),
 			})
 			mygo.App.Quit()
 			return
 		}
 		a.store = s
-		a.loadSettings()
+		a.treeOpen = true
+		a.layoutPath = a.projectLayoutPath(s.dir)
+		if firstProject && !s.memory {
+			a.migrateLayout(s.dir)
+		}
+		a.rememberProject(s.dir)
+		a.saveSettings()
 		if !a.restoreLayout() {
 			a.focusFirstNote()
+		} else if t := a.tab(); t != nil {
+			a.focusReq = t.editorPane()
 		}
+		if n := a.currentNote(); n != nil {
+			a.revealInTree(n)
+		}
+		a.revealTab = true
+		a.saveLayout()
 	}
 	win := mygo.NewWindow(mygo.WindowOptions{
 		Title:                "Mojian",
@@ -124,18 +151,33 @@ func (a *app) open() {
 		Content:              ui.View(a.view),
 	})
 	a.win = win
+	win.OnFocus(func() {
+		a.refreshProject()
+	})
 	a.updateTitle()
 	win.OnClosed(func() {
 		a.saveNow()
 		if a.saveTimer != nil {
 			a.saveTimer.Stop()
+			a.saveTimer = nil
 		}
 		a.win = nil
 		a.focusReq = nil
+		a.paletteOpen = false
+		a.projectOpen = false
+		a.folderDraft = nil
+		a.rename = nil
 	})
 }
 
-// loadSettings reads the appearance the app was left in.
+// settingsFile is what the app keeps between launches.
+type settingsFile struct {
+	Appearance int      `json:"appearance"`
+	Project    string   `json:"project,omitempty"`
+	Projects   []string `json:"projects,omitempty"`
+}
+
+// loadSettings reads the appearance and the project the app was left in.
 func (a *app) loadSettings() {
 	if a.settingsPath == "" {
 		return
@@ -144,24 +186,98 @@ func (a *app) loadSettings() {
 	if err != nil {
 		return
 	}
-	var s struct {
-		Appearance int `json:"appearance"`
+	var s settingsFile
+	if json.Unmarshal(data, &s) != nil {
+		return
 	}
-	if json.Unmarshal(data, &s) == nil && s.Appearance >= 0 && s.Appearance <= 2 {
+	if s.Appearance >= 0 && s.Appearance <= 2 {
 		a.appearance = s.Appearance
 		a.syncAppearance()
 	}
+	a.project = s.Project
+	a.projects = s.Projects
 }
 
 func (a *app) saveSettings() {
 	if a.settingsPath == "" {
 		return
 	}
-	data, _ := json.MarshalIndent(struct {
-		Appearance int `json:"appearance"`
-	}{a.appearance}, "", "  ")
+	project := a.project
+	if a.store != nil && !a.store.memory {
+		project = a.store.dir
+	}
+	data, _ := json.MarshalIndent(settingsFile{
+		Appearance: a.appearance,
+		Project:    project,
+		Projects:   a.projects,
+	}, "", "  ")
 	_ = os.MkdirAll(filepath.Dir(a.settingsPath), 0o755)
 	_ = os.WriteFile(a.settingsPath, data, 0o644)
+}
+
+// initialStore opens $MOJIAN_VAULT, else the project of the last launch,
+// else the default folder.
+func (a *app) initialStore() (*store, error) {
+	if os.Getenv("MOJIAN_VAULT") != "" {
+		return openStore()
+	}
+	if a.project != "" {
+		if info, err := os.Stat(a.project); err == nil && info.IsDir() {
+			if s, err := openStoreAt(a.project); err == nil {
+				return s, nil
+			}
+		}
+	}
+	return openStore()
+}
+
+// rememberProject moves dir to the front of the recent projects.
+func (a *app) rememberProject(dir string) {
+	if dir == "" {
+		return
+	}
+	dir = filepath.Clean(dir)
+	a.project = dir
+	out := []string{dir}
+	for _, p := range a.projects {
+		p = filepath.Clean(p)
+		if p != dir && p != "." && p != "" {
+			out = append(out, p)
+		}
+	}
+	if len(out) > 8 {
+		out = out[:8]
+	}
+	a.projects = out
+}
+
+// projectLayoutPath keeps a layout for each project, apart from the
+// others.
+func (a *app) projectLayoutPath(dir string) string {
+	if a.dataDir == "" || dir == "" {
+		return ""
+	}
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(dir))
+	return filepath.Join(a.dataDir, "layouts", fmt.Sprintf("%016x.json", h.Sum64()))
+}
+
+// migrateLayout copies the one layout of older versions to the first
+// project, so its tabs survive the upgrade.
+func (a *app) migrateLayout(dir string) {
+	if a.layoutPath == "" {
+		return
+	}
+	if _, err := os.Stat(a.layoutPath); err == nil {
+		return
+	}
+	old := filepath.Join(a.dataDir, "layout.json")
+	data, err := os.ReadFile(old)
+	if err != nil {
+		return
+	}
+	_ = os.MkdirAll(filepath.Dir(a.layoutPath), 0o755)
+	_ = os.WriteFile(a.layoutPath, data, 0o644)
 }
 
 func (a *app) setAppearance(v int) {
@@ -189,6 +305,7 @@ func (a *app) saveNow() {
 			log.Print(err)
 		}
 	}
+	a.saveTick.Store(false)
 	if a.layoutDirty {
 		a.saveLayout()
 		a.layoutDirty = false
@@ -245,37 +362,43 @@ func (a *app) scheduleSave() {
 	if win == nil {
 		return
 	}
+	// The timer outlives a single frame. Recreate it for a reopened
+	// window rather than waking one that is gone.
 	if a.saveTimer == nil {
-		a.saveTimer = time.AfterFunc(650*time.Millisecond, func() {
+		a.saveTimer = time.AfterFunc(800*time.Millisecond, func() {
+			a.saveTick.Store(true)
 			win.Update(func() {})
 		})
 		return
 	}
-	a.saveTimer.Reset(650 * time.Millisecond)
+	a.saveTimer.Reset(800 * time.Millisecond)
 }
 
-// autosave writes the notes and the layout once editing has paused.
+// autosave writes the files and the layout once editing has paused. The
+// timer that wakes the frame is the only path into the vault scan, so a
+// frame that merely animates or hovers does not read every note.
 func (a *app) autosave(c *ui.Context) {
 	now := time.Now()
-	saved := false
-	if a.store != nil {
+	if a.saveTick.Swap(false) && a.store != nil {
+		saved := false
 		for _, n := range a.store.notes {
-			if !n.dirty() || now.Sub(n.lastEdit) < 700*time.Millisecond {
+			if !n.dirty() {
 				continue
 			}
 			if err := a.store.save(n); err != nil {
 				a.err = err.Error()
-			} else {
-				saved = true
+				a.invalidate()
+				continue
 			}
+			saved = true
+		}
+		if saved {
+			a.invalidate()
 		}
 	}
 	if a.layoutDirty && now.Sub(a.lastChange) > 550*time.Millisecond {
 		a.saveLayout()
 		a.layoutDirty = false
-	}
-	if saved {
-		a.invalidate()
 	}
 }
 
@@ -306,6 +429,8 @@ func (a *app) focusFirstNote() {
 	a.tabs = []*tab{newTab(notes[0])}
 	a.active = 0
 	a.focusReq = a.tabs[0].Focus
+	a.revealTab = true
+	a.revealInTree(notes[0])
 }
 
 // newNote writes a note and shows it in the focused pane, or a new tab
@@ -314,7 +439,7 @@ func (a *app) newNote() {
 	if a.store == nil {
 		return
 	}
-	n, err := a.store.newNote()
+	n, err := a.store.newNoteIn(a.selectedDir())
 	if err != nil {
 		a.fail(err)
 		return
@@ -337,12 +462,14 @@ func (a *app) newTab() {
 		}
 	}
 	t := newTab(n)
-	if a.noteHasEditor(n, nil) {
-		t.Focus.Preview = true
-	}
 	a.tabs = append(a.tabs, t)
 	a.active = len(a.tabs) - 1
-	a.focusReq = t.Focus
+	a.focusReq = t.editorPane()
+	a.revealTab = true
+	a.folderDraft = nil
+	if t.Focus != nil {
+		a.revealInTree(t.Focus.Note)
+	}
 	a.changed()
 }
 
@@ -352,12 +479,16 @@ func (a *app) openNote(n *note) {
 	if n == nil {
 		return
 	}
+	a.folderDraft = nil
+	a.treeQuery = ""
 	t := a.tab()
 	if t == nil {
 		t = newTab(n)
 		a.tabs = append(a.tabs, t)
 		a.active = len(a.tabs) - 1
 		a.focusReq = t.Focus
+		a.revealTab = true
+		a.revealInTree(n)
 		a.changed()
 		return
 	}
@@ -366,30 +497,18 @@ func (a *app) openNote(n *note) {
 		p = firstPane(t.Root)
 	}
 	if p == nil {
-		p = newPane(n, false)
+		p = newPane(n)
 		t.Root = &node{Pane: p}
 		t.Focus = p
 	}
+	if p.Note != n {
+		p.state = nil
+	}
 	p.Note = n
-	p.Preview = a.noteHasEditor(n, p)
 	t.Focus = p
 	a.focusReq = p
-	a.notesOpen = false
+	a.revealInTree(n)
 	a.changed()
-}
-
-// noteHasEditor reports whether a pane other than except shows the note
-// in the editor. A note has one editor at a time; opening it elsewhere
-// shows the preview instead, so two views never edit the same state.
-func (a *app) noteHasEditor(n *note, except *pane) bool {
-	for _, t := range a.tabs {
-		for _, p := range t.panes() {
-			if p != except && p.Note == n && !p.Preview {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 // closeTab closes a workspace.
@@ -412,12 +531,27 @@ func (a *app) closeTab(t *tab) {
 		}
 	}
 	a.tabs = append(a.tabs[:i], a.tabs[i+1:]...)
-	if len(a.tabs) == 0 {
+	wasActive := a.active == i
+	switch {
+	case len(a.tabs) == 0:
 		a.active = -1
-	} else if a.active >= i {
-		a.active = min(max(a.active-1, 0), len(a.tabs)-1)
+	case i < a.active:
+		a.active--
+	case wasActive:
+		a.active = min(i, len(a.tabs)-1)
 	}
-	a.focusReq = nil
+	if a.rename == t {
+		a.rename = nil
+	}
+	if next := a.tab(); next != nil {
+		a.focusReq = next.editorPane()
+		a.revealTab = true
+		if next.Focus != nil {
+			a.revealInTree(next.Focus.Note)
+		}
+	} else {
+		a.focusReq = nil
+	}
 	a.changed()
 }
 
@@ -445,33 +579,21 @@ func (a *app) closePane(p *pane) {
 	}
 }
 
-// split adds a pane beside or below the focused one, showing the note's
-// other face: the preview beside the editor, or the editor beside the
-// preview.
+// split adds another editor view of the note beside or below the
+// focused one. Both panes edit the note's one buffer, with their own
+// caret and scroll.
 func (a *app) split(down bool) {
 	t := a.tab()
 	if t == nil || t.Focus == nil {
 		return
 	}
 	p := t.Focus
-	with := newPane(p.Note, !p.Preview)
-	if !with.Preview && a.noteHasEditor(p.Note, p) {
-		with.Preview = true
-	}
+	with := newPane(p.Note)
 	if !t.split(p, with, down) {
 		return
 	}
-	a.focusReq = with
-	a.changed()
-}
-
-func (a *app) togglePreview() {
-	t := a.tab()
-	if t == nil || t.Focus == nil {
-		return
-	}
-	t.Focus.Preview = !t.Focus.Preview
-	a.focusReq = t.Focus
+	t.Focus = p
+	a.focusReq = p
 	a.changed()
 }
 
@@ -501,7 +623,14 @@ func (a *app) cycleTab(delta int) {
 		return
 	}
 	a.active = (a.active + delta + len(a.tabs)) % len(a.tabs)
-	a.focusReq = nil
+	a.revealTab = true
+	a.folderDraft = nil
+	if t := a.tab(); t != nil {
+		a.focusReq = t.editorPane()
+		if t.Focus != nil {
+			a.revealInTree(t.Focus.Note)
+		}
+	}
 	a.changed()
 }
 
@@ -515,7 +644,14 @@ func (a *app) showTab(n int) {
 		i = len(a.tabs) - 1
 	}
 	a.active = min(max(i, 0), len(a.tabs)-1)
-	a.focusReq = nil
+	a.revealTab = true
+	a.folderDraft = nil
+	if t := a.tab(); t != nil {
+		a.focusReq = t.editorPane()
+		if t.Focus != nil {
+			a.revealInTree(t.Focus.Note)
+		}
+	}
 	a.changed()
 }
 
@@ -532,18 +668,7 @@ func (a *app) startRename(t *tab) {
 	a.rename = t
 	a.renameText = t.Name
 	a.renameFocus = false
-	a.invalidate()
-}
-
-func (a *app) finishRename(keep bool) {
-	if a.rename == nil {
-		return
-	}
-	if keep {
-		a.rename.Name = a.renameText
-		a.changed()
-	}
-	a.rename = nil
+	a.revealTab = true
 	a.invalidate()
 }
 
@@ -611,12 +736,18 @@ func (a *app) menu() *mygo.Menu {
 	return mygo.NewMenu([]*mygo.MenuItem{
 		{Role: mygo.RoleAppMenu},
 		{Label: "File", Submenu: []*mygo.MenuItem{
+			item(cmdOpenProject),
+			item(cmdNotes),
+			mygo.Separator(),
 			item(cmdNewNote),
+			item(cmdNewFolder),
 			item(cmdNewTab),
 			item(cmdSave),
 			mygo.Separator(),
 			item(cmdCloseTab),
-			{Label: "Reveal Vault", Click: func(*mygo.MenuItem, *mygo.Window) { a.revealVault() }},
+			mygo.Separator(),
+			item(cmdTerminal),
+			{Label: "Reveal Project", Click: func(*mygo.MenuItem, *mygo.Window) { a.revealVault() }},
 		}},
 		{Label: "Edit", Submenu: []*mygo.MenuItem{
 			{Role: mygo.RoleUndo},
@@ -628,8 +759,8 @@ func (a *app) menu() *mygo.Menu {
 			{Role: mygo.RoleSelectAll},
 		}},
 		{Label: "View", Submenu: []*mygo.MenuItem{
+			item(cmdTree),
 			item(cmdPalette),
-			item(cmdNotes),
 			mygo.Separator(),
 			{Label: "Appearance", Submenu: []*mygo.MenuItem{
 				appearance("System", 0),
@@ -647,7 +778,6 @@ func (a *app) menu() *mygo.Menu {
 			item(cmdSplitRight),
 			item(cmdSplitDown),
 			mygo.Separator(),
-			item(cmdPreview),
 			item(cmdZoom),
 			item(cmdEqualize),
 			mygo.Separator(),
@@ -686,18 +816,4 @@ func (a *app) editorTheme(c *ui.Context) *editor.Theme {
 		a.edDark = dark
 	}
 	return a.edTheme
-}
-
-// markdownTheme returns the preview theme for the current appearance.
-func (a *app) markdownTheme(c *ui.Context) *markdown.Theme {
-	dark := c.Theme().Dark
-	if a.mdTheme == nil || a.mdDark != dark {
-		th := markdown.DefaultTheme(c.Theme())
-		th.FontSize = 14.5
-		th.LineHeight = 1.65
-		th.CodeFont = "JetBrains Mono"
-		a.mdTheme = th
-		a.mdDark = dark
-	}
-	return a.mdTheme
 }

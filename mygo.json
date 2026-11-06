@@ -2,7 +2,7 @@
   "name": "Mojian",
   "identifier": "dev.mojian.app",
   "version": "0.1.0",
-  "copyright": "Mojian, a quiet Markdown workspace built with MyGo",
+  "copyright": "Mojian, a quiet text editor built with MyGo",
   "out": "build",
   "macos": { "minimumSystemVersion": "13.0" }
 }

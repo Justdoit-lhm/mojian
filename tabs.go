@@ -7,39 +7,75 @@ import (
 )
 
 const (
-	tabH      = 28
-	tabMaxW   = 214
-	tabMinW   = 112
-	tileW     = 20
-	tileH     = 15
-	tileStep  = 5 // how far each tile behind the front one peeks out
-	titleFree = 56
+	tabH     = 28
+	tabMaxW  = 214
+	tabMinW  = 112
+	tileW    = 20
+	tileH    = 15
+	tileStep = 5 // how far each tile behind the front one peeks out
 )
 
 // tabStrip draws the tabs in a track as wide as they are, which shrinks
 // when the title bar has no room. The track is part of the title bar, so
 // its edges drag the window.
 func (a *app) tabStrip(c *ui.Context, k *colors) {
+	if len(a.tabs) == 0 {
+		return
+	}
 	widths := make([]float32, len(a.tabs))
-	total := float32(4 + max(len(a.tabs)-1, 0))
+	total := float32(4 + 2*max(len(a.tabs)-1, 0))
 	for i, t := range a.tabs {
 		widths[i] = tabWidth(c, t)
 		total += widths[i]
 	}
-	track := ui.Row(c).Basis(total).Shrink(1).MinWidth(0).Height(tabH+4).Padding(2).
+	// The strip scrolls rather than shrinking tabs into unreadable
+	// slivers: every tab keeps its name, and the active one is revealed
+	// when it changes.
+	track := ui.ScrollHorizontal(c).Basis(total).Shrink(1).MinWidth(0).Height(tabH+4).
 		Radius((tabH+4)/2).Background(k.track).Border(0.5, k.trackBorder).
-		AlignItems(ui.Center).ClipX().DragWindow().Role(ui.RoleTabList).Label("Tabs")
+		ClipX().DragWindow().Role(ui.RoleTabList).Label("Tabs").Scrollbars(false).
+		TrackScroll(&a.tabScroll)
 	tabs := append([]*tab(nil), a.tabs...)
-	track.Children(func() {
-		for i, t := range tabs {
-			if i > 0 {
-				sep := ui.Box(c).Size(1, 15).Shrink(0)
-				if i != a.active && i-1 != a.active {
-					sep.Background(k.tabSep)
-				}
-			}
-			a.tabItem(c, k, i, t, widths[i])
+	viewport := track.Bounds().W
+	if a.revealTab {
+		start := float32(2)
+		for i := 0; i < a.active && i < len(widths); i++ {
+			start += widths[i] + 2
 		}
+		end := start
+		if a.active >= 0 && a.active < len(widths) {
+			end += widths[a.active]
+		}
+		x := a.tabScroll.X
+		switch {
+		case viewport <= 0:
+			x = start
+		case start < x:
+			x = start
+		case end > x+viewport:
+			x = end - viewport
+		}
+		if a.active <= 0 {
+			x = 0
+		}
+		a.tabScroll.X = max(x, 0)
+		a.revealTab = false
+	}
+	offset := a.tabScroll.X
+	if viewport > 0 {
+		offset = min(offset, max(total-viewport, 0))
+	}
+	track.Children(func() {
+		ui.Row(c).Height(tabH + 4).Width(total).Padding(2).Gap(2).AlignItems(ui.Center).Children(func() {
+			x := float32(2)
+			for i, t := range tabs {
+				// A tab cut by the left edge shows a blank pill rather
+				// than a stray tail of its name.
+				whole := viewport <= 0 || x >= offset-0.5
+				a.tabItem(c, k, i, t, widths[i], whole)
+				x += widths[i] + 2
+			}
+		})
 	})
 }
 
@@ -60,10 +96,10 @@ func tabLabel(name, detail string, nameColor, detailColor ui.Color) []ui.Span {
 	}
 }
 
-// tabItem draws one tab: the tiles of its notes and its label.
-func (a *app) tabItem(c *ui.Context, k *colors, i int, t *tab, width float32) {
+// tabItem draws one tab: the tiles of its panes and its label.
+func (a *app) tabItem(c *ui.Context, k *colors, i int, t *tab, width float32, whole bool) {
 	active := i == a.active
-	e := ui.Row(c.Key(t.ID)).Height(tabH).Basis(width).Shrink(1).MinWidth(76).
+	e := ui.Row(c.Key(t.ID)).Height(tabH).Basis(width).Shrink(0).
 		Padding(0, 9, 0, 5).Gap(8).AlignItems(ui.Center).Radius(tabH / 2).
 		Role(ui.RoleTab).Selected(active).FocusRing(false)
 	name, detail := t.label()
@@ -72,11 +108,16 @@ func (a *app) tabItem(c *ui.Context, k *colors, i int, t *tab, width float32) {
 		e.Background(k.tabActive).Shadow(0, 1, 2, 0, k.shadow).Shadow(0, 2, 8, 0, k.shadow)
 	} else if e.Hovered() {
 		e.Background(k.hover)
+	} else {
+		e.Background(k.tabInactive)
 	}
 	e.Transition(ui.ElementTransition{Colors: true, Position: true, Duration: 160 * time.Millisecond})
 	if e.Clicked() && !active {
 		a.active = i
 		a.focusReq = t.Focus
+		if t.Focus != nil {
+			a.revealInTree(t.Focus.Note)
+		}
 		a.changed()
 	}
 	if e.DoubleClicked() {
@@ -85,43 +126,45 @@ func (a *app) tabItem(c *ui.Context, k *colors, i int, t *tab, width float32) {
 	}
 	e.ContextMenu(func(m *ui.Menu) { a.tabMenu(m, t) })
 	hovered := e.Hovered()
-	e.Children(func() {
-		a.tiles(c, k, t)
-		if a.rename == t {
-			a.renameField(c, t, name)
-			return
-		}
-		nameColor, detailColor := k.text, k.textFaint
-		if !active {
-			nameColor = k.textMuted
-		}
-		label := ui.Box(c).Grow(1).MinWidth(0).Height(18).ClipX()
-		label.Children(func() {
-			ui.Row(c).Gap(5).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, name).FontSize(13).FontWeight(500).TextColor(nameColor).
-					SingleLine().Shrink(0).MaxWidth(max(width-70, 24))
-				if detail != "" {
-					ui.Text(c, detail).FontSize(12).TextColor(detailColor).
-						SingleLine().Shrink(1).MinWidth(0)
-				}
-			})
-		})
-		switch {
-		case hovered && len(a.tabs) > 1:
-			if iconButton(c, k, "x", "Close Tab", 18, 12).Tooltip("Close Tab").Clicked() {
-				a.later(func() { a.closeTab(t) })
+	if whole {
+		e.Children(func() {
+			a.tiles(c, k, t)
+			if a.rename == t {
+				a.renameField(c, t, name)
+				return
 			}
-		case t.dirty():
-			ui.Box(c).Size(7, 7).Radius(4).Background(k.attention).Margin(0, 5, 0, 5).
-				Tooltip("Unsaved edits")
-		default:
-			ui.Box(c).Size(7, 7).Shrink(0)
-		}
-	})
+			nameColor, detailColor := k.text, k.textFaint
+			if !active {
+				nameColor = k.textMuted
+			}
+			label := ui.Box(c).Grow(1).MinWidth(0).Height(18).ClipX()
+			label.Children(func() {
+				ui.Row(c).Gap(5).AlignItems(ui.Center).Children(func() {
+					ui.Text(c, name).FontSize(13).FontWeight(500).TextColor(nameColor).
+						SingleLine().Shrink(0).MaxWidth(max(width-70, 24))
+					if detail != "" {
+						ui.Text(c, detail).FontSize(12).TextColor(detailColor).
+							SingleLine().Shrink(1).MinWidth(0)
+					}
+				})
+			})
+			switch {
+			case hovered && len(a.tabs) > 1:
+				if iconButton(c, k, "x", "Close Tab", 18, 12).Tooltip("Close Tab").Clicked() {
+					a.later(func() { a.closeTab(t) })
+				}
+			case t.dirty():
+				ui.Box(c).Size(7, 7).Radius(4).Background(k.attention).Margin(0, 5, 0, 5).
+					Tooltip("Unsaved edits")
+			default:
+				ui.Box(c).Size(7, 7).Shrink(0)
+			}
+		})
+	}
 }
 
 // renameField edits the name of a tab in place: Enter or moving the focus
-// away keeps it, Escape goes back, and an empty name follows the notes
+// away keeps it, Escape goes back, and an empty name follows the file
 // again.
 func (a *app) renameField(c *ui.Context, t *tab, name string) {
 	in := ui.TextInput(c, &a.renameText).Placeholder(name).Grow(1).MinWidth(0).Height(22).

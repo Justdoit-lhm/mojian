@@ -2,11 +2,11 @@ package main
 
 import (
 	"fmt"
+	"runtime"
 	"time"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
-	"github.com/egoist/mygo/ui/markdown"
 )
 
 const (
@@ -20,18 +20,23 @@ func (a *app) view(c *ui.Context) {
 	a.runPending()
 	a.applyTheme(c)
 	k := colorsOf(c)
-	a.md.Theme = a.markdownTheme(c)
 	c.Root().Background(k.bgBottom)
 	ui.Column(c).Fill().
 		Draw(func(p *ui.Painter, r ui.Rect) { paintBackground(p, r, k) }).
 		Children(func() {
 			a.titleBar(c, k)
-			ui.Column(c).Grow(1).MinHeight(0).Padding(0, gap, gap, gap).Children(func() {
-				if t := a.tab(); t != nil {
-					a.tabContent(c, k, t)
-				} else {
-					a.emptyState(c, k)
+			ui.Row(c).Grow(1).MinHeight(0).Gap(gap).Padding(0, gap, gap, gap).
+				AlignItems(ui.Stretch).Children(func() {
+				if a.treeOpen {
+					a.sidebar(c, k)
 				}
+				ui.Column(c).Grow(1).MinWidth(0).MinHeight(0).FillHeight().Children(func() {
+					if t := a.tab(); t != nil {
+						a.tabContent(c, k, t)
+					} else {
+						a.emptyState(c, k)
+					}
+				})
 			})
 		})
 	if a.err != "" {
@@ -55,19 +60,25 @@ func (a *app) titleBar(c *ui.Context, k *colors) {
 	}
 	ui.Row(c).Height(titleH).Padding(0, max(bar.Right, 10), 0, left).Gap(14).
 		AlignItems(ui.Center).DragWindow().Children(func() {
-		a.vaultChip(c, k)
+		a.projectChip(c, k)
 		a.tabStrip(c, k)
 		// The title bar between the tabs and the buttons drags the
 		// window, and a double click on it zooms the window.
 		ui.Box(c).Grow(1).MinWidth(24)
 		ui.Row(c).Gap(2).AlignItems(ui.Center).Shrink(0).Children(func() {
+			if iconButton(c, k, "panel-left", "File Tree", 30, 17).
+				Tooltip(tip("File Tree", cmdTree)).Clicked() {
+				a.later(func() { a.toggleTree() })
+			}
 			if iconButton(c, k, "command", "Command Palette", 30, 17).
 				Tooltip(tip("Command Palette", cmdPalette)).Clicked() {
 				a.openPalette()
 			}
-			if iconButton(c, k, "plus", "New Note", 30, 19).
-				Tooltip(tip("New Note", cmdNewNote)).Clicked() {
-				a.later(func() { a.newNote() })
+			if runtime.GOOS != "js" {
+				if iconButton(c, k, "folder-plus", "New Folder", 30, 19).
+					Tooltip(tip("New Folder", cmdNewFolder)).Clicked() {
+					a.later(func() { a.newFolder() })
+				}
 			}
 		})
 	})
@@ -172,8 +183,7 @@ func (a *app) node(c *ui.Context, k *colors, t *tab, n *node) ui.Element {
 	return box
 }
 
-// paneCard draws one note: a card with a header over its editor or its
-// preview.
+// paneCard draws one file: a card with a header over its editor.
 func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 	focused := t.Focus == p
 	card := ui.Column(c.Key(p.ID)).Radius(cardR).Clip().MinWidth(0).MinHeight(0)
@@ -193,25 +203,23 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 			if p.Note == nil {
 				return
 			}
-			if p.Preview {
-				ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
-					ui.Column(c).FillWidth().Padding(14, 16, 24, 16).Children(func() {
-						markdown.View(c, p.Note.text(), &a.md)
-					})
-				})
-				return
+			st := p.state
+			if st == nil {
+				st = p.Note.newState()
+				p.state = st
 			}
-			st := p.Note.editorState()
 			st.Theme = a.editorTheme(c)
 			st.Font = noteFont
 			st.Label = p.Note.Title
 			note := p.Note
 			st.OnInput = func(ui.InputEvent) bool {
-				note.lastEdit = time.Now()
+				if isMarkdownPath(note.Path) {
+					note.words = wordCount(note.text())
+				}
 				a.scheduleSave()
 				return false
 			}
-			tv := editor.View(c, st).Fill()
+			tv := editor.View(c, st).Fill().MaxWidth(900).AlignSelf(ui.Center)
 			if a.focusReq == p {
 				tv.Focus()
 				a.focusReq = nil
@@ -236,10 +244,12 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hov
 	name, detail := "Untitled", ""
 	if p.Note != nil {
 		name = p.Note.Title
-		if p.Preview {
-			detail = "Preview"
+		if isMarkdownPath(p.Note.Path) {
+			detail = fmt.Sprintf("%d words", p.Note.words)
+		} else if l := editor.LanguageFor(p.Note.Path); l != nil {
+			detail = l.Name
 		} else {
-			detail = fmt.Sprintf("%d words", wordCount(p.Note.text()))
+			detail = "Text"
 		}
 	}
 	h := ui.Row(c).Height(headerH).Padding(0, 8, 0, 12).Gap(7).
@@ -271,16 +281,6 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hov
 		ui.Row(c).Gap(1).AlignItems(ui.Center).Children(func() {
 			if !show {
 				return
-			}
-			mode, label := "eye", "Preview"
-			if p.Preview {
-				mode, label = "pencil", "Edit"
-			}
-			if iconButton(c, k, mode, label, 26, 16).Tooltip(tip(label, cmdPreview)).Clicked() {
-				t.Focus = p
-				p.Preview = !p.Preview
-				a.focusReq = p
-				a.changed()
 			}
 			if iconButton(c, k, "columns-2", "Split Right", 26, 16).
 				Tooltip(tip("Split Right", cmdSplitRight)).Clicked() {
@@ -325,12 +325,21 @@ func (a *app) emptyState(c *ui.Context, k *colors) {
 			Border(1, k.cardBorderFocused).Center().Children(func() {
 			ui.Icon(c, icon("file-text")).Size(26, 26).TextColor(k.textMuted)
 		})
-		ui.Text(c, "No note open").FontSize(19).FontWeight(600).TextColor(k.text)
-		ui.Text(c, "Write something, or open a note from the title bar.").
+		ui.Text(c, "No file open").FontSize(19).FontWeight(600).TextColor(k.text)
+		ui.Text(c, "Write something, or pick a file in Files.").
 			FontSize(13).TextColor(k.textMuted)
-		if ui.PrimaryButton(c, "New Note").Clicked() {
+		btn := ui.Row(c).Padding(7, 16).Radius(8).Cursor(ui.CursorPointer).
+			Role(ui.RoleButton).Label("New Note").Background(k.text)
+		if btn.Hovered() {
+			btn.Background(k.text.Alpha(0.86))
+		}
+		btn.Tooltip(tip("New Note", cmdNewNote))
+		if btn.Clicked() {
 			a.newNote()
 		}
+		btn.Children(func() {
+			ui.Text(c, "New Note").FontSize(12.5).FontWeight(600).TextColor(k.panel)
+		})
 	})
 }
 
@@ -342,7 +351,7 @@ func (a *app) errorBanner(c *ui.Context, k *colors) {
 			ui.Row(c).Gap(10).Padding(8, 10, 8, 14).Radius(12).Background(k.panel).
 				Border(1, k.panelBorder).Shadow(0, 8, 24, 0, k.shadowFocused).
 				AlignItems(ui.Center).Children(func() {
-				ui.Box(c).Size(8, 8).Radius(4).Background(ui.Hex("#ef4444"))
+				ui.Box(c).Size(8, 8).Radius(4).Background(k.danger)
 				ui.Text(c, a.err).FontSize(12.5).TextColor(k.text).MaxWidth(520)
 				if iconButton(c, k, "x", "Dismiss", 22, 14).Clicked() {
 					a.err = ""

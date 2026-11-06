@@ -22,9 +22,9 @@ type colors struct {
 	text, textMuted, textFaint, iconMuted ui.Color
 	hover, pressed                        ui.Color
 
-	track, trackBorder, tabActive, tabSep, tileRim ui.Color
+	track, trackBorder, tabActive, tabInactive, tileRim ui.Color
 
-	busy, attention ui.Color
+	danger, attention ui.Color
 
 	panel, panelBorder, panelSel, backdrop ui.Color
 }
@@ -36,33 +36,33 @@ var lightColors = colors{
 	bgBottom: ui.Hex("#ece1bd"),
 	bgTint:   ui.RGBA(242, 214, 222, 0.35),
 
-	card:              ui.RGBA(255, 255, 255, 0.66),
-	cardFocused:       ui.RGBA(255, 255, 255, 0.95),
-	cardBorder:        ui.RGBA(255, 255, 255, 0.72),
+	card:              ui.RGBA(255, 255, 255, 0.78),
+	cardFocused:       ui.RGBA(255, 255, 255, 0.97),
+	cardBorder:        ui.RGBA(255, 255, 255, 0.82),
 	cardBorderFocused: ui.RGBA(255, 255, 255, 1),
 	shadow:            ui.RGBA(60, 40, 50, 0.07),
 	shadowFocused:     ui.RGBA(60, 40, 50, 0.12),
 
 	text:      ui.Hex("#1d1d1f"),
 	textMuted: ui.Hex("#636366"),
-	textFaint: ui.Hex("#8e8e93"),
-	iconMuted: ui.Hex("#8a8a8f"),
+	textFaint: ui.Hex("#6f6f75"),
+	iconMuted: ui.Hex("#7c7c82"),
 	hover:     ui.RGBA(0, 0, 0, 0.055),
 	pressed:   ui.RGBA(0, 0, 0, 0.1),
 
 	track:       ui.RGBA(255, 255, 255, 0.34),
 	trackBorder: ui.RGBA(255, 255, 255, 0.45),
 	tabActive:   ui.RGBA(255, 255, 255, 0.97),
-	tabSep:      ui.RGBA(0, 0, 0, 0.13),
+	tabInactive: ui.RGBA(255, 255, 255, 0.34),
 	tileRim:     ui.RGBA(255, 255, 255, 0.95),
 
-	busy:      ui.Hex("#34a853"),
+	danger:    ui.Hex("#d92d20"),
 	attention: ui.Hex("#f59e0b"),
 
 	panel:       ui.RGBA(252, 252, 253, 0.97),
 	panelBorder: ui.RGBA(0, 0, 0, 0.08),
 	panelSel:    ui.RGBA(46, 111, 208, 0.12),
-	backdrop:    ui.RGBA(40, 20, 40, 0.06),
+	backdrop:    ui.RGBA(30, 15, 25, 0.18),
 }
 
 var darkColors = colors{
@@ -72,8 +72,8 @@ var darkColors = colors{
 	bgBottom: ui.Hex("#2a2619"),
 	bgTint:   ui.RGBA(80, 40, 60, 0.25),
 
-	card:              ui.RGBA(20, 20, 24, 0.5),
-	cardFocused:       ui.RGBA(36, 36, 41, 0.94),
+	card:              ui.RGBA(24, 24, 28, 0.58),
+	cardFocused:       ui.RGBA(36, 36, 41, 0.95),
 	cardBorder:        ui.RGBA(255, 255, 255, 0.05),
 	cardBorderFocused: ui.RGBA(255, 255, 255, 0.14),
 	shadow:            ui.RGBA(0, 0, 0, 0.25),
@@ -89,16 +89,16 @@ var darkColors = colors{
 	track:       ui.RGBA(255, 255, 255, 0.06),
 	trackBorder: ui.RGBA(255, 255, 255, 0.06),
 	tabActive:   ui.RGBA(255, 255, 255, 0.14),
-	tabSep:      ui.RGBA(255, 255, 255, 0.14),
+	tabInactive: ui.RGBA(255, 255, 255, 0.04),
 	tileRim:     ui.RGBA(255, 255, 255, 0.22),
 
-	busy:      ui.Hex("#4ade80"),
+	danger:    ui.Hex("#f97066"),
 	attention: ui.Hex("#fbbf24"),
 
 	panel:       ui.RGBA(38, 38, 42, 0.97),
 	panelBorder: ui.RGBA(255, 255, 255, 0.1),
 	panelSel:    ui.RGBA(108, 178, 255, 0.18),
-	backdrop:    ui.RGBA(0, 0, 0, 0.2),
+	backdrop:    ui.RGBA(0, 0, 0, 0.45),
 }
 
 func colorsOf(c *ui.Context) *colors {
