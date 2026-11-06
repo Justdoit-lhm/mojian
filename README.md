@@ -122,6 +122,12 @@ The pieces that stand on their own are packages of their own.
 | `internal/icons/` | Lucide action icons and Material Icon Theme file icons |
 | `internal/assets/` | the embedded icons and JetBrains Mono |
 | `internal/motion/` | the page, pane, tab and tree transitions |
+| `test/` | black-box integration tests and the helpers they share |
+
+Go requires `_test.go` files that read unexported state to sit beside their
+package, so those white-box tests stay in `internal/app`, `internal/git`,
+`internal/icons` and `internal/theme`. The `test/` package holds black-box
+integration tests, such as real Git working trees.
 
 Inside `internal/app/`:
 

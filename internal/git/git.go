@@ -66,11 +66,11 @@ type Page struct {
 }
 
 type StatusData struct {
-	root    string
-	prefix  string
-	branch  string
-	changes []Change
-	err     string
+	Root    string
+	Prefix  string
+	Branch  string
+	Changes []Change
+	Err     string
 }
 
 func (p *Page) Toggle(h Host) {
@@ -106,12 +106,12 @@ func (p *Page) Refresh() {
 	seq := p.Seq
 	root := mustDir(h)
 	if h.Window() == nil {
-		p.applyStatus(seq, readStatus(root))
+		p.applyStatus(seq, ReadStatus(root))
 		return
 	}
 	win := h.Window()
 	go func() {
-		data := readStatus(root)
+		data := ReadStatus(root)
 		win.Update(func() {
 			if seq == p.Seq {
 				p.applyStatus(seq, data)
@@ -126,18 +126,18 @@ func (p *Page) applyStatus(seq int, data StatusData) {
 		return
 	}
 	p.Loading = false
-	p.Root = data.root
-	p.Prefix = data.prefix
-	p.Branch = data.branch
-	p.Changes = data.changes
-	p.Err = data.err
-	if len(data.changes) == 0 {
+	p.Root = data.Root
+	p.Prefix = data.Prefix
+	p.Branch = data.Branch
+	p.Changes = data.Changes
+	p.Err = data.Err
+	if len(data.Changes) == 0 {
 		p.Sel = -1
 		p.Diff = ""
 		p.DiffPath = ""
 		return
 	}
-	p.Sel = min(max(p.Sel, 0), len(data.changes)-1)
+	p.Sel = min(max(p.Sel, 0), len(data.Changes)-1)
 	p.loadDiff(p.Sel)
 }
 
@@ -166,13 +166,13 @@ func (p *Page) loadDiff(i int) {
 	seq := p.DiffSeq
 	root := p.Root
 	if h.Window() == nil {
-		diff, err := readGitDiff(root, change)
+		diff, err := ReadDiff(root, change)
 		p.applyDiff(seq, diff, err)
 		return
 	}
 	win := h.Window()
 	go func() {
-		diff, err := readGitDiff(root, change)
+		diff, err := ReadDiff(root, change)
 		win.Update(func() {
 			if seq == p.DiffSeq {
 				p.applyDiff(seq, diff, err)
@@ -193,40 +193,40 @@ func (p *Page) applyDiff(seq int, diff string, err error) {
 	}
 }
 
-// readStatus reads the repository's branch and changed files under
+// ReadStatus reads the repository's branch and changed files under
 // the project.
-func readStatus(project string) StatusData {
+func ReadStatus(project string) StatusData {
 	if resolved, err := filepath.EvalSymlinks(project); err == nil {
 		project = resolved
 	}
-	d := StatusData{root: project}
+	d := StatusData{Root: project}
 	out, err := runGit(project, "rev-parse", "--show-toplevel")
 	if err != nil {
-		d.err = "This folder is not a Git repository."
+		d.Err = "This folder is not a Git repository."
 		return d
 	}
-	d.root = strings.TrimSpace(out)
-	if r, err := filepath.Rel(d.root, project); err == nil && r != "." && r != "" {
-		d.prefix = filepath.ToSlash(r)
+	d.Root = strings.TrimSpace(out)
+	if r, err := filepath.Rel(d.Root, project); err == nil && r != "." && r != "" {
+		d.Prefix = filepath.ToSlash(r)
 	}
-	if branch, err := runGit(d.root, "rev-parse", "--abbrev-ref", "HEAD"); err == nil {
-		d.branch = strings.TrimSpace(branch)
-	} else if branch, err := runGit(d.root, "symbolic-ref", "--short", "HEAD"); err == nil {
-		d.branch = strings.TrimSpace(branch)
+	if branch, err := runGit(d.Root, "rev-parse", "--abbrev-ref", "HEAD"); err == nil {
+		d.Branch = strings.TrimSpace(branch)
+	} else if branch, err := runGit(d.Root, "symbolic-ref", "--short", "HEAD"); err == nil {
+		d.Branch = strings.TrimSpace(branch)
 	}
-	if d.branch == "" || d.branch == "HEAD" {
-		d.branch = "detached"
+	if d.Branch == "" || d.Branch == "HEAD" {
+		d.Branch = "detached"
 	}
 	pathspec := "."
-	if d.prefix != "" {
-		pathspec = d.prefix
+	if d.Prefix != "" {
+		pathspec = d.Prefix
 	}
-	status, err := runGit(d.root, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--", pathspec)
+	status, err := runGit(d.Root, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--", pathspec)
 	if err != nil {
-		d.err = err.Error()
+		d.Err = err.Error()
 		return d
 	}
-	d.changes = parseStatus(status, d.prefix)
+	d.Changes = parseStatus(status, d.Prefix)
 	return d
 }
 
@@ -289,9 +289,9 @@ func statusLetter(code string) string {
 	}
 }
 
-// readGitDiff reads one file's diff against HEAD, including staged and
+// ReadDiff reads one file's diff against HEAD, including staged and
 // unstaged work. Untracked files are shown as additions.
-func readGitDiff(root string, c Change) (string, error) {
+func ReadDiff(root string, c Change) (string, error) {
 	path := c.Path
 	if c.Status == "U" {
 		return untrackedDiff(root, path, c.Display)

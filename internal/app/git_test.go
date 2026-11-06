@@ -2,36 +2,20 @@ package app
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	integration "mojian/test"
+
 	"github.com/egoist/mygo/ui"
 )
-
-func initRepo(t *testing.T, dir string) {
-	t.Helper()
-	run := func(args ...string) {
-		t.Helper()
-		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
-		cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
-	run("init", "-q")
-	run("config", "user.email", "mojian@example.com")
-	run("config", "user.name", "Mojian Test")
-	run("add", ".")
-	run("commit", "-qm", "initial")
-}
 
 func TestGitPage(t *testing.T) {
 	registerFonts()
 	dir := t.TempDir()
-	makeVault(t, dir, map[string]string{"a.md": "# A\n\nold\n", "keep.go": "package x\n"})
-	initRepo(t, dir)
+	integration.WriteVault(t, dir, map[string]string{"a.md": "# A\n\nold\n", "keep.go": "package x\n"})
+	integration.InitRepo(t, dir)
 	if err := os.WriteFile(filepath.Join(dir, "a.md"), []byte("# A\n\nnew\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +46,7 @@ func TestGitPage(t *testing.T) {
 func TestGitOutsideRepo(t *testing.T) {
 	registerFonts()
 	dir := t.TempDir()
-	makeVault(t, dir, map[string]string{"a.md": "# A\n"})
+	integration.WriteVault(t, dir, map[string]string{"a.md": "# A\n"})
 	a := &app{treeOpen: true}
 	s, err := openStoreAt(dir)
 	if err != nil {

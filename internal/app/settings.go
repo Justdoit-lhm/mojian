@@ -41,7 +41,9 @@ func (a *app) settingsWindowView(c *ui.Context) {
 	a.applyTheme(c)
 	k := colorsOf(c)
 	c.Root().Background(k.BgBottom)
-	ui.Column(c).Fill().Children(func() {
+	ui.Column(c).Fill().Draw(func(p *ui.Painter, r ui.Rect) {
+		paintBackground(p, r, k)
+	}).Children(func() {
 		a.settingsTitleBar(c, k)
 		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
 			a.settingsRail(c, k)

@@ -6,28 +6,17 @@ import (
 	"path/filepath"
 	"testing"
 
+	integration "mojian/test"
+
 	"github.com/egoist/mygo/ui"
 )
-
-func makeVault(t *testing.T, dir string, files map[string]string) {
-	t.Helper()
-	for name, body := range files {
-		path := filepath.Join(dir, name)
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-}
 
 func TestProjectSwitch(t *testing.T) {
 	root := t.TempDir()
 	alpha := filepath.Join(root, "Alpha")
 	beta := filepath.Join(root, "Beta")
-	makeVault(t, alpha, map[string]string{"alpha.md": "# Alpha\n"})
-	makeVault(t, beta, map[string]string{"beta.py": "print('beta')\n"})
+	integration.WriteVault(t, alpha, map[string]string{"alpha.md": "# Alpha\n"})
+	integration.WriteVault(t, beta, map[string]string{"beta.py": "print('beta')\n"})
 
 	data := t.TempDir()
 	a := &app{
@@ -95,7 +84,7 @@ func TestProjectSwitch(t *testing.T) {
 func TestProjectChip(t *testing.T) {
 	registerFonts()
 	dir := filepath.Join(t.TempDir(), "Quiet")
-	makeVault(t, dir, map[string]string{"note.md": "# A note\n", "app.js": "console.log(1);\n"})
+	integration.WriteVault(t, dir, map[string]string{"note.md": "# A note\n", "app.js": "console.log(1);\n"})
 	a := &app{dataDir: t.TempDir(), treeOpen: true}
 	s, err := openStoreAt(dir)
 	if err != nil {
