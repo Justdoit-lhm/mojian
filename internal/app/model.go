@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
@@ -47,6 +48,20 @@ type node struct {
 	Ratio    float32
 	A, B     *node
 	Pane     *pane
+
+	// A split starts with the old pane almost filling the node, then
+	// moves Ratio to animTo over the next frames.
+	animFrom, animTo float32
+	animAt           time.Time
+	animating        bool
+}
+
+// startSplitAnim eases a fresh split from the old pane's full size to
+// the proportion the two panes share.
+func (n *node) startSplitAnim(to float32) {
+	n.animFrom, n.animTo = 0.97, to
+	n.animAt, n.animating = time.Now(), true
+	n.Ratio = n.animFrom
 }
 
 // tab is a workspace: a tree of panes, the one with the focus, and the
@@ -193,6 +208,7 @@ func (n *node) split(p, with *pane, down bool) bool {
 			A:        &node{Pane: old},
 			B:        &node{Pane: with},
 		}
+		n.startSplitAnim(0.5)
 		return true
 	}
 	if n.A != nil && n.A.split(p, with, down) {

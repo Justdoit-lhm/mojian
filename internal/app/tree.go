@@ -239,6 +239,9 @@ func (a *app) refreshProject() {
 	}
 	a.closeOrphanPanes()
 	a.keepTreeSelection()
+	if a.git.Open && !a.noGitAutoRefresh {
+		a.refreshGit()
+	}
 	a.invalidate()
 }
 

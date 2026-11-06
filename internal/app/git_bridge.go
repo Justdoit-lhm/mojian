@@ -7,10 +7,12 @@ import (
 
 // toggleGit shows the working-tree page or returns to the editor.
 func (a *app) toggleGit() {
-	a.settingsOpen = false
 	a.git.Toggle(a)
 	a.invalidate()
 }
+
+// refreshGit rereads the working tree for the open page.
+func (a *app) refreshGit() { a.git.Refresh() }
 
 // gitPage draws the page; the page owns its state and its view.
 func (a *app) gitPage(c *ui.Context, k *colors) {

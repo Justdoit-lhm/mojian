@@ -1,10 +1,12 @@
 package app
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
@@ -235,5 +237,23 @@ func TestNewTabIsEmpty(t *testing.T) {
 	}
 	if !tt.HasText("No file open") {
 		t.Fatalf("empty tab texts: %q", tt.Texts())
+	}
+}
+
+func TestSplitAnimatesToHalf(t *testing.T) {
+	a := newProjectApp(t)
+	a.splitWith(a.store.byRelPath("Reading notes.md"), false)
+	tt := ui.NewTester(a.view, 1100, 700)
+	tt.Frame()
+	root := a.tab().Root
+	if root == nil || !root.animating {
+		t.Fatal("a fresh split is not animating")
+	}
+	if root.Ratio <= 0.9 {
+		t.Fatalf("split started at %v, want the old pane nearly full", root.Ratio)
+	}
+	tt.Advance(300 * time.Millisecond)
+	if root.animating || math.Abs(float64(root.Ratio-0.5)) > 0.001 {
+		t.Fatalf("split settled at %v (animating=%v)", root.Ratio, root.animating)
 	}
 }

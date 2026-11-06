@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -174,6 +175,7 @@ func TestTerminalPaneAndSharedLimit(t *testing.T) {
 	a.addTerminalPane(&termTab{})
 	tt := ui.NewTester(a.view, 1100, 700)
 	tt.Frame()
+	tt.Advance(300 * time.Millisecond)
 	if got := len(a.tab().panes()); got != 2 {
 		t.Fatalf("panes: %d", got)
 	}

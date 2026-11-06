@@ -33,8 +33,13 @@ workspaces hold panes, and every pane edits a file with syntax highlighting.
 - **Pictures and PDFs.** Images open in a contained viewer, SVGs and animated
   GIFs included. A PDF shows its first page through macOS Quick Look (or
   `pdftoppm` when installed), with Open for the system reader.
-- **Settings in the window.** `⌘,` opens appearance, editor type, line numbers,
-  Markdown default and terminal type. Every change applies and is saved at once.
+- **Settings in their own window.** `⌘,`, the gear, or the palette opens a
+  separate window: categories on the left, settings on the right. The editor
+  and terminal fonts are chosen from the families installed on the Mac, with
+  live previews; type, line height, tab size, wrapping, Markdown, Git refresh
+  and startup are there too. Every change applies and is saved at once.
+  ![The Settings window](docs/settings.png)
+
 - **A terminal inside the window.** `⇧⌘T` opens a terminal pane on the right,
   in the selected folder. It shares the tab's four-pane limit and the same
   split, zoom and close controls as a file pane; `⇧⌘T` again closes it. It is a

@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"time"
 
 	gitpage "mojian/internal/git"
@@ -82,11 +83,35 @@ type app struct {
 	appearance      int // 0 follows the system, 1 light, 2 dark
 	appearanceItems [3]*mygo.MenuItem
 
-	settingsOpen     bool
-	editorFontSize   float64 // 0 means the default 12.5
-	hideLineNumbers  bool
-	markdownPreview  bool
-	terminalFontSize float64 // 0 means the default 12.5
+	settingsWin *mygo.Window
+	settingsCat int
+	fontPick    bool
+	fontPickFor int
+	fontTarget  int
+	fontSearch  string
+	fontsOnce   sync.Once
+	fonts       []ui.FontFamily
+
+	editorFontSize      float64 // 0 means the default 12.5
+	editorFontFamily    string
+	editorLineHeight    float64 // 0 means the default 1.55
+	editorTabSize       int     // 0 means 4
+	editorSoftWrap      bool
+	hideLineNumbers     bool
+	markdownPreview     bool
+	noActiveLine        bool
+	noIndentGuides      bool
+	noAutoClose         bool
+	noScrollPastEnd     bool
+	terminalFontSize    float64 // 0 means the default 12.5
+	terminalFontFamily  string
+	terminalLineHeight  float64 // 0 means 1
+	terminalOptionAsAlt bool
+	terminalCopySelect  bool
+	noCursorBlink       bool
+	terminalScrollback  int // MB, 0 means 10
+	noRestoreLayout     bool
+	noGitAutoRefresh    bool
 
 	err   string
 	title string
@@ -103,7 +128,10 @@ type app struct {
 
 func Run() {
 	registerFonts()
-	a := &app{editorFontSize: 12.5, terminalFontSize: 12.5}
+	a := &app{
+		editorFontSize: 12.5, editorLineHeight: 1.55, editorTabSize: 4,
+		terminalFontSize: 12.5, terminalLineHeight: 1, terminalScrollback: 10,
+	}
 	mygo.App.SetMenu(a.menu())
 	mygo.App.WhenReady(a.open)
 	mygo.App.OnActivate(func(hasVisibleWindows bool) {
@@ -119,6 +147,9 @@ func Run() {
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
 		a.saveNow()
 		a.closeTerminals()
+		if a.settingsWin != nil {
+			a.settingsWin.Close()
+		}
 	})
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)
@@ -154,7 +185,7 @@ func (a *app) open() {
 		}
 		a.rememberProject(s.dir)
 		a.saveSettings()
-		if !a.restoreLayout() {
+		if a.noRestoreLayout || !a.restoreLayout() {
 			a.focusFirstNote()
 		} else if t := a.tab(); t != nil {
 			a.focusReq = t.editorPane()
@@ -195,6 +226,9 @@ func (a *app) createWindow(stateKey string) *mygo.Window {
 
 // windowClosed clears the window state, keeping the tabs for a reopen.
 func (a *app) windowClosed() {
+	if a.settingsWin != nil {
+		a.settingsWin.Close()
+	}
 	a.saveNow()
 	a.closeTerminals()
 	if a.layoutTimer != nil {
@@ -211,13 +245,29 @@ func (a *app) windowClosed() {
 
 // settingsFile is what the app keeps between launches.
 type settingsFile struct {
-	Appearance       int      `json:"appearance"`
-	EditorFontSize   float64  `json:"editorFontSize,omitempty"`
-	HideLineNumbers  bool     `json:"hideLineNumbers,omitempty"`
-	MarkdownPreview  bool     `json:"markdownPreview,omitempty"`
-	TerminalFontSize float64  `json:"terminalFontSize,omitempty"`
-	Project          string   `json:"project,omitempty"`
-	Projects         []string `json:"projects,omitempty"`
+	Appearance          int      `json:"appearance"`
+	EditorFontFamily    string   `json:"editorFontFamily,omitempty"`
+	EditorFontSize      float64  `json:"editorFontSize,omitempty"`
+	EditorLineHeight    float64  `json:"editorLineHeight,omitempty"`
+	EditorTabSize       int      `json:"editorTabSize,omitempty"`
+	EditorSoftWrap      bool     `json:"editorSoftWrap,omitempty"`
+	HideLineNumbers     bool     `json:"hideLineNumbers,omitempty"`
+	MarkdownPreview     bool     `json:"markdownPreview,omitempty"`
+	NoActiveLine        bool     `json:"noActiveLine,omitempty"`
+	NoIndentGuides      bool     `json:"noIndentGuides,omitempty"`
+	NoAutoClose         bool     `json:"noAutoClose,omitempty"`
+	NoScrollPastEnd     bool     `json:"noScrollPastEnd,omitempty"`
+	TerminalFontFamily  string   `json:"terminalFontFamily,omitempty"`
+	TerminalFontSize    float64  `json:"terminalFontSize,omitempty"`
+	TerminalLineHeight  float64  `json:"terminalLineHeight,omitempty"`
+	TerminalOptionAsAlt bool     `json:"terminalOptionAsAlt,omitempty"`
+	TerminalCopySelect  bool     `json:"terminalCopySelect,omitempty"`
+	NoCursorBlink       bool     `json:"noCursorBlink,omitempty"`
+	TerminalScrollback  int      `json:"terminalScrollback,omitempty"`
+	NoRestoreLayout     bool     `json:"noRestoreLayout,omitempty"`
+	NoGitAutoRefresh    bool     `json:"noGitAutoRefresh,omitempty"`
+	Project             string   `json:"project,omitempty"`
+	Projects            []string `json:"projects,omitempty"`
 }
 
 // loadSettings reads the appearance and the project the app was left in.
@@ -237,14 +287,38 @@ func (a *app) loadSettings() {
 		a.appearance = s.Appearance
 		a.syncAppearance()
 	}
-	if s.EditorFontSize >= 10 && s.EditorFontSize <= 22 {
+	if s.EditorFontSize >= 8 && s.EditorFontSize <= 32 {
 		a.editorFontSize = s.EditorFontSize
 	}
-	if s.TerminalFontSize >= 9 && s.TerminalFontSize <= 20 {
+	if s.EditorLineHeight >= 1 && s.EditorLineHeight <= 2.4 {
+		a.editorLineHeight = s.EditorLineHeight
+	}
+	if s.EditorTabSize >= 1 && s.EditorTabSize <= 8 {
+		a.editorTabSize = s.EditorTabSize
+	}
+	if s.TerminalFontSize >= 8 && s.TerminalFontSize <= 32 {
 		a.terminalFontSize = s.TerminalFontSize
 	}
+	if s.TerminalLineHeight >= 0.8 && s.TerminalLineHeight <= 2 {
+		a.terminalLineHeight = s.TerminalLineHeight
+	}
+	if s.TerminalScrollback >= 1 && s.TerminalScrollback <= 1000 {
+		a.terminalScrollback = s.TerminalScrollback
+	}
+	a.editorFontFamily = s.EditorFontFamily
+	a.editorSoftWrap = s.EditorSoftWrap
 	a.hideLineNumbers = s.HideLineNumbers
 	a.markdownPreview = s.MarkdownPreview
+	a.noActiveLine = s.NoActiveLine
+	a.noIndentGuides = s.NoIndentGuides
+	a.noAutoClose = s.NoAutoClose
+	a.noScrollPastEnd = s.NoScrollPastEnd
+	a.terminalFontFamily = s.TerminalFontFamily
+	a.terminalOptionAsAlt = s.TerminalOptionAsAlt
+	a.terminalCopySelect = s.TerminalCopySelect
+	a.noCursorBlink = s.NoCursorBlink
+	a.noRestoreLayout = s.NoRestoreLayout
+	a.noGitAutoRefresh = s.NoGitAutoRefresh
 	a.project = s.Project
 	a.projects = s.Projects
 }
@@ -258,13 +332,29 @@ func (a *app) saveSettings() {
 		project = a.store.dir
 	}
 	data, _ := json.MarshalIndent(settingsFile{
-		Appearance:       a.appearance,
-		EditorFontSize:   a.fontSize(),
-		HideLineNumbers:  a.hideLineNumbers,
-		MarkdownPreview:  a.markdownPreview,
-		TerminalFontSize: a.termFontSize(),
-		Project:          project,
-		Projects:         a.projects,
+		Appearance:          a.appearance,
+		EditorFontFamily:    a.editorFontFamily,
+		EditorFontSize:      a.fontSize(),
+		EditorLineHeight:    a.lineHeight(),
+		EditorTabSize:       a.tabSize(),
+		EditorSoftWrap:      a.editorSoftWrap,
+		HideLineNumbers:     a.hideLineNumbers,
+		MarkdownPreview:     a.markdownPreview,
+		NoActiveLine:        a.noActiveLine,
+		NoIndentGuides:      a.noIndentGuides,
+		NoAutoClose:         a.noAutoClose,
+		NoScrollPastEnd:     a.noScrollPastEnd,
+		TerminalFontFamily:  a.terminalFontFamily,
+		TerminalFontSize:    a.termFontSize(),
+		TerminalLineHeight:  a.termLineHeight(),
+		TerminalOptionAsAlt: a.terminalOptionAsAlt,
+		TerminalCopySelect:  a.terminalCopySelect,
+		NoCursorBlink:       a.noCursorBlink,
+		TerminalScrollback:  a.termScrollback(),
+		NoRestoreLayout:     a.noRestoreLayout,
+		NoGitAutoRefresh:    a.noGitAutoRefresh,
+		Project:             project,
+		Projects:            a.projects,
 	}, "", "  ")
 	_ = os.MkdirAll(filepath.Dir(a.settingsPath), 0o755)
 	_ = os.WriteFile(a.settingsPath, data, 0o644)
@@ -286,22 +376,68 @@ func (a *app) termFontSize() float64 {
 	return a.terminalFontSize
 }
 
-// settingsToggle opens or closes the Settings page.
-func (a *app) settingsToggle() {
-	a.settingsOpen = !a.settingsOpen
-	if a.settingsOpen {
-		a.git.Open = false
-		a.paletteOpen = false
-		a.projectPicker = false
-		a.splitPick = false
+// lineHeight, tabSize and the terminal's numbers are the effective
+// values, with the defaults when unset.
+func (a *app) lineHeight() float64 {
+	if a.editorLineHeight <= 0 {
+		return 1.55
 	}
-	a.invalidate()
+	return a.editorLineHeight
 }
 
-// closeSettings returns to the editor.
-func (a *app) closeSettings() {
-	a.settingsOpen = false
-	a.invalidate()
+func (a *app) tabSize() int {
+	if a.editorTabSize <= 0 {
+		return 4
+	}
+	return a.editorTabSize
+}
+
+func (a *app) termLineHeight() float64 {
+	if a.terminalLineHeight <= 0 {
+		return 1
+	}
+	return a.terminalLineHeight
+}
+
+func (a *app) termScrollback() int {
+	if a.terminalScrollback <= 0 {
+		return 10
+	}
+	return a.terminalScrollback
+}
+
+// openSettingsWindow shows the preferences in a window of their own, or
+// brings it forward.
+func (a *app) openSettingsWindow() {
+	if a.settingsWin != nil {
+		a.settingsWin.Focus()
+		return
+	}
+	win := mygo.NewWindow(mygo.WindowOptions{
+		Title:                "Settings",
+		Width:                900,
+		Height:               640,
+		MinWidth:             720,
+		MinHeight:            500,
+		StateKey:             "settings",
+		TitleBarStyle:        mygo.TitleBarHidden,
+		TrafficLightPosition: &mygo.Point{X: 16, Y: 15},
+		BackgroundColor:      "light-dark(#efe1e6, #231e27)",
+		Content:              ui.View(a.settingsWindowView),
+	})
+	a.settingsWin = win
+	win.OnClosed(func() { a.settingsWin = nil })
+	win.Focus()
+}
+
+// invalidate redraws both windows that show app state.
+func (a *app) invalidate() {
+	if a.win != nil {
+		a.win.Invalidate()
+	}
+	if a.settingsWin != nil {
+		a.settingsWin.Invalidate()
+	}
 }
 
 // initialStore opens $MOJIAN_VAULT, else the project of the last launch,
@@ -402,12 +538,6 @@ func (a *app) saveNow() {
 }
 
 // invalidate asks for a frame after a change made outside the view.
-func (a *app) invalidate() {
-	if a.win != nil {
-		a.win.Invalidate()
-	}
-}
-
 // fail shows an error at the bottom of the window.
 func (a *app) fail(err error) {
 	if err == nil {
@@ -522,7 +652,6 @@ func (a *app) focusFirstNote() {
 // newTab adds an empty workspace to the right of the tabs. It does not
 // copy the current file; picking or creating a file fills it.
 func (a *app) newTab() {
-	a.settingsOpen = false
 	a.git.Open = false
 	t := &tab{ID: nextID("t")}
 	a.tabs = append(a.tabs, t)
@@ -559,7 +688,6 @@ func (a *app) openNote(n *note) {
 	if n == nil {
 		return
 	}
-	a.settingsOpen = false
 	a.git.Open = false
 	a.treeDraft = nil
 	a.treeQuery = ""
@@ -647,7 +775,6 @@ func (a *app) openAsset(f *assetFile) {
 	if f == nil {
 		return
 	}
-	a.settingsOpen = false
 	a.git.Open = false
 	a.treeDraft = nil
 	a.treeQuery = ""
@@ -802,7 +929,6 @@ func (a *app) showTab(n int) {
 	if len(a.tabs) == 0 {
 		return
 	}
-	a.settingsOpen = false
 	a.git.Open = false
 	i := n - 1
 	if n >= 9 {
@@ -844,8 +970,6 @@ func (a *app) updateTitle() {
 	}
 	title := "Mojian"
 	switch {
-	case a.settingsOpen:
-		title = "Settings"
 	case a.git.Open:
 		title = "Changes"
 	case a.tab() != nil:
@@ -968,6 +1092,10 @@ func (a *app) menu() *mygo.Menu {
 // run runs a command from a menu or the palette.
 func (a *app) run(c *command) {
 	if c == nil {
+		return
+	}
+	if c == cmdClosePane && a.settingsWin != nil && a.settingsWin.IsFocused() {
+		a.settingsWin.Close()
 		return
 	}
 	c.run(a)

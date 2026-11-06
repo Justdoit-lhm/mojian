@@ -377,12 +377,10 @@ func TestMenuBuilds(t *testing.T) {
 func TestSettingsPageAndPersistence(t *testing.T) {
 	a := newProjectApp(t)
 	a.settingsPath = filepath.Join(t.TempDir(), "settings.json")
-	tt := ui.NewTester(a.view, 1100, 700)
+	tt := ui.NewTester(a.settingsWindowView, 900, 640)
 	tt.Frame()
-	a.settingsToggle()
-	tt.Frame()
-	if !tt.HasText("APPEARANCE") || !tt.HasText("Settings") {
-		t.Fatalf("settings page texts: %q", tt.Texts())
+	if !tt.HasText("PREFERENCES") || !tt.HasText("General") || !tt.HasText("Theme") {
+		t.Fatalf("settings window texts: %q", tt.Texts())
 	}
 	a.editorFontSize = 15
 	a.hideLineNumbers = true
@@ -465,18 +463,17 @@ func TestAssetsAppearAndOpen(t *testing.T) {
 func TestSettingsAppearanceAndEditor(t *testing.T) {
 	a := newProjectApp(t)
 	tt := ui.NewTester(a.view, 1100, 700)
-	a.settingsToggle()
-	tt.Frame()
-	if err := tt.Click("Dark"); err != nil {
+	settings := ui.NewTester(a.settingsWindowView, 900, 640)
+	settings.Frame()
+	if err := settings.Click("Dark"); err != nil {
 		t.Fatal(err)
 	}
-	tt.Frame()
+	settings.Frame()
 	if a.appearance != 2 {
 		t.Fatalf("appearance after Dark: %d", a.appearance)
 	}
 	a.editorFontSize = 16
 	a.hideLineNumbers = true
-	a.settingsOpen = false
 	a.openNote(a.store.byRelPath("scripts/tasks.py"))
 	tt.Frame()
 	p := a.tab().Focus
@@ -488,5 +485,43 @@ func TestSettingsAppearanceAndEditor(t *testing.T) {
 	}
 	if p.state.LineNumbers != editor.LineNumbersOff {
 		t.Fatalf("line numbers: %v", p.state.LineNumbers)
+	}
+}
+
+func TestSettingsCategoriesAndFontFamily(t *testing.T) {
+	a := newProjectApp(t)
+	settings := ui.NewTester(a.settingsWindowView, 900, 640)
+	settings.Frame()
+	if err := settings.Click("Terminal"); err != nil {
+		t.Fatal(err)
+	}
+	settings.Frame()
+	if a.settingsCat != settingsTerminal {
+		t.Fatalf("category after Terminal: %d", a.settingsCat)
+	}
+	if !settings.HasText("Option as Alt") {
+		t.Fatalf("terminal settings texts: %q", settings.Texts())
+	}
+	if err := settings.Click("Editor"); err != nil {
+		t.Fatal(err)
+	}
+	settings.Frame()
+	a.editorFontFamily = "Menlo"
+	a.editorFontSize = 15
+	a.editorLineHeight = 1.7
+	a.editorTabSize = 2
+	a.noActiveLine = true
+	a.openNote(a.store.byRelPath("scripts/tasks.py"))
+	main := ui.NewTester(a.view, 1100, 700)
+	main.Frame()
+	p := a.tab().Focus
+	if p.state == nil {
+		t.Fatal("the editor state was not built")
+	}
+	if !strings.Contains(p.state.Font.Family, "Menlo") || p.state.Font.Size != 15 {
+		t.Fatalf("editor font: %+v", p.state.Font)
+	}
+	if p.state.LineHeight != 1.7 || p.state.TabSize != 2 || !p.state.NoActiveLine {
+		t.Fatalf("editor options: line=%v tab=%d active=%v", p.state.LineHeight, p.state.TabSize, p.state.NoActiveLine)
 	}
 }

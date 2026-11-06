@@ -54,9 +54,6 @@ func (a *app) workspace(c *ui.Context, k *colors) {
 	key := "workspace:empty"
 	build := func() { a.emptyState(c, k) }
 	switch {
-	case a.settingsOpen:
-		key = "workspace:settings"
-		build = func() { a.settingsPage(c, k) }
 	case a.git.Open:
 		key = "workspace:git"
 		build = func() { a.gitPage(c, k) }
@@ -113,7 +110,7 @@ func (a *app) titleBar(c *ui.Context, k *colors) {
 			}
 			if iconButton(c, k, "settings", "Settings", 30, 17).
 				Tooltip(tip("Settings", cmdSettings)).Clicked() {
-				a.later(func() { a.settingsToggle() })
+				a.later(func() { a.openSettingsWindow() })
 			}
 		})
 	})
@@ -182,6 +179,22 @@ func (a *app) node(c *ui.Context, k *colors, t *tab, n *node) ui.Element {
 	}
 	box.MinWidth(0).MinHeight(0).AlignItems(ui.Stretch)
 	bounds := box.Bounds()
+	if n.animating {
+		if c.Preferences().ReduceMotion {
+			n.Ratio, n.animating = n.animTo, false
+			a.changed()
+		} else {
+			p := float32(c.Now().Sub(n.animAt)) / float32(240*time.Millisecond)
+			if p >= 1 {
+				n.Ratio, n.animating = n.animTo, false
+				a.changed()
+			} else {
+				ease := ui.CubicBezier(0.23, 1, 0.32, 1)
+				n.Ratio = n.animFrom + (n.animTo-n.animFrom)*ease(max(p, 0))
+				c.AnimationFrame()
+			}
+		}
+	}
 	first, second, ratio := n.A, n.B, n.Ratio
 	box.Children(func() {
 		a.node(c, k, t, first).Grow(ratio).Basis(0).MinWidth(0).MinHeight(0)
@@ -192,6 +205,7 @@ func (a *app) node(c *ui.Context, k *colors, t *tab, n *node) ui.Element {
 			div.Width(gap).Cursor(ui.CursorResizeColumn)
 		}
 		if dx, dy, ok := div.Dragged(); ok {
+			n.animating = false
 			total := bounds.W - gap
 			d := dx
 			if n.Vertical {
@@ -204,6 +218,7 @@ func (a *app) node(c *ui.Context, k *colors, t *tab, n *node) ui.Element {
 		}
 		if div.DoubleClicked() {
 			n.Ratio = 0.5
+			n.animating = false
 			a.changed()
 		}
 		if div.Hovered() || div.Dragging() || div.Pressed() {
@@ -275,8 +290,14 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 				p.state = st
 			}
 			st.Theme = a.editorTheme(c)
-			st.Font = noteFont
-			st.Font.Size = float32(a.fontSize())
+			st.Font = a.editorFont()
+			st.LineHeight = float32(a.lineHeight())
+			st.TabSize = a.tabSize()
+			st.SoftWrap = a.editorSoftWrap || wrapFor(p.Note.Path)
+			st.NoActiveLine = a.noActiveLine
+			st.NoIndentGuides = a.noIndentGuides
+			st.NoAutoClose = a.noAutoClose
+			st.NoScrollPastEnd = a.noScrollPastEnd
 			st.Label = p.Note.Title
 			if a.hideLineNumbers {
 				st.LineNumbers = editor.LineNumbersOff

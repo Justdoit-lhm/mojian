@@ -64,7 +64,7 @@ var (
 	cmdGit = &command{title: "Git Diff", accel: "CmdOrCtrl+Shift+G", keys: "⇧⌘G", glyph: "git-branch",
 		run: func(a *app) { a.toggleGit() }}
 	cmdSettings = &command{title: "Settings…", accel: "CmdOrCtrl+,", keys: "⌘,", glyph: "settings",
-		run: func(a *app) { a.settingsToggle() }}
+		run: func(a *app) { a.openSettingsWindow() }}
 )
 
 // paletteCommands are the commands the palette lists.

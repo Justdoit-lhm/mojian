@@ -157,6 +157,7 @@ func (a *app) addTerminalPane(tt *termTab) *pane {
 			A:        t.Root,
 			B:        &node{Pane: p},
 		}
+		t.Root.startSplitAnim(0.66)
 	}
 	t.Zoom = nil
 	t.Focus = p
@@ -181,11 +182,23 @@ func (a *app) startTerminal() (*termTab, error) {
 			win.Update(fn)
 		}
 	}
+	copySelect := terminal.CopyOnSelectNone
+	if a.terminalCopySelect {
+		copySelect = terminal.CopyOnSelectClipboard
+	}
 	term, err := terminal.New(terminal.Options{
-		Dir:         dir,
-		Font:        terminal.Font{Size: float32(a.termFontSize())},
-		Transparent: true,
-		Padding:     terminal.Padding{X: 10, Y: 8},
+		Dir: dir,
+		Font: terminal.Font{
+			Family:     a.terminalFontFamily,
+			Size:       float32(a.termFontSize()),
+			LineHeight: float32(a.termLineHeight()),
+		},
+		OptionAsAlt:  a.terminalOptionAsAlt,
+		CopyOnSelect: copySelect,
+		NoBlink:      a.noCursorBlink,
+		Scrollback:   a.termScrollback() * 1 << 20,
+		Transparent:  true,
+		Padding:      terminal.Padding{X: 10, Y: 8},
 		OnExit: func(int) {
 			update(func() {
 				tt.Exited = true
