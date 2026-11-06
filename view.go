@@ -56,15 +56,16 @@ func (a *app) view(c *ui.Context) {
 // tabs, and the buttons of the palette and a new note.
 func (a *app) titleBar(c *ui.Context, k *colors) {
 	bar := c.TitleBar()
-	left := bar.Left
-	if left == 0 {
-		left = 12 // in full screen, or beside no controls
+	dragW := bar.Left + 18
+	if bar.Left == 0 {
+		dragW = 30 // in full screen, or beside no controls
 	}
 	ui.Row(c).Height(titleH).Padding(0, max(bar.Right, 10), 0, 0).Gap(14).
 		AlignItems(ui.Center).DragWindow().Children(func() {
-		// The band under the traffic lights drags the window from the
-		// top-left corner; the system controls stay above it.
-		ui.Box(c).Width(left).Height(titleH).DragWindow().Cursor(ui.CursorGrab)
+		// The title bar band right of the traffic lights moves the
+		// window, and leaves the corner itself to the resize edge.
+		ui.Box(c).Width(dragW).Height(titleH).DragWindow().
+			Cursor(ui.CursorGrab).Tooltip("Drag Window")
 		a.projectChip(c, k)
 		a.tabStrip(c, k)
 		// The title bar between the tabs and the buttons drags the
@@ -88,6 +89,10 @@ func (a *app) titleBar(c *ui.Context, k *colors) {
 					Tooltip(tip("Toggle Terminal", cmdTerminal)).Clicked() {
 					a.later(func() { a.toggleTerminal() })
 				}
+			}
+			if iconButton(c, k, "plus", "New Tab", 30, 17).
+				Tooltip(tip("New Tab", cmdNewTab)).Clicked() {
+				a.later(func() { a.newTab() })
 			}
 		})
 	})

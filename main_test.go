@@ -215,3 +215,18 @@ func TestView(t *testing.T) {
 		t.Errorf("current note: %+v", a.currentNote())
 	}
 }
+
+func TestNewTabButton(t *testing.T) {
+	registerFonts()
+	a := newProjectApp(t)
+	tt := ui.NewTester(a.view, 1100, 700)
+	tt.Frame()
+	before := len(a.tabs)
+	if err := tt.Click("New Tab"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if got := len(a.tabs); got != before+1 {
+		t.Fatalf("tabs after New Tab: %d, want %d", got, before+1)
+	}
+}
