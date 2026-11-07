@@ -2,16 +2,10 @@
   <img src="logos/png/mojian-logo-horizontal-1600.png" alt="Mojian" width="400">
 </p>
 
-<h1 align="center">Mojian · 墨间</h1>
-
 <p align="center"><em>Words on paper. The tool steps back.</em></p>
 
 <p align="center">
   macOS 13+ &nbsp;·&nbsp; Linux amd64/arm64 &nbsp;·&nbsp; MyGo native UI &nbsp;·&nbsp; No webview &nbsp;·&nbsp; Built without cgo
-</p>
-
-<p align="center">
-  <a href="README.md">English</a> &nbsp;·&nbsp; <a href="README.zh-CN.md">简体中文</a>
 </p>
 
 <p align="center">
@@ -21,9 +15,9 @@
 
 ## Mojian
 
-Mojian is a quiet plain-text editor for macOS. It opens ordinary folders and edits ordinary files. There is no library, no index, no database, no account.
+Mojian is a quiet plain-text editor for macOS and Linux. It opens ordinary folders and edits ordinary files. There is no library, no index, no database, no account.
 
-The window is drawn by [MyGo](https://mygo.egoist.dev) as native UI — Metal on macOS — so there is no webview, no Electron, and no JavaScript build. A tab holds tiled panes; a pane can edit a file, preview a picture or PDF, or run a terminal. Terminals live in a separate session server and survive quitting the app, and a project can live on a server reached over SSH.
+The window is drawn by [MyGo](https://mygo.egoist.dev) as native UI — Metal on macOS, GTK on Linux — so there is no webview, no Electron, and no JavaScript build. A tab holds tiled panes; a pane can edit a file, preview a picture or PDF, or run a terminal. Terminals live in a separate session server and survive quitting the app, and a project can live on a server reached over SSH.
 
 The Chinese name 墨间 (mò jiān) is ink, and the space it needs. The tool steps behind the paper, the file stays in front of you, and the pace of writing stays yours.
 
@@ -33,7 +27,7 @@ Download the latest build from [Releases](https://github.com/ox0pine/mojian/rele
 
 On macOS, use `mojian-<version>-arm64.dmg` for Apple Silicon or `mojian-<version>-amd64.dmg` for Intel, open the disk image, and drag Mojian into Applications. Mojian requires macOS 13 or later. Release builds are ad-hoc signed rather than notarized; if macOS blocks the first launch, right-click Mojian in Finder and choose **Open**.
 
-On Linux, install `mojian_<version>_<arch>.deb` (amd64 or arm64), or unpack `mojian-<version>-linux-<arch>.tar.gz`, run `sh install.sh` inside it, and launch `mojian` from the applications menu. The archive installs per user without root.
+On Linux, install the Debian package with `sudo apt install ./mojian_<version>_<arch>.deb` (amd64 or arm64), or unpack `mojian-<version>-linux-<arch>.tar.gz`, run `sh install.sh` inside it, and launch `mojian` from the applications menu. The archive installs per user without root. The Linux build needs GTK 3.
 
 ## Features
 
@@ -47,7 +41,7 @@ On Linux, install `mojian_<version>_<arch>.deb` (amd64 or arm64), or unpack `moj
 
 Syntax highlighting covers the languages MyGo knows — Python, JavaScript, TypeScript, Go, Rust, C and C++, Swift, Kotlin, Ruby, JSON, YAML, TOML, SQL, HTML, CSS, Markdown and more. Code keeps its line numbers; prose wraps. The editor follows Zed's keymap for find and replace, multiple carets, line moves, comments and folding.
 
-A Markdown pane switches between source and preview from its header, and Settings › Editor can open new `.md` files rendered. Images, SVG included, open in a contained viewer; PDFs render page by page — up to 60 — when `pdftoppm` is installed, and fall back to a Quick Look first page.
+A Markdown pane switches between source and preview from its header, and Settings › Editor can open new `.md` files rendered. Images, SVG included, open in a contained viewer; PDFs render page by page — up to 60 — when `pdftoppm` is installed, and fall back to a Quick Look first page on macOS.
 
 ### Tabs, panes, and the Explorer
 
@@ -74,6 +68,8 @@ Add a host in Settings › Hosts, then choose it from the server chip; the addre
 `⇧⌘P` searches commands, files and tabs with fuzzy matching. Both palettes are tuned by hand; the window follows the system by default, and View › Appearance overrides it.
 
 ## Keyboard shortcuts
+
+The tables use macOS keys. On Linux, Ctrl takes the place of `⌘`, and Alt the place of `⌥`.
 
 ### Files and projects
 
@@ -126,7 +122,7 @@ cd mojian
 go tool mygo dev        # live-reloading development app
 go test ./...           # unit and integration tests
 go tool mygo vet .      # go vet plus MyGo's UI lifetime checks
-go tool mygo build      # build/<os>-<arch>/Mojian.app and .dmg
+go tool mygo build      # build/<os>-<arch>/: .app and .dmg, or .tar.gz and .deb
 ```
 
 MyGo is pinned as a Go tool in `go.mod`, so the first `go tool mygo` downloads the exact version. `go tool mygo dev -web` opens the interface in a browser, with files kept in memory. After changing the session protocol or `cmd/mojian-server`, rebuild the embedded remote binaries with `sh tools/build-remote.sh`.

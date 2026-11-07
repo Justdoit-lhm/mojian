@@ -2,16 +2,10 @@
   <img src="logos/png/mojian-logo-horizontal-1600.png" alt="墨间" width="400">
 </p>
 
-<h1 align="center">墨间 · Mojian</h1>
-
 <p align="center"><em>字落于纸，工具退于幕后。</em></p>
 
 <p align="center">
   macOS 13+ &nbsp;·&nbsp; Linux amd64/arm64 &nbsp;·&nbsp; MyGo 原生界面 &nbsp;·&nbsp; 无 WebView &nbsp;·&nbsp; 无 cgo 构建
-</p>
-
-<p align="center">
-  <a href="README.md">English</a> &nbsp;·&nbsp; <a href="README.zh-CN.md">简体中文</a>
 </p>
 
 <p align="center">
@@ -21,9 +15,9 @@
 
 ## 墨间
 
-墨间是一款为纯文本而生的 macOS 编辑器。它打开普通文件夹，编辑普通文件：不导入、不建库、不索引，也不需要账号。
+墨间是一款为纯文本而生的 macOS 与 Linux 编辑器。它打开普通文件夹，编辑普通文件：不导入、不建库、不索引，也不需要账号。
 
-窗口由 [MyGo](https://mygo.egoist.dev) 以原生界面绘制——在 macOS 上经 Metal 呈现——因此没有 WebView，没有 Electron，也没有 JavaScript 构建。一个标签页由若干可平铺的窗格组成；窗格可以编辑文件、预览图片或 PDF，也可以运行终端。终端进程活在独立的会话服务器里，退出应用也不会结束；项目还可以放在通过 SSH 连接的服务器上。
+窗口由 [MyGo](https://mygo.egoist.dev) 以原生界面绘制——macOS 上经 Metal，Linux 上经 GTK——因此没有 WebView，没有 Electron，也没有 JavaScript 构建。一个标签页由若干可平铺的窗格组成；窗格可以编辑文件、预览图片或 PDF，也可以运行终端。终端进程活在独立的会话服务器里，退出应用也不会结束；项目还可以放在通过 SSH 连接的服务器上。
 
 **墨**是文字，**间**是留白。工具退到纸后，文件留在眼前；编辑的节奏，由你掌握。
 
@@ -33,7 +27,7 @@
 
 macOS：Apple Silicon 选 `mojian-<版本>-arm64.dmg`，Intel 选 `mojian-<版本>-amd64.dmg`；打开镜像，把墨间拖进「应用程序」。墨间需要 macOS 13 或更高版本。发布包采用 ad-hoc 签名、未经公证；如果系统拦截首次启动，请在 Finder 中右键墨间并选择「打开」。
 
-Linux：安装 `mojian_<版本>_<架构>.deb`（amd64 或 arm64），或解压 `mojian-<版本>-linux-<架构>.tar.gz` 后运行其中的 `sh install.sh`，再从应用菜单启动。压缩包安装到用户目录，不需要 root。
+Linux：用 `sudo apt install ./mojian_<版本>_<架构>.deb` 安装（amd64 或 arm64），或解压 `mojian-<版本>-linux-<架构>.tar.gz` 后运行其中的 `sh install.sh`，再从应用菜单启动。压缩包安装到用户目录，不需要 root。Linux 构建需要 GTK 3。
 
 ## 功能
 
@@ -47,7 +41,7 @@ Linux：安装 `mojian_<版本>_<架构>.deb`（amd64 或 arm64），或解压 `
 
 语法高亮覆盖 MyGo 所知的多种语言——Python、JavaScript、TypeScript、Go、Rust、C 与 C++、Swift、Kotlin、Ruby、JSON、YAML、TOML、SQL、HTML、CSS、Markdown 等。代码保留行号，散文自然换行。编辑器沿用 Zed 的键位：查找替换、多光标、整行移动、注释与折叠都在。
 
-Markdown 窗格可在标题栏切换源码与预览；设置 › Editor 可让新开的 `.md` 直接以排版后的样子打开。图片（含 SVG）在窗格内等比呈现；安装 `pdftoppm` 时 PDF 逐页渲染（至多 60 页），否则以 Quick Look 生成首页。
+Markdown 窗格可在标题栏切换源码与预览；设置 › Editor 可让新开的 `.md` 直接以排版后的样子打开。图片（含 SVG）在窗格内等比呈现；安装 `pdftoppm` 时 PDF 逐页渲染（至多 60 页），否则在 macOS 上以 Quick Look 生成首页。
 
 ### 标签页、窗格与 Explorer
 
@@ -74,6 +68,8 @@ Markdown 窗格可在标题栏切换源码与预览；设置 › Editor 可让�
 `⇧⌘P` 以模糊匹配搜索命令、文件与标签页。两套调色板皆经手工校准；默认随系统，也可由 View › Appearance 指定。
 
 ## 快捷键
+
+下表以 macOS 键位为准。Linux 上，`Ctrl` 对应 `⌘`，`Alt` 对应 `⌥`。
 
 ### 文件与项目
 
@@ -126,7 +122,7 @@ cd mojian
 go tool mygo dev        # 热重载的开发版
 go test ./...           # 单元与集成测试
 go tool mygo vet .      # go vet 与 MyGo 的界面生命周期检查
-go tool mygo build      # 生成 build/<os>-<arch>/Mojian.app 与 .dmg
+go tool mygo build      # 生成 build/<os>-<arch>/：.app 与 .dmg，或 .tar.gz 与 .deb
 ```
 
 MyGo 以 Go tool 的形式固定在 `go.mod` 中，首次运行 `go tool mygo` 会下载对应版本。`go tool mygo dev -web` 在浏览器中打开界面，文件保存在内存里。改动会话协议或 `cmd/mojian-server` 后，用 `sh tools/build-remote.sh` 重新生成内嵌的远端二进制。

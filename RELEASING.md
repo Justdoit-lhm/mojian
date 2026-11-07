@@ -30,8 +30,8 @@ amd64 and arm64, and publishes the GitHub release with every installer.
 
 The workflow refuses a tag that does not match `mygo.json`, builds
 `mojian-X.Y.Z-arm64.dmg`, `mojian-X.Y.Z-amd64.dmg`,
-`mojian-X.Y.Z-linux-amd64.tar.gz`, `mojian-X.Y.Z-linux-arm64.tar.gz` and
-the matching `.deb` packages, creates a draft release with generated notes,
+`mojian-X.Y.Z-linux-amd64.tar.gz`, `mojian-X.Y.Z-linux-arm64.tar.gz`,
+`install.sh` and the matching `.deb` packages, creates a draft release with generated notes,
 uploads every installer and `SHA256SUMS`, and publishes the draft only after
 every upload succeeds. If a job fails, fix it, move the tag to
 the new commit and push the tag again; the workflow replaces the draft.

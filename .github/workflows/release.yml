@@ -73,6 +73,7 @@ jobs:
           path: |
             build/linux-amd64/*.tar.gz
             build/linux-amd64/*.deb
+            build/linux-amd64/install.sh
             build/linux-arm64/*.tar.gz
             build/linux-arm64/*.deb
 
@@ -99,6 +100,7 @@ jobs:
           test -f "dist/mojian-$version-linux-arm64.tar.gz"
           test -f "dist/mojian_${version}_amd64.deb"
           test -f "dist/mojian_${version}_arm64.deb"
+          test -f "dist/install.sh"
           ls -lh dist
       - name: Create the draft release
         env:
@@ -119,9 +121,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          (cd dist && sha256sum *.dmg *.tar.gz *.deb > SHA256SUMS)
+          (cd dist && sha256sum *.dmg *.tar.gz *.deb install.sh > SHA256SUMS)
           gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber \
-            dist/*.dmg dist/*.tar.gz dist/*.deb dist/SHA256SUMS
+            dist/*.dmg dist/*.tar.gz dist/*.deb dist/install.sh dist/SHA256SUMS
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
