@@ -254,11 +254,27 @@ func (a *app) closeOrphanPanes() {
 		liveNotes[n] = true
 	}
 	a.closeNotes(func(n *note) bool { return !liveNotes[n] && !n.dirty() })
-	liveAssets := make(map[*assetFile]bool, len(a.store.assets))
-	for _, f := range a.store.assets {
-		liveAssets[f] = true
+	// Keep an asset pane on the file it shows when the refresh reused
+	// the entry, and rebind it when the file changed on disk.
+	for _, t := range a.tabs {
+		for _, p := range t.panes() {
+			if p.Asset == nil {
+				continue
+			}
+			live := a.store.assets[p.Asset.Rel]
+			if live == nil || live == p.Asset {
+				continue
+			}
+			releaseAsset(p)
+			p.Asset = live
+			p.assetView = &assetView{}
+			p.Preview = false
+		}
 	}
-	a.closeAssets(func(f *assetFile) bool { return !liveAssets[f] })
+	a.closeAssets(func(f *assetFile) bool {
+		_, ok := a.store.assets[f.Rel]
+		return !ok
+	})
 }
 
 // keepTreeSelection keeps the selected row if it still exists; otherwise

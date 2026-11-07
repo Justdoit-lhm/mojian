@@ -152,8 +152,6 @@ func EditorTheme(t *ui.Theme) *editor.Theme {
 	return th
 }
 
-var svgCache = map[string]*ui.SVG{}
-
 // RegisterFonts loads the editor's faces, under one family.
 func RegisterFonts() {
 	entries, err := assets.Files.ReadDir("fonts")

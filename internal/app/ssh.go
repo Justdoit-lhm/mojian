@@ -160,8 +160,6 @@ func (a *app) sshPicker(c *ui.Context, k *colors) {
 		}
 	}
 	a.sshSel = min(max(a.sshSel, 0), max(len(filtered)-1, 0))
-	was := a.sshPick
-	_ = was
 	ui.DialogBase(c, &a.sshPick, func(backdrop, panel ui.Element) {
 		backdrop.Background(k.Backdrop).Justify(ui.Start).Padding(78, 0, 0, 0)
 		panel.Width(560).MaxHeight(460).Radius(radius).Background(k.Panel).
@@ -246,5 +244,5 @@ func (a *app) sshPicker(c *ui.Context, k *colors) {
 func sshArgs(host string) []string {
 	return []string{"ssh", "-tt",
 		"-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3",
-		host}
+		"--", host}
 }

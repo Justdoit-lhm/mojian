@@ -472,21 +472,29 @@ func editorShape(path string) string {
 }
 
 func (a *app) resetRenamedStates(notes []*note, before map[*note]string) {
-	changed := make(map[*note]bool)
+	renamed := make(map[*note]bool, len(notes))
+	shapeChanged := make(map[*note]bool)
 	for _, n := range notes {
+		renamed[n] = true
 		if before[n] != editorShape(n.Path) {
-			changed[n] = true
+			shapeChanged[n] = true
 		}
-	}
-	if len(changed) == 0 {
-		return
 	}
 	for _, t := range a.tabs {
 		for _, p := range t.panes() {
-			if changed[p.Note] {
+			if p.Note == nil || !renamed[p.Note] {
+				continue
+			}
+			// Markdown previews resolve images relative to the note's
+			// folder, which a rename or move may have changed.
+			p.md = nil
+			if shapeChanged[p.Note] {
 				p.state = nil
 			}
 		}
+	}
+	if len(shapeChanged) == 0 {
+		return
 	}
 	if p := a.focusPane(); p != nil {
 		a.focusReq = p

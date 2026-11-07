@@ -345,7 +345,9 @@ func (a *app) startRestoredTerminal(p *pane) {
 	t := p.Term
 	t.starting = true
 	defer func() { t.starting = false }()
-	client, err := a.sessions()
+	// Use the same server that owns the saved session. A remote project's
+	// terminals live on its server, not in the local one.
+	client, err := a.terminalClient(t.Spec)
 	if err != nil {
 		t.startErr = err.Error()
 		return
@@ -355,7 +357,7 @@ func (a *app) startRestoredTerminal(p *pane) {
 		if list, listErr := client.List(); listErr == nil {
 			found := false
 			for _, info := range list {
-				if info.ID == sid {
+				if info.ID == sid && !info.Exited {
 					found = true
 					break
 				}
@@ -364,11 +366,6 @@ func (a *app) startRestoredTerminal(p *pane) {
 				sid = ""
 			}
 		}
-	}
-	client, err = a.terminalClient(t.Spec)
-	if err != nil {
-		t.startErr = err.Error()
-		return
 	}
 	var tt *termTab
 	if sid != "" {
@@ -382,6 +379,7 @@ func (a *app) startRestoredTerminal(p *pane) {
 		return
 	}
 	t.Term, t.SID, t.stream = tt.Term, tt.SID, tt.stream
+	t.Client = tt.Client
 	a.changed()
 	a.invalidate()
 }

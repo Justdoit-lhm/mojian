@@ -10,7 +10,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sync"
 	"time"
@@ -18,7 +17,8 @@ import (
 
 // Client is a control connection to the session server.
 type Client struct {
-	conn net.Conn
+	conn   net.Conn
+	socket string // the Unix socket this client talks to
 
 	wmu     sync.Mutex
 	mu      sync.Mutex
@@ -58,7 +58,13 @@ func connectAt(path string, spawn bool) (*Client, error) {
 			}
 		}
 	}
-	c := &Client{conn: conn, pending: map[int64]chan Response{}, closed: make(chan struct{})}
+	if err != nil {
+		return nil, err
+	}
+	c := &Client{
+		conn: conn, socket: path,
+		pending: map[int64]chan Response{}, closed: make(chan struct{}),
+	}
 	go c.read()
 	return c, nil
 }
@@ -111,6 +117,9 @@ func (c *Client) call(req Request, out any) error {
 	_, err := c.conn.Write(append(b, '\n'))
 	c.wmu.Unlock()
 	if err != nil {
+		c.mu.Lock()
+		delete(c.pending, req.ID)
+		c.mu.Unlock()
 		return err
 	}
 	select {
@@ -174,7 +183,11 @@ func (s *Stream) attach() {
 	s.mu.Lock()
 	cols, rows := s.cols, s.rows
 	s.mu.Unlock()
-	conn, err := net.Dial("unix", SocketPath())
+	socket := s.c.socket
+	if socket == "" {
+		socket = SocketPath()
+	}
+	conn, err := net.Dial("unix", socket)
 	if err == nil {
 		b, _ := json.Marshal(Attach{Op: "attach", SID: s.sid, Cols: cols, Rows: rows})
 		_, err = conn.Write(append(b, '\n'))
@@ -336,5 +349,3 @@ func spawnExecutable() (string, error) {
 	}
 	return exe, nil
 }
-
-var _ = exec.Command

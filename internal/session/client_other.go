@@ -17,7 +17,20 @@ func (c *Client) Shutdown() error                           { return errUnsuppor
 func (c *Client) Close() error                              { return nil }
 func (c *Client) Closed() <-chan struct{}                   { return nil }
 func (c *Client) Stream(string, int, int) *Stream           { return &Stream{} }
-func (s *Stream) Read([]byte) (int, error)                  { return 0, io.EOF }
-func (s *Stream) Write([]byte) (int, error)                 { return 0, io.EOF }
-func (s *Stream) Close() error                              { return nil }
-func (s *Stream) Resize(int, int) error                     { return nil }
+
+// ConnectAt is unavailable where the session server does not run.
+func ConnectAt(string) (*Client, error) { return nil, errUnsupported }
+
+func (c *Client) ListTree(string) ([]FileEntry, error) { return nil, errUnsupported }
+func (c *Client) ReadFile(string) ([]byte, error)      { return nil, errUnsupported }
+func (c *Client) WriteFile(string, []byte) error       { return errUnsupported }
+func (c *Client) Mkdir(string) error                   { return errUnsupported }
+func (c *Client) Rename(string, string) error          { return errUnsupported }
+func (c *Client) Remove(string) error                  { return errUnsupported }
+func (c *Client) Archive(string) ([]byte, error)       { return nil, errUnsupported }
+func (c *Client) ListDirs(string) ([]FileEntry, error) { return nil, errUnsupported }
+
+func (s *Stream) Read([]byte) (int, error)  { return 0, io.EOF }
+func (s *Stream) Write([]byte) (int, error) { return 0, io.EOF }
+func (s *Stream) Close() error              { return nil }
+func (s *Stream) Resize(int, int) error     { return nil }

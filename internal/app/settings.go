@@ -48,6 +48,7 @@ var settingsCats = []settingsCat{
 // settingsWindowView is the whole content of the separate Settings
 // window: a rail of categories on the left, the chosen page on the right.
 func (a *app) settingsWindowView(c *ui.Context) {
+	a.runPending()
 	a.applyTheme(c)
 	k := colorsOf(c)
 	c.Root().Background(k.BgBottom)
@@ -274,7 +275,10 @@ func (a *app) hostSettingsRow(c *ui.Context, k *colors, host, label, detail stri
 	if row.Clicked() {
 		if host == "" {
 			a.later(func() {
-				a.saveNow()
+				if err := a.saveNow(); err != nil {
+					a.fail(err)
+					return
+				}
 				a.closeRemote()
 				a.serverAlias = ""
 				a.remotePath = ""

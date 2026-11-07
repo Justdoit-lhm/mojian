@@ -216,7 +216,8 @@ func (s *store) refresh() error {
 		return nil
 	}
 	seen := make(map[string]bool, len(s.notes))
-	s.assets = map[string]*assetFile{}
+	previousAssets := s.assets
+	assets := map[string]*assetFile{}
 	err := filepath.WalkDir(s.dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil // an unreadable folder is skipped, not fatal
@@ -237,10 +238,17 @@ func (s *store) refresh() error {
 				if err != nil {
 					return nil
 				}
-				s.assets[rel] = &assetFile{
-					Rel: rel, Path: path, Name: filepath.Base(path),
-					Size: info.Size(), Mod: info.ModTime(),
+				// Reuse the file a pane already shows, so a refresh
+				// does not close it. A changed picture or PDF gets a
+				// fresh cache and reloads its pixels.
+				f := previousAssets[rel]
+				if f == nil || !f.Mod.Equal(info.ModTime()) || f.Size != info.Size() {
+					f = &assetFile{
+						Rel: rel, Path: path, Name: filepath.Base(path),
+						Size: info.Size(), Mod: info.ModTime(),
+					}
 				}
+				assets[rel] = f
 			}
 			return nil
 		}
@@ -268,6 +276,7 @@ func (s *store) refresh() error {
 	if err != nil {
 		return err
 	}
+	s.assets = assets
 	// A file removed or moved outside the app leaves the store. Dirty
 	// notes stay: their text is still in memory and may be saved again.
 	kept := s.notes[:0]

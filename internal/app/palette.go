@@ -34,7 +34,11 @@ var (
 	cmdNewTab = &command{title: "New Tab", accel: "CmdOrCtrl+T", keys: "⌘T", glyph: "plus",
 		run: func(a *app) { a.newTab() }}
 	cmdSave = &command{title: "Save", accel: "CmdOrCtrl+S", keys: "⌘S", glyph: "save",
-		run: func(a *app) { a.saveNow() }}
+		run: func(a *app) {
+			if err := a.saveNow(); err != nil {
+				a.fail(err)
+			}
+		}}
 	cmdSplitLeft = &command{title: "Split Left", accel: "CmdOrCtrl+Alt+Left", keys: "⌥⌘←", glyph: "columns-2",
 		run: func(a *app) { a.splitFocusedSide(splitLeft) }}
 	cmdSplitRight = &command{title: "Split Right", accel: "CmdOrCtrl+Shift+D", keys: "⇧⌘D", glyph: "columns-2",
@@ -150,7 +154,7 @@ func (a *app) paletteItems() []paletteItem {
 			tabDetail += " " + detail
 		}
 		items = append(items, paletteItem{title: name, detail: tabDetail, glyph: "layout-grid", keys: keys,
-			run: func() { a.showTab(i + 1); a.updateTitle() }})
+			run: func() { a.selectTab(i); a.updateTitle() }})
 	}
 	return items
 }

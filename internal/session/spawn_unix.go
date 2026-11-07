@@ -42,5 +42,3 @@ func Spawn() error {
 	}
 	return cmd.Process.Release()
 }
-
-func processAlive(pid int) bool { return syscall.Kill(pid, 0) == nil }

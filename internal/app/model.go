@@ -3,9 +3,9 @@ package app
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"os"
-	"path/filepath"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
@@ -43,6 +43,7 @@ type assetView struct {
 	pdfErr     string
 	pdfLoading bool
 	pdfStarted bool
+	pdfGen     int // invalidates a preview whose pane was repurposed
 	pdfImage   ui.ImageSource
 	pdfImageAt int // the page pdfImage was decoded for
 }
@@ -1106,8 +1107,7 @@ func (a *app) saveLayout() {
 	if err != nil {
 		return
 	}
-	if err := os.MkdirAll(filepath.Dir(a.layoutPath), 0o755); err != nil {
-		return
+	if err := writeFileAtomic(a.layoutPath, data); err != nil {
+		log.Print(err)
 	}
-	_ = os.WriteFile(a.layoutPath, data, 0o644)
 }

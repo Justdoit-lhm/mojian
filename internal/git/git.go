@@ -273,7 +273,7 @@ func statusLetter(code string) string {
 	switch {
 	case code == "??":
 		return "U"
-	case strings.Contains(code, "U"):
+	case code == "AA" || code == "DD" || strings.Contains(code, "U"):
 		return "C"
 	case strings.Contains(code, "D"):
 		return "D"
@@ -654,20 +654,28 @@ var gitHunkPattern = regexp.MustCompile(`^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@
 func ParseDiff(diff string) []gitDiffLine {
 	var out []gitDiffLine
 	oldNo, newNo := 0, 0
+	inHunk := false
 	for _, line := range strings.Split(strings.TrimRight(diff, "\n"), "\n") {
+		if strings.HasPrefix(line, "diff --git ") {
+			inHunk = false
+			continue
+		}
+		// File headers only appear before a hunk. Inside one, "--- a/x"
+		// is a deleted line whose text starts with "--", not metadata.
+		if !inHunk && diffMeta(line) {
+			continue
+		}
 		if strings.HasPrefix(line, "\\") {
 			out = append(out, gitDiffLine{text: line, kind: '\\'})
 			continue
 		}
 		if strings.HasPrefix(line, "@@") {
+			inHunk = true
 			if m := gitHunkPattern.FindStringSubmatch(line); len(m) == 3 {
 				oldNo, _ = strconv.Atoi(m[1])
 				newNo, _ = strconv.Atoi(m[2])
 			}
 			out = append(out, gitDiffLine{text: line, kind: '@'})
-			continue
-		}
-		if diffMeta(line) {
 			continue
 		}
 		if line == "" {
@@ -709,8 +717,19 @@ func diffMeta(line string) bool {
 }
 
 func DiffStat(diff string) (add, del int) {
+	inHunk := false
 	for _, line := range strings.Split(diff, "\n") {
-		if diffMeta(line) || strings.HasPrefix(line, "@@") {
+		if strings.HasPrefix(line, "diff --git ") {
+			inHunk = false
+			continue
+		}
+		if !inHunk {
+			if strings.HasPrefix(line, "@@") {
+				inHunk = true
+			}
+			continue
+		}
+		if strings.HasPrefix(line, "\\") {
 			continue
 		}
 		switch {

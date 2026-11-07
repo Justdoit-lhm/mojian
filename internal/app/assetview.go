@@ -74,10 +74,21 @@ func (a *app) pdfBody(c *ui.Context, k *colors, p *pane) {
 	v := p.assetView
 	if !v.pdfStarted {
 		v.pdfStarted, v.pdfLoading = true, true
+		v.pdfGen++
+		gen := v.pdfGen
 		path, win := p.Asset.Path, a.win
 		go func() {
 			pages, dir, err := pdfPreview(path)
 			update := func() {
+				// The pane may have been closed or repurposed while the
+				// preview was made; do not publish into it, and do not
+				// leave its temporary pages behind.
+				if p.assetView != v || v.pdfGen != gen {
+					if dir != "" {
+						_ = os.RemoveAll(dir)
+					}
+					return
+				}
 				v.pdfLoading, v.pdfPages, v.pdfDir, v.pdfErr = false, pages, dir, ""
 				if err != nil {
 					v.pdfErr = err.Error()
@@ -269,7 +280,11 @@ func pageNumber(path string) int {
 // releaseAsset drops a pane's PDF preview files before it shows another
 // file or closes.
 func releaseAsset(p *pane) {
-	if p == nil || p.assetView == nil || p.assetView.pdfDir == "" {
+	if p == nil || p.assetView == nil {
+		return
+	}
+	p.assetView.pdfGen++
+	if p.assetView.pdfDir == "" {
 		return
 	}
 	_ = os.RemoveAll(p.assetView.pdfDir)

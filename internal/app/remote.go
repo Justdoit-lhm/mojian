@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -62,7 +63,7 @@ func sshCommon() []string {
 }
 
 func sshOutput(host, command string) (string, error) {
-	args := append(sshCommon(), host, command)
+	args := append(append(sshCommon(), "--"), host, command)
 	cmd := exec.Command("ssh", args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -80,15 +81,34 @@ func shellQuote(s string) string {
 }
 
 // ensureRemote starts the server on host when needed, forwards its Unix
-// socket over SSH, and connects the control client.
+// socket over SSH, connects the control client, and makes it the open
+// server.
 func (a *app) ensureRemote(host string) (*remoteConn, error) {
-	if a.remote != nil && a.remote.host == host && a.remote.client != nil {
-		return a.remote, nil
+	rc, err := a.connectRemote(host)
+	if err != nil {
+		return nil, err
+	}
+	a.adoptRemote(rc)
+	return rc, nil
+}
+
+// connectRemote prepares a connection to host without replacing the
+// current server, so a failed or cancelled switch leaves the open project
+// talking to the machine it came from.
+func (a *app) connectRemote(host string) (*remoteConn, error) {
+	if a.remote != nil && a.remote.host == host {
+		if a.remote.client != nil {
+			return a.remote, nil
+		}
+		// A stale forward for this host would own the local socket path
+		// the new one needs.
+		stale := a.remote
+		a.remote = nil
+		a.closeRemoteConn(stale)
 	}
 	if host == "" {
 		return nil, fmt.Errorf("no server selected")
 	}
-	a.closeRemote()
 	home, err := sshOutput(host, `printf %s "$HOME"`)
 	if err != nil {
 		return nil, err
@@ -115,7 +135,7 @@ func (a *app) ensureRemote(host string) (*remoteConn, error) {
 	// Upload the server when the remote copy differs.
 	size, _ := sshOutput(host, "stat -c %s "+shellQuote(binPath)+" 2>/dev/null || true")
 	if size != fmt.Sprint(len(bin)) {
-		cmd := exec.Command("ssh", append(sshCommon(), host,
+		cmd := exec.Command("ssh", append(sshCommon(), "--", host,
 			"mkdir -p "+shellQuote(dir)+" && cat > "+shellQuote(binPath+".tmp")+
 				" && chmod 755 "+shellQuote(binPath+".tmp")+
 				" && mv "+shellQuote(binPath+".tmp")+" "+shellQuote(binPath))...)
@@ -129,7 +149,7 @@ func (a *app) ensureRemote(host string) (*remoteConn, error) {
 	// The server's headless terminal needs libghostty-vt beside it.
 	libSize, _ := sshOutput(host, "stat -c %s "+shellQuote(libPath)+" 2>/dev/null || true")
 	if libSize != fmt.Sprint(len(lib)) {
-		cmd := exec.Command("ssh", append(sshCommon(), host,
+		cmd := exec.Command("ssh", append(sshCommon(), "--", host,
 			"cat > "+shellQuote(libPath+".tmp")+" && mv "+shellQuote(libPath+".tmp")+" "+shellQuote(libPath))...)
 		cmd.Stdin = bytes.NewReader(lib)
 		var stderr bytes.Buffer
@@ -152,7 +172,7 @@ func (a *app) ensureRemote(host string) (*remoteConn, error) {
 	_ = os.Remove(local)
 	fwd := exec.Command("ssh", "-N", "-o", "BatchMode=yes", "-o", "ConnectTimeout=20",
 		"-o", "ExitOnForwardFailure=yes", "-o", "ServerAliveInterval=15",
-		"-L", local+":"+sock, host)
+		"-L", local+":"+sock, "--", host)
 	var ferr bytes.Buffer
 	fwd.Stderr = &ferr
 	if err := fwd.Start(); err != nil {
@@ -177,9 +197,7 @@ func (a *app) ensureRemote(host string) (*remoteConn, error) {
 		_ = fwd.Process.Kill()
 		return nil, err
 	}
-	rc := &remoteConn{host: host, socket: local, forward: fwd, client: client}
-	a.remote = rc
-	return rc, nil
+	return &remoteConn{host: host, socket: local, forward: fwd, client: client}, nil
 }
 
 func shortHash(s string) string {
@@ -187,19 +205,37 @@ func shortHash(s string) string {
 	return hex.EncodeToString(sum[:6])
 }
 
-func (a *app) closeRemote() {
-	if a.remote == nil {
+// adoptRemote makes rc the open server and closes the one it replaces.
+func (a *app) adoptRemote(rc *remoteConn) {
+	if rc == nil || a.remote == rc {
 		return
 	}
-	if a.remote.client != nil {
-		_ = a.remote.client.Close()
+	old := a.remote
+	a.remote = rc
+	if old != nil {
+		a.closeRemoteConn(old)
 	}
-	if a.remote.forward != nil && a.remote.forward.Process != nil {
-		_ = a.remote.forward.Process.Kill()
-		_, _ = a.remote.forward.Process.Wait()
-	}
-	_ = os.Remove(a.remote.socket)
+}
+
+func (a *app) closeRemote() {
+	a.dropPickerRemote()
+	rc := a.remote
 	a.remote = nil
+	a.closeRemoteConn(rc)
+}
+
+func (a *app) closeRemoteConn(rc *remoteConn) {
+	if rc == nil {
+		return
+	}
+	if rc.client != nil {
+		_ = rc.client.Close()
+	}
+	if rc.forward != nil && rc.forward.Process != nil {
+		_ = rc.forward.Process.Kill()
+		_, _ = rc.forward.Process.Wait()
+	}
+	_ = os.Remove(rc.socket)
 }
 
 // remoteCacheDir is a local mirror of a remote project. The server is
@@ -263,6 +299,9 @@ func (a *app) downloadRemote(c *session.Client, remotePath, cache string) error 
 			}
 		}
 	}
+	// The mirror is now the remote tree. Remember it, so the next file
+	// operation can tell which removed paths to delete on the server.
+	writeRemoteManifest(cache, localFileList(cache))
 	return nil
 }
 
@@ -308,7 +347,7 @@ func readRemoteManifest(cache string) map[string]bool {
 
 func (a *app) uploadRemoteNote(n *note) error {
 	if a.remote == nil || a.remote.client == nil || a.remotePath == "" {
-		return nil
+		return errors.New("the remote project is disconnected")
 	}
 	rel := strings.ReplaceAll(n.Rel, string(filepath.Separator), "/")
 	return a.remote.client.WriteFile(path.Join(a.remotePath, rel), []byte(n.text()))
@@ -320,25 +359,41 @@ func (a *app) openRemoteProject(host, remotePath string) error {
 		return fmt.Errorf("choose a server and a project")
 	}
 	remotePath = strings.TrimRight(remotePath, "/")
-	a.saveNow()
+	if err := a.saveNow(); err != nil {
+		return fmt.Errorf("could not save the open project: %w", err)
+	}
 	if a.layoutPath != "" {
 		a.saveLayout()
 	}
-	rc, err := a.ensureRemote(host)
+	a.dropPickerRemote()
+	rc, err := a.connectRemote(host)
 	if err != nil {
 		return err
 	}
-	a.closeTerminals()
-	a.git.Open = false
+	newConn := rc != a.remote
+	fail := func(err error) error {
+		if newConn {
+			a.closeRemoteConn(rc)
+		}
+		return err
+	}
 	cache := a.remoteCacheDir(host, remotePath)
 	if err := a.downloadRemote(rc.client, remotePath, cache); err != nil {
-		return err
+		return fail(err)
 	}
 	s, err := openStoreAt(cache)
 	if err != nil {
-		return err
+		return fail(err)
 	}
 	s.onSave = a.uploadRemoteNote
+	// Detach the old project's terminals while their server is still up,
+	// then make the new connection the open one.
+	a.closeTerminals()
+	a.adoptRemote(rc)
+	a.git.Open = false
+	a.git.Seq++
+	a.git.DiffSeq++
+	a.dropPickerRemote()
 	a.store = s
 	a.treeOpen = true
 	a.serverAlias = host
@@ -400,14 +455,22 @@ func (a *app) rememberRemoteProject(p remoteProject) {
 // openRemotePicker asks the selected server for its home, then shows the
 // directories to choose a project from.
 func (a *app) openRemotePicker(host string) {
-	a.saveNow()
-	rc, err := a.ensureRemote(host)
+	if err := a.saveNow(); err != nil {
+		a.fail(fmt.Errorf("could not save the open project: %w", err))
+		return
+	}
+	a.dropPickerRemote()
+	rc, err := a.connectRemote(host)
 	if err != nil {
 		a.fail(err)
 		return
 	}
+	if rc != a.remote {
+		a.remotePick = rc
+	}
 	homeDir, err := sshOutput(host, `printf %s "$HOME"`)
 	if err != nil {
+		a.dropPickerRemote()
 		a.fail(err)
 		return
 	}
@@ -415,12 +478,32 @@ func (a *app) openRemotePicker(host string) {
 	a.remoteQuery = homeDir
 	a.remoteDirs, err = rc.client.ListDirs(homeDir)
 	if err != nil {
+		a.dropPickerRemote()
 		a.fail(err)
 		return
 	}
 	a.remotePicker = true
 	a.serverOpen = false
 	a.invalidate()
+}
+
+// pickerRemote is the server whose folders the project picker shows.
+func (a *app) pickerRemote() *remoteConn {
+	if a.remotePick != nil {
+		return a.remotePick
+	}
+	return a.remote
+}
+
+// dropPickerRemote closes a connection made only for the picker. The
+// open project's server is left alone.
+func (a *app) dropPickerRemote() {
+	a.remotePicker = false
+	rc := a.remotePick
+	a.remotePick = nil
+	if rc != nil && rc != a.remote {
+		a.closeRemoteConn(rc)
+	}
 }
 
 func (a *app) remotePickerModal(c *ui.Context, k *colors) {
@@ -456,6 +539,7 @@ func (a *app) remotePickerModal(c *ui.Context, k *colors) {
 						return
 					}
 					a.remotePicker = false
+					a.dropPickerRemote()
 					a.later(func() {
 						if err := a.openRemoteProject(a.remoteHost, path); err != nil {
 							a.fail(err)
@@ -489,7 +573,7 @@ func (a *app) remotePickerModal(c *ui.Context, k *colors) {
 					}
 					if row.Clicked() {
 						a.remoteQuery = d.Rel
-						rc := a.remote
+						rc := a.pickerRemote()
 						a.remoteDirs = nil
 						if rc != nil {
 							if entries, err := rc.client.ListDirs(d.Rel); err == nil {
@@ -509,6 +593,9 @@ func (a *app) remotePickerModal(c *ui.Context, k *colors) {
 			})
 		})
 	})
+	if !a.remotePicker {
+		a.dropPickerRemote()
+	}
 }
 
 func (a *app) serverChip(c *ui.Context, k *colors) {
@@ -560,7 +647,10 @@ func (a *app) serverRow(c *ui.Context, k *colors, host, label string) {
 		a.serverOpen = false
 		if host == "" {
 			a.later(func() {
-				a.saveNow()
+				if err := a.saveNow(); err != nil {
+					a.fail(err)
+					return
+				}
 				a.closeRemote()
 				a.serverAlias = ""
 				a.remotePath = ""

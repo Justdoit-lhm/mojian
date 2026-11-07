@@ -113,6 +113,7 @@ func (s *Server) watchIdle() {
 			return
 		case <-t.C:
 		}
+		s.pruneExited()
 		s.mu.Lock()
 		idle := len(s.sessions) == 0 && s.controls == 0 && time.Since(s.idleFrom) > idleTimeout
 		s.mu.Unlock()
@@ -120,6 +121,26 @@ func (s *Server) watchIdle() {
 			s.shutdown()
 			return
 		}
+	}
+}
+
+// pruneExited forgets sessions whose shell has finished, so a dead
+// terminal does not keep the server alive forever or hide a live
+// session behind the same id.
+func (s *Server) pruneExited() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	removed := false
+	for id, ss := range s.sessions {
+		if !ss.hasExited() {
+			continue
+		}
+		delete(s.sessions, id)
+		s.order = removeString(s.order, id)
+		removed = true
+	}
+	if removed && len(s.sessions) == 0 {
+		s.idleFrom = time.Now()
 	}
 }
 
@@ -208,6 +229,7 @@ func (s *Server) do(req Request) (any, error) {
 	case "hello":
 		return Hello{Version: ProtocolVersion, PID: os.Getpid(), Started: s.started}, nil
 	case "list":
+		s.pruneExited()
 		s.mu.Lock()
 		all := make([]*session, 0, len(s.order))
 		for _, id := range s.order {
@@ -610,6 +632,13 @@ func (s *session) kill() {
 			_ = s.cmd.Process.Kill()
 		}
 	}
+}
+
+// hasExited reports whether the session's program has finished.
+func (s *session) hasExited() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.exited
 }
 
 func (s *session) info() SessionInfo {

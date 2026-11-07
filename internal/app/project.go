@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -78,24 +79,29 @@ func (a *app) openProject(dir string) {
 	if dir == "" {
 		return
 	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		a.fail(err)
+		return
+	}
+	if a.remotePath == "" && a.store != nil && !a.store.memory && a.store.dir == abs {
+		a.projectOpen = false
+		a.invalidate()
+		return
+	}
+	// Save while the current server is still connected: a remote note
+	// written after closeRemote would only reach the local mirror.
+	if err := a.saveNow(); err != nil {
+		a.fail(fmt.Errorf("could not save the open project: %w", err))
+		return
+	}
+	a.closeTerminals()
 	if a.remotePath != "" {
 		a.closeRemote()
 		a.serverAlias = ""
 		a.remotePath = ""
 		a.remoteCache = ""
 	}
-	abs, err := filepath.Abs(dir)
-	if err != nil {
-		a.fail(err)
-		return
-	}
-	if a.store != nil && !a.store.memory && a.store.dir == abs {
-		a.projectOpen = false
-		a.invalidate()
-		return
-	}
-	a.saveNow()
-	a.closeTerminals()
 	a.git.Open = false
 	a.git.Seq++
 	a.git.DiffSeq++

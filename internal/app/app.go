@@ -41,6 +41,7 @@ type app struct {
 	remotePath     string
 	remoteCache    string
 	remote         *remoteConn
+	remotePick     *remoteConn // a connection prepared by the project picker
 	remoteProjects []remoteProject
 	hosts          []hostConfig
 	hostDraftName  string
@@ -181,7 +182,7 @@ func Run() {
 	})
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
 		a.quitting = true
-		a.saveNow()
+		_ = a.saveNow()
 		a.closeTerminals()
 		if a.sessionClient != nil {
 			_ = a.sessionClient.Close()
@@ -291,7 +292,7 @@ func (a *app) windowClosed() {
 	if a.settingsWin != nil {
 		a.settingsWin.Close()
 	}
-	a.saveNow()
+	_ = a.saveNow()
 	a.closeTerminals()
 	if a.sessionClient != nil {
 		_ = a.sessionClient.Close()
@@ -449,8 +450,40 @@ func (a *app) saveSettings() {
 		RemoteProjects:      a.remoteProjects,
 		Hosts:               a.hosts,
 	}, "", "  ")
-	_ = os.MkdirAll(filepath.Dir(a.settingsPath), 0o755)
-	_ = os.WriteFile(a.settingsPath, data, 0o644)
+	if err := writeFileAtomic(a.settingsPath, data); err != nil {
+		log.Print(err)
+	}
+}
+
+// writeFileAtomic replaces path with data, so a crash leaves the old
+// file or the new one, never half of each.
+func writeFileAtomic(path string, data []byte) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	f, err := os.CreateTemp(dir, filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	name := f.Name()
+	defer os.Remove(name)
+	if err := f.Chmod(0o644); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Rename(name, path)
 }
 
 // fontSize is the editor's font size, with the default when unset.
@@ -594,8 +627,9 @@ func (a *app) migrateLayout(dir string) {
 	if err != nil {
 		return
 	}
-	_ = os.MkdirAll(filepath.Dir(a.layoutPath), 0o755)
-	_ = os.WriteFile(a.layoutPath, data, 0o644)
+	if err := writeFileAtomic(a.layoutPath, data); err != nil {
+		log.Print(err)
+	}
 }
 
 func (a *app) setAppearance(v int) {
@@ -616,11 +650,15 @@ func (a *app) syncAppearance() {
 	}
 }
 
-// saveNow writes every unsaved note, the layout and the settings.
-func (a *app) saveNow() {
+// saveNow writes every unsaved note, the layout and the settings. It
+// returns the first note that could not be written, so a project switch
+// can stop before dropping unsaved work.
+func (a *app) saveNow() error {
+	var first error
 	if a.store != nil {
 		if err := a.store.saveAll(); err != nil {
 			log.Print(err)
+			first = err
 		}
 	}
 	if a.layoutDirty {
@@ -628,6 +666,7 @@ func (a *app) saveNow() {
 		a.layoutDirty = false
 	}
 	a.saveSettings()
+	return first
 }
 
 // invalidate asks for a frame after a change made outside the view.
@@ -644,8 +683,11 @@ func (a *app) fail(err error) {
 // change the tree it is part of while the tree builds.
 func (a *app) later(fn func()) {
 	a.pending = append(a.pending, fn)
-	if a.win != nil {
+	switch {
+	case a.win != nil:
 		a.win.Update(func() {})
+	case a.settingsWin != nil:
+		a.settingsWin.Update(func() {})
 	}
 }
 
@@ -813,6 +855,16 @@ func (a *app) openNote(n *note) {
 	if p == nil {
 		p = firstPane(t.Root)
 	}
+	if p != nil && p.Term != nil {
+		// A tab can hold only terminals. A note needs an editor pane,
+		// so give it a tab instead of replacing a shell.
+		if editor := t.firstEditorPane(); editor != nil {
+			p = editor
+		} else {
+			a.openNoteInTab(n)
+			return
+		}
+	}
 	if p == nil {
 		p = newPane(n)
 		t.Root = &node{Pane: p}
@@ -897,6 +949,16 @@ func (a *app) openAsset(f *assetFile) {
 	}
 	if p == nil {
 		p = firstPane(t.Root)
+	}
+	if p != nil && p.Term != nil {
+		// A tab can hold only terminals. A picture or PDF needs a viewer
+		// pane, so give it a tab instead of replacing a shell.
+		if editor := t.firstEditorPane(); editor != nil {
+			p = editor
+		} else {
+			a.openAssetInTab(f)
+			return
+		}
 	}
 	if p == nil {
 		p = newAssetPane(f)
@@ -1041,19 +1103,15 @@ func (a *app) cycleTab(delta int) {
 	a.changed()
 }
 
-// showTab shows the nth tab, from 1; 9 shows the last.
-func (a *app) showTab(n int) {
-	if len(a.tabs) == 0 {
+// selectTab shows the tab at index i.
+func (a *app) selectTab(i int) {
+	if i < 0 || i >= len(a.tabs) {
 		return
 	}
 	a.git.Open = false
 	a.overview = false
 	a.overviewFocus = false
-	i := n - 1
-	if n >= 9 {
-		i = len(a.tabs) - 1
-	}
-	a.active = min(max(i, 0), len(a.tabs)-1)
+	a.active = i
 	a.revealTab = true
 	a.treeDraft = nil
 	if t := a.tab(); t != nil {
@@ -1063,6 +1121,18 @@ func (a *app) showTab(n int) {
 		}
 	}
 	a.changed()
+}
+
+// showTab shows the nth tab, from 1; 9 shows the last.
+func (a *app) showTab(n int) {
+	if len(a.tabs) == 0 {
+		return
+	}
+	i := n - 1
+	if n >= 9 {
+		i = len(a.tabs) - 1
+	}
+	a.selectTab(i)
 }
 
 func (a *app) startRename(t *tab) {
