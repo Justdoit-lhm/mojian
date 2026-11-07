@@ -130,14 +130,17 @@ such as `.git`, `node_modules`, `dist` and `build` stay out of sight.
 ### Terminals and servers (macOS and Linux)
 
 `Shift+Cmd+T` / `Ctrl+Shift+T` opens a real terminal at the project root.
-Shells run in a detached session server, so quitting Mojian detaches them
-and reopening reattaches. `Shift+Cmd+L` / `Ctrl+Shift+L` opens an SSH
+Local shells run in a detached session server, so quitting Mojian detaches
+them and reopening reattaches. `Shift+Cmd+L` / `Ctrl+Shift+L` opens an SSH
 terminal from `~/.ssh/config`.
 
 Add a host in Settings › Hosts, then choose it from the server chip. Mojian
-prepares a small per-user session server over `ssh`, forwards its Unix
-socket and mirrors the project into a local cache; saves are written back.
-No root, no listening port and no system service are installed.
+starts a small per-user server there over `ssh` and works on the folder in
+place: the Explorer lists the host's files, a file is read when it opens,
+and saves and file operations write straight back. Git runs on the host
+too. A remote terminal ends when the SSH connection does; nothing is kept
+running after the app disconnects. No root, no listening port and no system
+service are installed.
 
 ### Git and the command palette
 

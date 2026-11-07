@@ -293,7 +293,6 @@ func (a *app) hostSettingsRow(c *ui.Context, k *colors, host, label, detail stri
 				a.closeRemote()
 				a.serverAlias = ""
 				a.remotePath = ""
-				a.remoteCache = ""
 				a.saveSettings()
 				if a.settingsWin != nil {
 					a.settingsWin.Close()
@@ -478,8 +477,10 @@ func (a *app) settingsKeyboardPage(c *ui.Context, k *colors) {
 func (a *app) settingsAdvancedPage(c *ui.Context, k *colors) {
 	a.settingsSection(c, k, "DATA", func() {
 		a.aboutRow(c, k, "Settings", a.settingsPath)
-		a.settingDivider(c, k)
-		a.aboutRow(c, k, "Project cache", a.remoteCache)
+		if a.remotePath != "" {
+			a.settingDivider(c, k)
+			a.aboutRow(c, k, "Remote project", a.serverAlias+":"+a.remotePath)
+		}
 		if terminalsSupported() {
 			a.settingDivider(c, k)
 			a.aboutRow(c, k, "Local sessions", session.SocketPath())
@@ -723,56 +724,6 @@ func (a *app) settingsTerminalPage(c *ui.Context, k *colors) {
 				}
 			})
 		})
-	})
-}
-
-func (a *app) settingsFilesPage(c *ui.Context, k *colors) {
-	a.settingsSection(c, k, "CURRENT PROJECT", func() {
-		a.aboutRow(c, k, "Folder", a.projectPath())
-		a.settingDivider(c, k)
-		a.settingRow(c, k, "Reveal", "Show the project in "+fileManagerName()+".", func() {
-			b := ui.Row(c).Padding(4, 9).Radius(radius).Cursor(ui.CursorPointer).
-				Role(ui.RoleButton).Label("Reveal Project")
-			if b.Hovered() {
-				b.Background(k.Hover)
-			}
-			if b.Clicked() {
-				a.revealVault()
-			}
-			b.Children(func() {
-				ui.Text(c, "Reveal").FontSize(11.5).FontWeight(550).TextColor(k.Text)
-			})
-		})
-	})
-	recent := a.recentProjects()
-	a.settingsSection(c, k, "RECENT PROJECTS", func() {
-		if len(recent) == 0 {
-			ui.Text(c, "No recent projects yet.").FontSize(12).TextColor(k.TextFaint).
-				Padding(16)
-			return
-		}
-		for i, p := range recent {
-			if i >= 6 {
-				break
-			}
-			p := p
-			row := ui.Row(c).Height(38).Padding(0, 14).Gap(8).Cursor(ui.CursorPointer).
-				Role(ui.RoleButton).Label("Open " + p)
-			if row.Hovered() {
-				row.Background(k.Hover)
-			}
-			if row.Clicked() {
-				a.openProject(p)
-				a.invalidate()
-			}
-			row.Children(func() {
-				ui.Text(c, shortPath(p)).FontSize(12).TextColor(k.Text).
-					SingleLine().Ellipsis("…")
-			})
-			if i != len(recent)-1 {
-				ui.Divider(c).Margin(0, 14)
-			}
-		}
 	})
 }
 

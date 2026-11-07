@@ -35,7 +35,11 @@ func (a *app) markdownBody(c *ui.Context, k *colors, p *pane) {
 		ui.Column(c).MaxWidth(780).AlignSelf(ui.Center).
 			Padding(26, 34, 44, 34).Children(func() {
 			if p.md == nil {
-				p.md = &markdown.Options{LoadImage: markdown.FileImages(filepath.Dir(p.Note.Path))}
+				opts := &markdown.Options{}
+				if a.store == nil || a.store.remote == nil {
+					opts.LoadImage = markdown.FileImages(filepath.Dir(p.Note.Path))
+				}
+				p.md = opts
 			}
 			markdown.View(c, p.Note.text(), p.md)
 		})
@@ -45,6 +49,9 @@ func (a *app) markdownBody(c *ui.Context, k *colors, p *pane) {
 // assetBody shows a picture, a PDF's first page, or why neither can show.
 func (a *app) assetBody(c *ui.Context, k *colors, p *pane) {
 	if p.Asset == nil {
+		return
+	}
+	if !a.loadAsset(p.Asset) {
 		return
 	}
 	if a.focusReq == p {
@@ -76,7 +83,7 @@ func (a *app) pdfBody(c *ui.Context, k *colors, p *pane) {
 		v.pdfStarted, v.pdfLoading = true, true
 		v.pdfGen++
 		gen := v.pdfGen
-		path, win := p.Asset.Path, a.win
+		path, win := p.Asset.localPath(), a.win
 		go func() {
 			pages, dir, err := pdfPreview(path)
 			update := func() {
@@ -202,7 +209,7 @@ func (a *app) openButton(c *ui.Context, k *colors, p *pane) {
 		b.Background(k.Hover)
 	}
 	if b.Clicked() {
-		mygo.Shell.OpenPath(p.Asset.Path)
+		mygo.Shell.OpenPath(p.Asset.localPath())
 	}
 	b.Children(func() {
 		ui.Text(c, "Open").FontSize(11.5).FontWeight(550).TextColor(k.Text)

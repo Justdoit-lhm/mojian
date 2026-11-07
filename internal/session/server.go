@@ -3,9 +3,9 @@
 package session
 
 import (
-	"archive/tar"
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -19,7 +19,10 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
+
+	"mojian/internal/filekind"
 
 	"github.com/creack/pty"
 	"github.com/egoist/mygo/plugins/terminal"
@@ -29,19 +32,32 @@ const (
 	scrollback  = 8 << 20
 	resyncDelay = 150 * time.Millisecond
 	idleTimeout = 10 * time.Minute
+	// transientIdle is how long a server started for one connection (a
+	// remote project) keeps its sessions after the app disconnects. The
+	// user does not need remote terminals to outlive the connection.
+	transientIdle = 10 * time.Second
+	// maxLine bounds one JSON request or response, and readFileLimit the
+	// bytes of a file sent in one.
+	maxLine        = 64 << 20
+	readFileLimit  = 32 << 20
+	writeFileLimit = 32 << 20
+	execOutLimit   = 2 << 20
+	execErrLimit   = 64 << 10
 )
 
 // Server owns the sessions and their pseudo-terminals.
 type Server struct {
-	mu       sync.Mutex
-	sessions map[string]*session
-	order    []string
-	started  time.Time
-	ln       net.Listener
-	quit     chan struct{}
-	once     sync.Once
-	controls int
-	idleFrom time.Time
+	mu        sync.Mutex
+	sessions  map[string]*session
+	order     []string
+	started   time.Time
+	ln        net.Listener
+	quit      chan struct{}
+	once      sync.Once
+	controls  int
+	conns     int
+	transient bool
+	idleFrom  time.Time
 }
 
 // Serve runs the session server until it is shut down.
@@ -64,10 +80,15 @@ func Serve() error {
 	if err != nil {
 		return err
 	}
-	_ = os.Chmod(sock, 0o600)
+	if err := os.Chmod(sock, 0o600); err != nil {
+		_ = ln.Close()
+		_ = os.Remove(sock)
+		return fmt.Errorf("session: securing the socket: %w", err)
+	}
 	s := &Server{
 		sessions: map[string]*session{}, order: nil, started: time.Now(),
 		ln: ln, quit: make(chan struct{}), idleFrom: time.Now(),
+		transient: os.Getenv("MOJIAN_TRANSIENT") != "",
 	}
 	go func() {
 		<-s.quit
@@ -98,14 +119,30 @@ func Serve() error {
 			}
 			return err
 		}
-		go s.handle(conn)
+		s.mu.Lock()
+		s.conns++
+		s.idleFrom = time.Now()
+		s.mu.Unlock()
+		go func() {
+			defer func() {
+				s.mu.Lock()
+				s.conns--
+				s.idleFrom = time.Now()
+				s.mu.Unlock()
+			}()
+			s.handle(conn)
+		}()
 	}
 }
 
 func (s *Server) shutdown() { s.once.Do(func() { close(s.quit) }) }
 
 func (s *Server) watchIdle() {
-	t := time.NewTicker(30 * time.Second)
+	period := 30 * time.Second
+	if s.transient {
+		period = 5 * time.Second
+	}
+	t := time.NewTicker(period)
 	defer t.Stop()
 	for {
 		select {
@@ -116,6 +153,11 @@ func (s *Server) watchIdle() {
 		s.pruneExited()
 		s.mu.Lock()
 		idle := len(s.sessions) == 0 && s.controls == 0 && time.Since(s.idleFrom) > idleTimeout
+		if s.transient {
+			// A server started for one app connection is only useful
+			// while that app is connected: its shells go with it.
+			idle = s.conns == 0 && time.Since(s.idleFrom) > transientIdle
+		}
 		s.mu.Unlock()
 		if idle {
 			s.shutdown()
@@ -146,7 +188,7 @@ func (s *Server) pruneExited() {
 
 func (s *Server) handle(conn net.Conn) {
 	r := bufio.NewReaderSize(conn, 64<<10)
-	first, err := r.ReadBytes('\n')
+	first, err := readLine(r, maxLine)
 	if err != nil {
 		_ = conn.Close()
 		return
@@ -193,11 +235,15 @@ func (s *Server) control(conn net.Conn, r *bufio.Reader, first []byte) {
 	line := first
 	for {
 		var req Request
-		if json.Unmarshal(line, &req) == nil {
-			reply(s.request(req))
+		if json.Unmarshal(line, &req) != nil {
+			// A frame the server cannot read leaves the caller waiting
+			// for an answer that will never come: end the connection,
+			// which reports the lost connection to every pending call.
+			return
 		}
+		reply(s.request(req))
 		var err error
-		line, err = r.ReadBytes('\n')
+		line, err = readLine(r, maxLine)
 		if err != nil {
 			return
 		}
@@ -244,16 +290,31 @@ func (s *Server) do(req Request) (any, error) {
 	case "listTree":
 		return listTree(req.Path)
 	case "readFile":
-		data, err := os.ReadFile(req.Path)
+		info, err := os.Stat(req.Path)
 		if err != nil {
 			return nil, err
 		}
-		return data, nil
+		if info.Size() > readFileLimit {
+			return nil, fmt.Errorf("%s is larger than %d MB", filepath.Base(req.Path), readFileLimit>>20)
+		}
+		return os.ReadFile(req.Path)
 	case "writeFile":
+		if len(req.Data) > writeFileLimit {
+			return nil, fmt.Errorf("file is larger than %d MB", writeFileLimit>>20)
+		}
 		if err := writeFileAtomic(req.Path, req.Data); err != nil {
 			return nil, err
 		}
 		return nil, nil
+	case "stat":
+		return statEntry(req.Path)
+	case "copy":
+		if req.Path == "" || req.To == "" {
+			return nil, errors.New("copy needs paths")
+		}
+		return nil, copyTree(req.Path, req.To)
+	case "exec":
+		return execCommand(req)
 	case "mkdir":
 		return nil, os.MkdirAll(req.Path, 0o755)
 	case "rename":
@@ -263,12 +324,6 @@ func (s *Server) do(req Request) (any, error) {
 		return nil, os.Rename(req.Path, req.To)
 	case "remove":
 		return nil, os.RemoveAll(req.Path)
-	case "archive":
-		data, err := archiveTree(req.Path)
-		if err != nil {
-			return nil, err
-		}
-		return data, nil
 	case "listDirs":
 		entries, err := os.ReadDir(req.Path)
 		if err != nil {
@@ -623,17 +678,30 @@ func (s *session) kill() {
 	s.mu.Lock()
 	exited := s.exited
 	s.mu.Unlock()
-	if !exited {
-		if s.cmd.Process != nil {
+	pid := 0
+	if s.cmd != nil && s.cmd.Process != nil {
+		pid = s.cmd.Process.Pid
+	}
+	if !exited && pid > 0 {
+		// The shell starts in its own session (pty.Start sets Setsid), so
+		// its foreground jobs are in its process group, not ours: signal
+		// the group, or a terminal running npm/ssh/vim leaves them behind.
+		if err := syscall.Kill(-pid, syscall.SIGINT); err != nil {
 			_ = s.cmd.Process.Signal(os.Interrupt)
 		}
 	}
 	select {
 	case <-s.done:
 	case <-time.After(time.Second):
-		if s.cmd.Process != nil {
-			_ = s.cmd.Process.Kill()
+		if pid > 0 {
+			_ = syscall.Kill(-pid, syscall.SIGKILL)
+			if s.cmd.Process != nil {
+				_ = s.cmd.Process.Kill()
+			}
 		}
+	}
+	if s.pty != nil {
+		_ = s.pty.Close()
 	}
 }
 
@@ -684,6 +752,12 @@ func listTree(root string) ([]FileEntry, error) {
 		if path == root {
 			return nil
 		}
+		if d.IsDir() {
+			if filekind.SkipDir(d.Name()) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 		rel, err := filepath.Rel(root, path)
 		if err != nil {
 			return nil
@@ -692,71 +766,174 @@ func listTree(root string) ([]FileEntry, error) {
 		if err != nil {
 			return nil
 		}
-		out = append(out, FileEntry{Rel: filepath.ToSlash(rel), Dir: d.IsDir(), Size: info.Size(), Mod: info.ModTime()})
+		kind, err := filekind.ClassifyFile(path)
+		if err != nil || kind == filekind.Other {
+			return nil
+		}
+		out = append(out, FileEntry{
+			Rel: filepath.ToSlash(rel), Size: info.Size(), Mod: info.ModTime(), Kind: kind,
+		})
 		return nil
 	})
 	return out, err
 }
 
-func writeFileAtomic(path string, data []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
+func statEntry(path string) (FileEntry, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return FileEntry{}, err
 	}
-	tmp := path + ".mojian-tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		return err
+	e := FileEntry{Rel: path, Dir: info.IsDir(), Size: info.Size(), Mod: info.ModTime()}
+	if !info.IsDir() {
+		e.Kind, _ = filekind.ClassifyFile(path)
 	}
-	return os.Rename(tmp, path)
+	return e, nil
 }
 
-func archiveTree(root string) ([]byte, error) {
-	var buf bytes.Buffer
-	tw := tar.NewWriter(&buf)
-	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if path == root {
-			return nil
-		}
-		rel, err := filepath.Rel(root, path)
-		if err != nil {
-			return nil
-		}
-		info, err := d.Info()
-		if err != nil {
-			return nil
-		}
-		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() && !info.IsDir() {
-			return nil
-		}
-		h, err := tar.FileInfoHeader(info, "")
-		if err != nil {
-			return nil
-		}
-		h.Name = filepath.ToSlash(rel)
-		if info.IsDir() {
-			h.Name += "/"
-		}
-		if err := tw.WriteHeader(h); err != nil {
+// copyTree copies a file or folder on the server, keeping its modes, so
+// a duplicate or paste does not carry the bytes through the app.
+func copyTree(from, to string) error {
+	info, err := os.Lstat(from)
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		if err := os.MkdirAll(to, info.Mode().Perm()); err != nil {
 			return err
 		}
-		if info.IsDir() {
-			return nil
-		}
-		data, err := os.ReadFile(path)
+		entries, err := os.ReadDir(from)
 		if err != nil {
+			return err
+		}
+		for _, e := range entries {
+			if err := copyTree(filepath.Join(from, e.Name()), filepath.Join(to, e.Name())); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	in, err := os.Open(from)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(to, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode().Perm())
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		_ = out.Close()
+		return err
+	}
+	return out.Close()
+}
+
+// execCommand runs a command for the app (Git, mostly) with a deadline
+// and a cap on what it may print.
+func execCommand(req Request) (ExecResult, error) {
+	if len(req.Args) == 0 {
+		return ExecResult{}, errors.New("exec needs a command")
+	}
+	timeout := time.Duration(req.Timeout) * time.Millisecond
+	if timeout <= 0 {
+		timeout = 10 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, req.Args[0], req.Args[1:]...)
+	cmd.Dir = req.Dir
+	cmd.Env = execEnv(req.Env)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error {
+		if cmd.Process == nil {
 			return nil
 		}
-		_, err = tw.Write(data)
+		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	}
+	cmd.WaitDelay = 2 * time.Second
+	var out, errb limitedWriter
+	out.limit, errb.limit = execOutLimit, execErrLimit
+	cmd.Stdout, cmd.Stderr = &out, &errb
+	err := cmd.Run()
+	res := ExecResult{Stdout: out.String(), Stderr: errb.String()}
+	if ee, ok := err.(*exec.ExitError); ok {
+		res.Code = ee.ExitCode()
+	}
+	if ctx.Err() != nil {
+		return res, errors.New("command timed out")
+	}
+	if err != nil && res.Code == 0 {
+		return res, err
+	}
+	return res, nil
+}
+
+// execEnv starts from the server's environment, without the Git
+// variables a launching shell may have set, then adds the command's.
+func execEnv(extra []string) []string {
+	drop := map[string]bool{
+		"GIT_DIR": true, "GIT_WORK_TREE": true, "GIT_INDEX_FILE": true,
+		"GIT_OBJECT_DIRECTORY": true, "GIT_ALTERNATE_OBJECT_DIRECTORIES": true,
+		"GIT_COMMON_DIR": true,
+	}
+	out := make([]string, 0, len(os.Environ())+len(extra))
+	for _, kv := range os.Environ() {
+		if i := strings.IndexByte(kv, '='); i > 0 && drop[kv[:i]] {
+			continue
+		}
+		out = append(out, kv)
+	}
+	return append(out, extra...)
+}
+
+// limitedWriter keeps the first limit bytes and drops the rest.
+type limitedWriter struct {
+	bytes.Buffer
+	limit int
+}
+
+func (w *limitedWriter) Write(p []byte) (int, error) {
+	if left := w.limit - w.Len(); left > 0 {
+		if len(p) > left {
+			w.Buffer.Write(p[:left])
+		} else {
+			w.Buffer.Write(p)
+		}
+	}
+	return len(p), nil
+}
+
+// writeFileAtomic replaces path without leaving a half-written file, and
+// keeps the mode of a file that was already there.
+func writeFileAtomic(path string, data []byte) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
-	})
+	}
+	mode := os.FileMode(0o644)
+	if info, err := os.Stat(path); err == nil {
+		mode = info.Mode().Perm()
+	}
+	f, err := os.CreateTemp(dir, "."+filepath.Base(path)+".mojian-*")
 	if err != nil {
-		_ = tw.Close()
-		return nil, err
+		return err
 	}
-	if err := tw.Close(); err != nil {
-		return nil, err
+	name := f.Name()
+	defer os.Remove(name)
+	if err := f.Chmod(mode); err != nil {
+		_ = f.Close()
+		return err
 	}
-	return buf.Bytes(), nil
+	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Rename(name, path)
 }

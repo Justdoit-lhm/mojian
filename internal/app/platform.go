@@ -102,11 +102,6 @@ func shortcutHint(c *command) string {
 	return nativeKeys(c.keys)
 }
 
-// fileManagerName is what the platform calls its file manager.
-func fileManagerName() string {
-	return fileManagerNameFor(runtime.GOOS)
-}
-
 func fileManagerNameFor(goos string) string {
 	switch goos {
 	case "darwin":

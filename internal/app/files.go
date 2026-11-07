@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -93,7 +94,11 @@ func (s *store) remap(oldRel, newRel string, dir bool) {
 		}
 		rest := strings.TrimPrefix(n.Rel, oldRel)
 		n.Rel = filepath.Join(newRel, rest)
-		n.Path = filepath.Join(s.dir, n.Rel)
+		if s.remote != nil {
+			n.Path = s.remote.abs(n.Rel)
+		} else {
+			n.Path = filepath.Join(s.dir, n.Rel)
+		}
 		n.Title = noteTitle(n.text(), n.Path)
 		if n.buf != nil {
 			n.buf.SetLanguage(editorLanguage(n.Path))
@@ -108,7 +113,11 @@ func (s *store) remap(oldRel, newRel string, dir bool) {
 		}
 		rest := strings.TrimPrefix(assetRel, oldRel)
 		f.Rel = filepath.Join(newRel, rest)
-		f.Path = filepath.Join(s.dir, f.Rel)
+		if s.remote != nil {
+			f.Path = s.remote.abs(f.Rel)
+		} else {
+			f.Path = filepath.Join(s.dir, f.Rel)
+		}
 		f.Name = filepath.Base(f.Path)
 		delete(s.assets, assetRel)
 		s.assets[f.Rel] = f
@@ -122,6 +131,28 @@ func (s *store) remap(oldRel, newRel string, dir bool) {
 func (s *store) rename(oldRel, name string) (string, []*note, error) {
 	if oldRel == "" {
 		return "", nil, errors.New("the project itself cannot be renamed")
+	}
+	if s.remote != nil {
+		oldRel = filepath.Clean(oldRel)
+		base := filepath.Base(oldRel)
+		newName := fileName(name, base)
+		if newName == base {
+			return oldRel, nil, nil
+		}
+		newRel := filepath.Join(filepath.Dir(oldRel), newName)
+		if filepath.Dir(oldRel) == "." {
+			newRel = newName
+		}
+		if s.existsRel(newRel) {
+			return "", nil, fmt.Errorf("%s already exists", newName)
+		}
+		isDir := s.dirs[oldRel]
+		if err := s.renameRel(oldRel, newRel); err != nil {
+			return "", nil, err
+		}
+		changed := s.notesUnder(oldRel, isDir)
+		s.movedEntry(oldRel, newRel, isDir)
+		return newRel, changed, nil
 	}
 	oldAbs, err := s.absRel(oldRel)
 	if err != nil {
@@ -457,7 +488,6 @@ func (a *app) submitTreeDraft() {
 	if d.kind == draftRename {
 		a.resetRenamedStates(changed, before)
 	}
-	a.syncRemoteProject()
 	a.changed()
 	a.invalidate()
 }
@@ -520,29 +550,6 @@ func (a *app) selectedDir() string {
 	return ""
 }
 
-func (a *app) selectionAbs() (string, bool) {
-	if a.store == nil || a.treeSel == "" {
-		return "", false
-	}
-	abs, err := a.store.absRel(a.treeSel)
-	if err != nil {
-		return "", false
-	}
-	return abs, true
-}
-
-func (a *app) selectionIsDir() bool {
-	if a.treeSel == "" {
-		return true
-	}
-	abs, ok := a.selectionAbs()
-	if !ok {
-		return false
-	}
-	info, err := os.Stat(abs)
-	return err == nil && info.IsDir()
-}
-
 // destinationFor returns the folder a paste into rel goes to.
 func (a *app) destinationFor(rel string) string {
 	if rel == "" {
@@ -562,12 +569,22 @@ func (a *app) copySelectionTo(rel string, cut bool) {
 	if rel == "" || a.store == nil {
 		return
 	}
+	if a.store.remote != nil {
+		// A remote path is not a local file, so the clipboard is the
+		// app's own; paste works within the same remote project.
+		a.fileClip = []string{rel}
+		a.fileClipRemote = true
+		a.fileCut = cut
+		a.invalidate()
+		return
+	}
 	abs, err := a.store.absRel(rel)
 	if err != nil {
 		a.fail(err)
 		return
 	}
 	a.fileClip = []string{abs}
+	a.fileClipRemote = false
 	a.fileCut = cut
 	if a.win != nil && runtime.GOOS != "js" {
 		if err := mygo.Clipboard.WriteFiles(abs); err != nil {
@@ -578,16 +595,21 @@ func (a *app) copySelectionTo(rel string, cut bool) {
 }
 
 func (a *app) duplicate(rel string) {
-	if rel == "" {
-		return
-	}
-	abs, err := a.store.absRel(rel)
-	if err != nil {
-		a.fail(err)
+	if rel == "" || a.store == nil {
 		return
 	}
 	dest := a.destinationFor(rel)
-	newRel, err := a.store.copyInto(abs, dest)
+	var newRel string
+	var err error
+	if a.store.remote != nil {
+		newRel, err = a.store.duplicateRel(rel, dest)
+	} else {
+		var abs string
+		abs, err = a.store.absRel(rel)
+		if err == nil {
+			newRel, err = a.store.copyInto(abs, dest)
+		}
+	}
 	if err != nil {
 		a.fail(err)
 		return
@@ -596,7 +618,6 @@ func (a *app) duplicate(rel string) {
 		a.fail(err)
 	}
 	a.selectRel(newRel)
-	a.syncRemoteProject()
 }
 
 func (a *app) pasteInto(rel string) {
@@ -604,6 +625,10 @@ func (a *app) pasteInto(rel string) {
 		return
 	}
 	dest := a.destinationFor(rel)
+	if a.store.remote != nil {
+		a.pasteRemote(rel, dest)
+		return
+	}
 	var paths []string
 	move := false
 	if a.fileCut && len(a.fileClip) > 0 {
@@ -649,7 +674,91 @@ func (a *app) pasteInto(rel string) {
 	if first != "" {
 		a.selectRel(first)
 	}
-	a.syncRemoteProject()
+}
+
+// pasteRemote pastes the app's own remote clipboard into dest. A Finder
+// paste has local paths, which a remote project cannot use.
+func (a *app) pasteRemote(rel, dest string) {
+	if a.store == nil || !a.fileClipRemote || len(a.fileClip) == 0 {
+		if a.win != nil && runtime.GOOS != "js" {
+			if got, err := mygo.Clipboard.ReadFiles(); err == nil && len(got) > 0 {
+				a.fail(errors.New("a remote project cannot paste Finder files; copy them in the Explorer first"))
+				return
+			}
+		}
+		a.fail(errors.New("the clipboard has no files from this remote project"))
+		return
+	}
+	move := a.fileCut
+	var first string
+	var lastErr error
+	for _, src := range a.fileClip {
+		var newRel string
+		var err error
+		if move {
+			newRel, err = a.store.moveRel(src, dest)
+		} else {
+			newRel = uniqueCopyRel(a.store, dest, filepath.Base(src))
+			err = a.store.copyRel(src, newRel)
+		}
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if first == "" {
+			first = newRel
+		}
+	}
+	if move {
+		a.fileCut = false
+		a.fileClip = nil
+		a.fileClipRemote = false
+	}
+	if err := a.store.refresh(); err != nil {
+		a.fail(err)
+		return
+	}
+	if lastErr != nil {
+		a.fail(lastErr)
+	}
+	if first != "" {
+		a.selectRel(first)
+	}
+}
+
+// trashRemote moves a remote file into the project's hidden trash folder,
+// since the system trash only holds local files.
+func (a *app) trashRemote(rel string) {
+	dest := a.destinationFor(rel)
+	stamp := time.Now().Format("20060102-150405")
+	dir := filepath.Join(".mojian-trash", stamp)
+	if err := a.store.mkdirRel(dir); err != nil {
+		a.fail(err)
+		return
+	}
+	newRel := filepath.Join(dir, filepath.Base(rel))
+	if a.store.existsRel(newRel) {
+		newRel = uniqueRel(a.store, dir, filepath.Base(rel))
+	}
+	if err := a.store.renameRel(rel, newRel); err != nil {
+		a.fail(err)
+		return
+	}
+	a.closeNotes(func(n *note) bool {
+		return n.Rel == rel || strings.HasPrefix(n.Rel, rel+string(filepath.Separator))
+	})
+	a.closeAssets(func(f *assetFile) bool {
+		return f.Rel == rel || strings.HasPrefix(f.Rel, rel+string(filepath.Separator))
+	})
+	a.store.forget(rel)
+	a.treeSel = dest
+	a.openPath(dest)
+	a.treeReveal = dest
+	if err := a.store.refresh(); err != nil {
+		a.fail(err)
+	}
+	a.changed()
+	a.invalidate()
 }
 
 func (a *app) copyPath(rel string, absolute bool) {
@@ -670,6 +779,10 @@ func (a *app) copyPath(rel string, absolute bool) {
 
 func (a *app) reveal(rel string) {
 	if a.store == nil || runtime.GOOS == "js" {
+		return
+	}
+	if a.store.remote != nil {
+		a.fail(errors.New("remote projects have no Finder window"))
 		return
 	}
 	abs, err := a.store.absRel(rel)
@@ -695,6 +808,10 @@ func (a *app) trash(rel string) {
 		a.fail(errors.New("trash needs the desktop app"))
 		return
 	}
+	if a.store.remote != nil {
+		a.trashRemote(rel)
+		return
+	}
 	abs, err := a.store.absRel(rel)
 	if err != nil {
 		a.fail(err)
@@ -714,7 +831,6 @@ func (a *app) trash(rel string) {
 	a.treeSel = a.destinationFor(rel)
 	a.openPath(a.treeSel)
 	a.treeReveal = a.treeSel
-	a.syncRemoteProject()
 	a.changed()
 	a.invalidate()
 }

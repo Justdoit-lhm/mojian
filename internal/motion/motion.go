@@ -16,11 +16,11 @@ import (
 // The responses are Apple's idea of spring duration: smaller is snappier.
 // They stay short enough that a switch never reads as a performance.
 const (
-	pageResponse = 240 * time.Millisecond
-	tabResponse  = 200 * time.Millisecond
-	treeResponse = 220 * time.Millisecond
-	paneResponse = 220 * time.Millisecond
-	colorMs      = 120 * time.Millisecond
+	pageResponse  = 240 * time.Millisecond
+	tabResponse   = 200 * time.Millisecond
+	treeResponse  = 220 * time.Millisecond
+	paneResponse  = 220 * time.Millisecond
+	colorDuration = 120 * time.Millisecond
 )
 
 // EaseOut is a strong ease-out for short fades and color changes. It
@@ -68,7 +68,7 @@ var (
 
 	// Colors makes hover faces catch up with the pointer.
 	Colors = ui.ElementTransition{
-		Duration: colorMs,
+		Duration: colorDuration,
 		Ease:     EaseOut,
 		Colors:   true,
 	}

@@ -4,7 +4,7 @@
 
 Mojian is a quiet text editor for plain files, written in Go against [MyGo](https://mygo.egoist.dev)'s native UI. It is not a web app: there is no webview, no cgo, no JavaScript build. One Go binary draws its own window (Metal on macOS). Tabs are workspaces; each tab holds a binary split tree of panes, and each pane edits a file, previews a picture or PDF, or runs a terminal. Version `0.1.0`, bundle id `dev.mojian.app`, macOS 13+.
 
-A project is just a folder; it keeps its own tabs and layout. Edits stay in memory until an explicit `⌘S`, terminals survive quitting because they live in a detached session server, and remote projects are edited over SSH.
+A project is just a folder; it keeps its own tabs and layout. Edits stay in memory until an explicit `⌘S`. Local terminals survive quitting because they live in a detached session server; a remote project's terminal ends with its SSH connection. Remote projects are edited directly on the host: only a listing is cached, and a file's text is read when it opens.
 
 Read `.agents/skills/mygo-maintenance/SKILL.md` before touching UI code; it is the authoritative source for MyGo lifetime and threading rules.
 
@@ -19,11 +19,11 @@ Frame conventions that keep this correct:
 - `a.invalidate()` (`app.go:551`) requests a redraw of both windows after state changes made outside the view.
 - Slow work never runs in a view. Background results land through `Window.Update` and are dropped when a sequence/generation counter moved on — see `git.Page.Seq`/`DiffSeq` (`internal/git/git.go:103-118`) and `assetView.pdfGen` (`internal/app/assetview.go:78`).
 
-**One traced path (open → edit → save).** Tree row click → `(*app).openRel` (`app.go:876`) → `store.byRelPath` (`store.go:572`) → `(*app).openNote` → `pane.Note`; the pane renders `note.buffer`, a single `*editor.Buffer` shared by every pane showing that file. `⌘S` → menu/palette command → `(*app).saveNow` (`app.go:647`) → `store.saveAll` → `store.save` → `writeFileAtomic` (`app.go:451`, tmp file + fsync + rename) → optional `store.onSave` remote upload → `buf.MarkSaved()`. Edits stay in memory until an explicit save.
+**One traced path (open → edit → save).** Tree row click → `(*app).openRel` (`app.go:876`) → `store.byRelPath` (`store.go:572`) → `(*app).openNote` → `pane.Note`; the pane renders `note.buffer`, a single `*editor.Buffer` shared by every pane showing that file. `⌘S` → menu/palette command → `(*app).saveNow` (`app.go:647`) → `store.saveAll` → `store.save` → `writeFileAtomic` for a local file (tmp file + fsync + rename) or `session.Client.WriteFile` for a remote one → `buf.MarkSaved()`. Edits stay in memory until an explicit save.
 
-**Terminals live in a second process.** `internal/session` is a Unix-socket server (`session.Serve`, `server.go:48`) speaking JSON lines, `ProtocolVersion = 1` (`proto.go:16`). The app spawns it by re-executing itself with `-server` (`spawn_unix.go:19`), so quitting the app detaches PTYs instead of killing them; reopening reattaches by session id. Terminal panes are `terminal.Terminal` (MyGo's libghostty plugin) bound to a `session.Stream`.
+**Terminals live in a second process.** `internal/session` is a Unix-socket server (`session.Serve`, `server.go:48`) speaking JSON lines, `ProtocolVersion = 2` (`proto.go`). The app spawns it by re-executing itself with `-server` (`spawn_unix.go:19`), so quitting the app detaches local PTYs instead of killing them; reopening reattaches by session id. A remote server is started with `MOJIAN_TRANSIENT=1`: it stops shortly after the app disconnects, taking its terminals with it. Terminal panes are `terminal.Terminal` (MyGo's libghostty plugin) bound to a `session.Stream`.
 
-**Remote projects.** `internal/app/remote.go` uploads the embedded Linux server + `libghostty-vt` from `internal/remotebin`, opens an `ssh -N -L` forward to the remote socket, and mirrors the project into a local cache (`remoteCacheDir`) synced by a `.files` manifest. Remote writes go through `session.Client.WriteFile`.
+**Remote projects.** `internal/app/remote.go` uploads the embedded Linux server + `libghostty-vt` from `internal/remotebin`, opens an `ssh -N -L` forward to the remote socket, and opens the folder there directly: `session.Client.ListTree` lists it (names, sizes, times, text/asset kinds), a note is read when it opens, and a save or file operation writes through the same client (`remote_store.go`). There is no local mirror and no full re-upload. Git runs on the host through the server's `exec` op (`internal/app/git_bridge.go`); pictures and PDFs are fetched into `remote-assets/` under the app data for their viewers.
 
 **Cross-package contracts.** `git.Host` (`internal/git/git.go:34`) is the only interface the Git page uses to reach the window; `*app` implements it in `internal/app/git_bridge.go`. `internal/app/theme_bridge.go` exists so `app` touches `internal/theme` through one file.
 
@@ -82,10 +82,12 @@ sh tools/build-remote.sh  # rebuild embedded Linux servers (needed after server/
 |---|---|
 | `internal/app/app.go` | `app` struct, `Run`, window lifecycle, menus/commands, settings, layout debounce, `fail`/`later`. |
 | `internal/app/model.go` | `pane`/`tab`, the `node` split tree, pane directions and moves, layout snapshot/restore (persisted as `columns`). |
-| `internal/app/store.go` | Project folder, `note` buffers, text/asset classification, atomic save, `onSave` hook. |
+| `internal/app/store.go` | Project folder, `note` buffers, text/asset classification, lazy remote notes, atomic save. |
 | `internal/app/view.go` | Root view: title bar, workspace switch, pane cards, error banner. |
 | `internal/app/term.go` | Terminal panes, session client bootstrap, attach, restore, detach on close. |
-| `internal/app/remote.go` | SSH connections, server upload, mirror download/sync. |
+| `internal/app/remote.go` | SSH connections, server upload, transient remote lifecycle. |
+| `internal/app/remote_store.go` | Direct remote project: listing, lazy reads, writes, file operations, asset cache. |
+| `internal/filekind` | Shared text/asset/skip-dir classification for the app and the session server. |
 | `internal/app/files.go` | Rename/copy/move/trash/paste, `absRel` path guard, tree drafts. |
 | `internal/app/palette.go` | Command table used by menu, palette and browser shortcuts. |
 | `mygo.json` | App manifest: name, identifier, version, `out`, macOS minimum. |
@@ -106,6 +108,6 @@ sh tools/build-remote.sh  # rebuild embedded Linux servers (needed after server/
 - **White-box tests** sit beside the code (`package app`, `session`, `git`, `icons`) and read unexported state. **Black-box tests** live in `test/` (`package integration`) with real temp folders and real Git; `test/helpers.go` exports `WriteVault` and `InitRepo` (the latter isolates Git with `GIT_CONFIG_GLOBAL=/dev/null`).
 - **UI tests** render headlessly with `ui.NewTester(a.view, 1100, 700)` (Settings: `settingsWindowView`, 900×640) and assert on `HasText`/`Texts`, clicks, typing and keys. Call `registerFonts()` before measuring text. Code that uses `a.later` needs an extra `tt.Frame()` — often two.
 - **Setup patterns:** `t.TempDir()` plus `t.Setenv` for `MOJIAN_VAULT`, `MOJIAN_DIR` and `HOME` (SSH tests write `.ssh/config`). Terminal tests start `session.Serve` in a goroutine and poll `session.SocketPath()` with a 3 s deadline. PTY and socket tests are Unix-only via build tags. Never add `t.Parallel()` to tests that set env or bind sockets.
-- **Injection seams** exist for tests, keep them working: `app.shellStarter` (`app.go:92`), `trashPath` (`files.go:684`), `store.onSave`, `remoteConn` literals, and the `dataDir`/`layoutPath`/`settingsPath` fields.
+- **Injection seams** exist for tests, keep them working: `app.shellStarter` (`app.go:92`), `trashPath` (`files.go`), `remoteConn` literals, and the `dataDir`/`layoutPath`/`settingsPath` fields.
 - **Expectations:** behavior, boundaries and regressions — not wiring. Add a regression test only where the failure mode is plausible; verify features with a throwaway script or the running app instead of new permanent tests.
 - **Known drift:** `README.md` claims white-box tests in `internal/theme`; none exist. `internal/app/main_test.go` contains an unused `newTestApp` helper. Do not "fix" either by inventing coverage.

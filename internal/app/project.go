@@ -100,11 +100,12 @@ func (a *app) openProject(dir string) {
 		a.closeRemote()
 		a.serverAlias = ""
 		a.remotePath = ""
-		a.remoteCache = ""
 	}
 	a.git.Open = false
-	a.git.Seq++
-	a.git.DiffSeq++
+	a.git.Reset()
+	a.fileClip = nil
+	a.fileClipRemote = false
+	a.fileCut = false
 	if a.layoutPath != "" {
 		a.saveLayout()
 	}

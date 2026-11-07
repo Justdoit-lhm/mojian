@@ -70,3 +70,16 @@ func TestStatusLetterConflicts(t *testing.T) {
 		}
 	}
 }
+
+func TestParseStatusKeepsRenameSource(t *testing.T) {
+	changes := parseStatus("R  moved.go\x00pack.go\x00M  other.go\x00", "")
+	if len(changes) != 2 {
+		t.Fatalf("changes: %+v", changes)
+	}
+	if changes[0].Path != "moved.go" || changes[0].OldPath != "pack.go" || changes[0].Status != "R" {
+		t.Fatalf("rename: %+v", changes[0])
+	}
+	if changes[1].Path != "other.go" || changes[1].OldPath != "" {
+		t.Fatalf("edit: %+v", changes[1])
+	}
+}

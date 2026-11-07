@@ -1,6 +1,15 @@
 package app
 
 import (
+	"errors"
+	"path"
+	"strings"
+	"time"
+
+	"mojian/internal/session"
+
+	gitpage "mojian/internal/git"
+
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 )
@@ -27,6 +36,52 @@ func (a *app) ProjectDir() (string, bool) {
 		return "", false
 	}
 	return a.store.dir, true
+}
+
+// GitRunner runs Git where the project lives: locally, or on the SSH
+// host through the session server.
+func (a *app) GitRunner() gitpage.Runner {
+	if a.remote != nil && a.remote.client != nil && a.remotePath != "" {
+		return remoteGitRunner{client: a.remote.client}
+	}
+	return gitpage.LocalRunner{}
+}
+
+type remoteGitRunner struct{ client *session.Client }
+
+func (r remoteGitRunner) Run(dir string, args ...string) (string, error) {
+	cmd := append([]string{"git", "-C", dir}, args...)
+	res, err := r.client.Exec(dir, cmd, nil, 10*time.Second)
+	if err != nil {
+		return res.Stdout, err
+	}
+	if res.Code != 0 {
+		msg := strings.TrimSpace(res.Stderr)
+		if msg == "" {
+			msg = "git failed"
+		}
+		return res.Stdout, errors.New(msg)
+	}
+	return res.Stdout, nil
+}
+
+func (r remoteGitRunner) RealPath(path string) (string, error) {
+	res, err := r.client.Exec("", []string{"sh", "-c", `cd "$1" && pwd -P`, "sh", path}, nil, 5*time.Second)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(res.Stdout), nil
+}
+
+func (r remoteGitRunner) ReadFile(dir, rel string, limit int) ([]byte, error) {
+	data, err := r.client.ReadFile(path.Join(dir, rel))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > limit {
+		return data[:limit+1], nil
+	}
+	return data, nil
 }
 
 func (a *app) Window() *mygo.Window { return a.win }

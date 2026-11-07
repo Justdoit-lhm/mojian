@@ -11,22 +11,6 @@ import (
 	"github.com/egoist/mygo/ui/editor"
 )
 
-// newTestApp opens a vault in a temporary directory with one note open.
-func newTestApp(t *testing.T) *app {
-	t.Helper()
-	t.Setenv("MOJIAN_VAULT", t.TempDir())
-	s, err := openStore()
-	if err != nil {
-		t.Fatal(err)
-	}
-	a := &app{store: s, treeOpen: true}
-	a.focusFirstNote()
-	if a.tab() == nil {
-		t.Fatal("no tab after opening the vault")
-	}
-	return a
-}
-
 func TestSplitAndClose(t *testing.T) {
 	a := newProjectApp(t)
 	t0 := a.tab()

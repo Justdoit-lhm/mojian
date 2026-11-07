@@ -39,7 +39,6 @@ type app struct {
 	projectPicker  bool
 	serverAlias    string
 	remotePath     string
-	remoteCache    string
 	remote         *remoteConn
 	remotePick     *remoteConn // a connection prepared by the project picker
 	remoteProjects []remoteProject
@@ -79,8 +78,9 @@ type app struct {
 	revealTab  bool
 	tabScroll  ui.ScrollState
 
-	fileClip []string
-	fileCut  bool
+	fileClip       []string
+	fileCut        bool
+	fileClipRemote bool // the paths are remote relative paths, not local files
 
 	updateCheckFn    updateCheckFunc
 	updateInstallFn  updateInstallFunc
@@ -155,6 +155,7 @@ type app struct {
 	layoutTimer *time.Timer
 	loaded      bool
 	quitting    bool
+	saveSkipped bool
 	pending     []func()
 
 	edDark  bool
@@ -181,9 +182,21 @@ func Run() {
 			mygo.App.Quit()
 		}
 	})
-	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
+	mygo.App.OnBeforeQuit(func(e *mygo.QuitEvent) {
 		a.quitting = true
-		_ = a.saveNow()
+		if !a.saveSkipped {
+			if err := a.saveNow(); err != nil {
+				// Keep the window and its unsaved text: a lost remote
+				// connection or a full disk must not discard edits.
+				e.PreventDefault()
+				a.quitting = false
+				a.askQuit(err, func() {
+					a.saveSkipped = true
+					mygo.App.Quit()
+				})
+				return
+			}
+		}
 		a.closeTerminals()
 		if a.sessionClient != nil {
 			_ = a.sessionClient.Close()
@@ -254,6 +267,7 @@ func (a *app) open() {
 		a.saveLayout()
 	}
 	a.quitting = false
+	a.saveSkipped = false
 	if a.loaded && a.serverAlias != "" && a.remotePath != "" {
 		if _, err := a.ensureRemote(a.serverAlias); err != nil {
 			a.fail(err)
@@ -281,6 +295,18 @@ func (a *app) createWindow(stateKey string) *mygo.Window {
 	win.OnFocus(func() {
 		a.refreshProject()
 	})
+	win.OnClose(func(e *mygo.CloseEvent) {
+		if a.quitting || a.saveSkipped {
+			return
+		}
+		if err := a.saveNow(); err != nil {
+			e.PreventDefault()
+			a.askQuit(err, func() {
+				a.saveSkipped = true
+				win.Update(func() { win.Close() })
+			})
+		}
+	})
 	win.OnClosed(func() {
 		a.windowClosed()
 	})
@@ -293,7 +319,9 @@ func (a *app) windowClosed() {
 	if a.settingsWin != nil {
 		a.settingsWin.Close()
 	}
-	_ = a.saveNow()
+	if !a.saveSkipped {
+		_ = a.saveNow()
+	}
 	a.closeTerminals()
 	if a.sessionClient != nil {
 		_ = a.sessionClient.Close()
@@ -649,6 +677,24 @@ func (a *app) syncAppearance() {
 	}
 }
 
+// askQuit asks whether to quit after a save failed. The dialog runs off
+// the UI thread, as MyGo's dialogs may; proceed runs from the UI thread.
+func (a *app) askQuit(err error, proceed func()) {
+	parent := a.win
+	go func() {
+		res, _ := mygo.Dialog.Message(mygo.MessageOptions{
+			Parent: parent, Type: mygo.MessageError,
+			Title:   "Mojian could not save",
+			Message: err.Error(),
+			Detail:  "Your edits are still in memory. Quit without saving?",
+			Buttons: []string{"Keep Editing", "Quit Without Saving"},
+		})
+		if res.Button == 1 {
+			proceed()
+		}
+	}()
+}
+
 // saveNow writes every unsaved note, the layout and the settings. It
 // returns the first note that could not be written, so a project switch
 // can stop before dropping unsaved work.
@@ -798,9 +844,39 @@ func (a *app) newTab() {
 	a.invalidate()
 }
 
+// loadNote reads a remote note's text before its pane is built. A local
+// note is already loaded; a remote one is fetched once.
+func (a *app) loadNote(n *note) bool {
+	if n == nil {
+		return false
+	}
+	if a.store != nil {
+		if err := a.store.loadNote(n); err != nil {
+			a.fail(fmt.Errorf("reading %s: %w", n.Rel, err))
+			return false
+		}
+	}
+	return true
+}
+
+// loadAsset fetches a remote picture or PDF into the local cache its
+// viewer reads.
+func (a *app) loadAsset(f *assetFile) bool {
+	if f == nil {
+		return false
+	}
+	if a.store != nil {
+		if _, err := a.store.materializeAsset(f); err != nil {
+			a.fail(fmt.Errorf("reading %s: %w", f.Rel, err))
+			return false
+		}
+	}
+	return true
+}
+
 // openNoteInTab shows n in a tab of its own.
 func (a *app) openNoteInTab(n *note) {
-	if n == nil {
+	if !a.loadNote(n) {
 		return
 	}
 	a.git.Open = false
@@ -822,7 +898,7 @@ func (a *app) openNoteInTab(n *note) {
 // openNote shows n in the focused pane, or in a new tab when none is
 // open.
 func (a *app) openNote(n *note) {
-	if n == nil {
+	if !a.loadNote(n) {
 		return
 	}
 	a.git.Open = false
@@ -900,7 +976,7 @@ func (a *app) openRel(rel string) {
 
 // openAssetInTab shows a picture or PDF in a tab of its own.
 func (a *app) openAssetInTab(f *assetFile) {
-	if f == nil {
+	if !a.loadAsset(f) {
 		return
 	}
 	a.git.Open = false
@@ -922,7 +998,7 @@ func (a *app) openAssetInTab(f *assetFile) {
 // openAsset shows a picture or PDF in the focused pane, or in a new tab
 // when none is open.
 func (a *app) openAsset(f *assetFile) {
-	if f == nil {
+	if !a.loadAsset(f) {
 		return
 	}
 	a.git.Open = false

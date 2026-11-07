@@ -1,18 +1,16 @@
 package app
 
 import (
-	"archive/tar"
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -43,13 +41,6 @@ func (a *app) remoteName() string {
 		return "Local"
 	}
 	return a.hostLabel(a.serverAlias)
-}
-
-func (a *app) remoteProjectName() string {
-	if a.remotePath == "" {
-		return ""
-	}
-	return filepath.Base(a.remotePath)
 }
 
 // sshOutput runs a command over SSH with the user's config and agent.
@@ -97,8 +88,14 @@ func (a *app) ensureRemote(host string) (*remoteConn, error) {
 // talking to the machine it came from.
 func (a *app) connectRemote(host string) (*remoteConn, error) {
 	if a.remote != nil && a.remote.host == host {
-		if a.remote.client != nil {
-			return a.remote, nil
+		if c := a.remote.client; c != nil {
+			select {
+			case <-c.Closed():
+				// The connection dropped; replace it below rather than
+				// handing back a dead client.
+			default:
+				return a.remote, nil
+			}
 		}
 		// A stale forward for this host would own the local socket path
 		// the new one needs.
@@ -121,83 +118,164 @@ func (a *app) connectRemote(host string) (*remoteConn, error) {
 	if err != nil {
 		return nil, err
 	}
+	lib, err := remotebin.Library(arch)
+	if err != nil {
+		return nil, err
+	}
 	dir := home + "/.local/share/mojian"
 	binPath := dir + "/mojian-server"
-	sock := dir + "/sessions.sock"
-	lib, libErr := remotebin.Library(arch)
-	if libErr != nil {
-		return nil, libErr
-	}
 	libPath := dir + "/libghostty-vt.so"
+	// The server computes its socket the same way (SocketPathIn), so a
+	// long home that moves the socket to /tmp still forwards correctly.
+	// Resolve it with the host's uid, not this machine's.
+	uid := -1
+	if out, err := sshOutput(host, "id -u"); err == nil {
+		uid, _ = strconv.Atoi(strings.TrimSpace(out))
+	}
+	sock := session.SocketPathIn(dir, uid)
 	if _, err := sshOutput(host, "mkdir -p "+shellQuote(dir)+" && chmod 700 "+shellQuote(dir)); err != nil {
 		return nil, err
 	}
-	// Upload the server when the remote copy differs.
-	size, _ := sshOutput(host, "stat -c %s "+shellQuote(binPath)+" 2>/dev/null || true")
-	if size != fmt.Sprint(len(bin)) {
-		cmd := exec.Command("ssh", append(sshCommon(), "--", host,
-			"mkdir -p "+shellQuote(dir)+" && cat > "+shellQuote(binPath+".tmp")+
-				" && chmod 755 "+shellQuote(binPath+".tmp")+
-				" && mv "+shellQuote(binPath+".tmp")+" "+shellQuote(binPath))...)
-		cmd.Stdin = bytes.NewReader(bin)
-		var stderr bytes.Buffer
-		cmd.Stderr = &stderr
-		if err := cmd.Run(); err != nil {
-			return nil, fmt.Errorf("uploading the session server: %v %s", err, strings.TrimSpace(stderr.String()))
+	upload := func(path string, data []byte, mode string) error {
+		return uploadRemote(host, path, data, mode)
+	}
+	// A file whose hash matches is already the build this app needs.
+	if !remoteHashEqual(host, binPath, bin) {
+		if err := upload(binPath, bin, "755"); err != nil {
+			return nil, fmt.Errorf("uploading the session server: %w", err)
 		}
 	}
-	// The server's headless terminal needs libghostty-vt beside it.
-	libSize, _ := sshOutput(host, "stat -c %s "+shellQuote(libPath)+" 2>/dev/null || true")
-	if libSize != fmt.Sprint(len(lib)) {
-		cmd := exec.Command("ssh", append(sshCommon(), "--", host,
-			"cat > "+shellQuote(libPath+".tmp")+" && mv "+shellQuote(libPath+".tmp")+" "+shellQuote(libPath))...)
-		cmd.Stdin = bytes.NewReader(lib)
-		var stderr bytes.Buffer
-		cmd.Stderr = &stderr
-		if err := cmd.Run(); err != nil {
-			return nil, fmt.Errorf("uploading libghostty-vt: %v %s", err, strings.TrimSpace(stderr.String()))
+	if !remoteHashEqual(host, libPath, lib) {
+		if err := upload(libPath, lib, "644"); err != nil {
+			return nil, fmt.Errorf("uploading libghostty-vt: %w", err)
 		}
 	}
-	// Start the per-user server. A live server refuses the second one
-	// through its lock; a stale socket from a server that exited is
-	// replaced by the new process. Starting it every time also recovers
-	// from the server's idle timeout.
-	startCmd := "MOJIAN_DIR=" + shellQuote(dir) + " nohup " + shellQuote(binPath) +
-		" >>" + shellQuote(dir+"/server.log") + " 2>&1 &"
-	if _, err := sshOutput(host, startCmd); err != nil {
-		return nil, err
-	}
-	time.Sleep(250 * time.Millisecond)
-	local := filepath.Join(os.TempDir(), "mojian-"+shortHash(host)+".sock")
-	_ = os.Remove(local)
-	fwd := exec.Command("ssh", "-N", "-o", "BatchMode=yes", "-o", "ConnectTimeout=20",
-		"-o", "ExitOnForwardFailure=yes", "-o", "ServerAliveInterval=15",
-		"-L", local+":"+sock, "--", host)
-	var ferr bytes.Buffer
-	fwd.Stderr = &ferr
-	if err := fwd.Start(); err != nil {
-		return nil, err
-	}
-	deadline := time.Now().Add(20 * time.Second)
-	var conn net.Conn
-	for {
-		conn, err = net.DialTimeout("unix", local, 200*time.Millisecond)
-		if err == nil {
-			_ = conn.Close()
-			break
+	start := func() error {
+		// A transient server ends with the app connection, taking its
+		// terminals with it; remote shells are not kept after a drop.
+		cmd := "MOJIAN_DIR=" + shellQuote(dir) + " MOJIAN_TRANSIENT=1 nohup " +
+			shellQuote(binPath) + " >>" + shellQuote(dir+"/server.log") + " 2>&1 &"
+		if _, err := sshOutput(host, cmd); err != nil {
+			return err
 		}
-		if time.Now().After(deadline) {
+		time.Sleep(250 * time.Millisecond)
+		return nil
+	}
+	open := func() (*remoteConn, string, error) {
+		local := filepath.Join(os.TempDir(), "mojian-"+shortHash(host)+".sock")
+		_ = os.Remove(local)
+		fwd := exec.Command("ssh", "-N", "-o", "BatchMode=yes", "-o", "ConnectTimeout=20",
+			"-o", "ExitOnForwardFailure=yes", "-o", "ServerAliveInterval=15",
+			"-L", local+":"+sock, "--", host)
+		var ferr bytes.Buffer
+		fwd.Stderr = &ferr
+		if err := fwd.Start(); err != nil {
+			return nil, local, err
+		}
+		deadline := time.Now().Add(20 * time.Second)
+		for {
+			conn, err := net.DialTimeout("unix", local, 200*time.Millisecond)
+			if err == nil {
+				_ = conn.Close()
+				break
+			}
+			if time.Now().After(deadline) {
+				_ = fwd.Process.Kill()
+				return nil, local, fmt.Errorf("the SSH forward failed: %v %s", err, strings.TrimSpace(ferr.String()))
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		client, err := session.ConnectAt(local)
+		if err != nil {
+			// A server from another build cannot answer this protocol.
+			// End it through its socket, then upload and start the current
+			// one before one more try.
+			var pe *session.ProtocolError
+			if errors.As(err, &pe) {
+				shutdownAt(local)
+				_ = fwd.Process.Kill()
+				_, _ = fwd.Process.Wait()
+				_ = os.Remove(local)
+				return nil, local, pe
+			}
 			_ = fwd.Process.Kill()
-			return nil, fmt.Errorf("the SSH forward failed: %v %s", err, strings.TrimSpace(ferr.String()))
+			_, _ = fwd.Process.Wait()
+			_ = os.Remove(local)
+			return nil, local, err
 		}
-		time.Sleep(50 * time.Millisecond)
+		return &remoteConn{host: host, socket: local, forward: fwd, client: client}, local, nil
 	}
-	client, err := session.ConnectAt(local)
-	if err != nil {
-		_ = fwd.Process.Kill()
+	if err := start(); err != nil {
 		return nil, err
 	}
-	return &remoteConn{host: host, socket: local, forward: fwd, client: client}, nil
+	rc, _, err := open()
+	if err == nil {
+		return rc, nil
+	}
+	var pe *session.ProtocolError
+	if !errors.As(err, &pe) {
+		return nil, err
+	}
+	// The running server was another protocol. Its socket is gone; put
+	// this build in place and start it before trying the forward again.
+	if err := upload(binPath, bin, "755"); err != nil {
+		return nil, fmt.Errorf("updating the session server: %w", err)
+	}
+	if err := upload(libPath, lib, "644"); err != nil {
+		return nil, fmt.Errorf("updating libghostty-vt: %w", err)
+	}
+	if err := start(); err != nil {
+		return nil, err
+	}
+	rc, _, err = open()
+	return rc, err
+}
+
+// shutdownAt asks a server at a local socket to stop without a client.
+func shutdownAt(socket string) {
+	conn, err := net.DialTimeout("unix", socket, time.Second)
+	if err != nil {
+		return
+	}
+	_, _ = conn.Write([]byte(`{"id":1,"op":"shutdown"}` + "\n"))
+	_ = conn.Close()
+}
+
+// remoteHashEqual reports whether the file on host already has data.
+func remoteHashEqual(host, path string, data []byte) bool {
+	want := sha256.Sum256(data)
+	sum, err := sshOutput(host, "if command -v sha256sum >/dev/null 2>&1; then sha256sum -- "+shellQuote(path)+
+		"; else shasum -a 256 -- "+shellQuote(path)+"; fi")
+	if err != nil {
+		return false
+	}
+	fields := strings.Fields(sum)
+	return len(fields) > 0 && strings.EqualFold(fields[0], hex.EncodeToString(want[:]))
+}
+
+// uploadRemote writes data to path on host through SSH, atomically.
+func uploadRemote(host, path string, data []byte, mode string) error {
+	tmp := path + ".tmp"
+	cmd := exec.Command("ssh", append(sshCommon(), "--", host,
+		"mkdir -p "+shellQuote(filepath.Dir(path))+" && cat > "+shellQuote(tmp)+
+			" && chmod "+mode+" "+shellQuote(tmp)+" && mv "+shellQuote(tmp)+" "+shellQuote(path))...)
+	cmd.Stdin = bytes.NewReader(data)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("%v %s", err, strings.TrimSpace(stderr.String()))
+	}
+	return nil
+}
+
+// remoteAssetCache is where pictures and PDFs of a remote project are
+// fetched for their viewers.
+func (a *app) remoteAssetCache(host, remotePath string) string {
+	base := a.dataDir
+	if base == "" {
+		base, _ = os.UserCacheDir()
+	}
+	return filepath.Join(base, "remote-assets", shortHash(host+"\x00"+remotePath))
 }
 
 func shortHash(s string) string {
@@ -229,6 +307,9 @@ func (a *app) closeRemoteConn(rc *remoteConn) {
 		return
 	}
 	if rc.client != nil {
+		// The remote server is transient: ending it stops its shells now
+		// instead of after the idle grace period.
+		_ = rc.client.Shutdown()
 		_ = rc.client.Close()
 	}
 	if rc.forward != nil && rc.forward.Process != nil {
@@ -238,122 +319,9 @@ func (a *app) closeRemoteConn(rc *remoteConn) {
 	_ = os.Remove(rc.socket)
 }
 
-// remoteCacheDir is a local mirror of a remote project. The server is
-// still the source of truth; the mirror lets the existing editor, assets,
-// and Git page work while edits sync back.
-func (a *app) remoteCacheDir(host, remotePath string) string {
-	base := a.dataDir
-	if base == "" {
-		base, _ = os.UserCacheDir()
-	}
-	return filepath.Join(base, "remote", shortHash(host+"\x00"+remotePath))
-}
-
-// archiveRemote downloads the project over the session server and opens
-// it as a local mirror.
-func (a *app) downloadRemote(c *session.Client, remotePath, cache string) error {
-	data, err := c.Archive(remotePath)
-	if err != nil {
-		return err
-	}
-	if err := os.RemoveAll(cache); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(cache, 0o755); err != nil {
-		return err
-	}
-	tr := tar.NewReader(bytes.NewReader(data))
-	for {
-		h, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return err
-		}
-		name := filepath.Clean(h.Name)
-		if name == "." || strings.HasPrefix(name, ".."+string(filepath.Separator)) || filepath.IsAbs(name) {
-			continue
-		}
-		dst := filepath.Join(cache, name)
-		switch h.Typeflag {
-		case tar.TypeDir:
-			if err := os.MkdirAll(dst, 0o755); err != nil {
-				return err
-			}
-		case tar.TypeReg, tar.TypeRegA:
-			if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-				return err
-			}
-			f, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
-			if err != nil {
-				return err
-			}
-			_, err = io.Copy(f, tr)
-			closeErr := f.Close()
-			if err != nil {
-				return err
-			}
-			if closeErr != nil {
-				return closeErr
-			}
-		}
-	}
-	// The mirror is now the remote tree. Remember it, so the next file
-	// operation can tell which removed paths to delete on the server.
-	writeRemoteManifest(cache, localFileList(cache))
-	return nil
-}
-
-func remoteManifestPath(cache string) string { return cache + ".files" }
-
-func localFileList(cache string) []string {
-	var out []string
-	_ = filepath.WalkDir(cache, func(p string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return nil
-		}
-		rel, err := filepath.Rel(cache, p)
-		if err != nil {
-			return nil
-		}
-		rel = filepath.ToSlash(rel)
-		if rel == ".git" || strings.HasPrefix(rel, ".git/") {
-			return nil
-		}
-		out = append(out, rel)
-		return nil
-	})
-	return out
-}
-
-func writeRemoteManifest(cache string, files []string) {
-	_ = os.WriteFile(remoteManifestPath(cache), []byte(strings.Join(files, "\n")), 0o644)
-}
-
-func readRemoteManifest(cache string) map[string]bool {
-	out := map[string]bool{}
-	data, err := os.ReadFile(remoteManifestPath(cache))
-	if err != nil {
-		return out
-	}
-	for _, line := range strings.Split(string(data), "\n") {
-		if line != "" {
-			out[line] = true
-		}
-	}
-	return out
-}
-
-func (a *app) uploadRemoteNote(n *note) error {
-	if a.remote == nil || a.remote.client == nil || a.remotePath == "" {
-		return errors.New("the remote project is disconnected")
-	}
-	rel := strings.ReplaceAll(n.Rel, string(filepath.Separator), "/")
-	return a.remote.client.WriteFile(path.Join(a.remotePath, rel), []byte(n.text()))
-}
-
-// openRemoteProject mirrors path from host and makes it the open project.
+// openRemoteProject connects to host and opens path there as the project.
+// Files live on the host: the tree lists them and a file is read when it
+// opens, with no local copy of the project.
 func (a *app) openRemoteProject(host, remotePath string) error {
 	if !terminalsSupported() {
 		return fmt.Errorf("remote projects need macOS or Linux")
@@ -380,28 +348,24 @@ func (a *app) openRemoteProject(host, remotePath string) error {
 		}
 		return err
 	}
-	cache := a.remoteCacheDir(host, remotePath)
-	if err := a.downloadRemote(rc.client, remotePath, cache); err != nil {
-		return fail(err)
-	}
-	s, err := openStoreAt(cache)
+	s, err := openRemoteStore(rc.client, remotePath, a.remoteAssetCache(host, remotePath))
 	if err != nil {
 		return fail(err)
 	}
-	s.onSave = a.uploadRemoteNote
 	// Detach the old project's terminals while their server is still up,
 	// then make the new connection the open one.
 	a.closeTerminals()
 	a.adoptRemote(rc)
 	a.git.Open = false
-	a.git.Seq++
-	a.git.DiffSeq++
+	a.git.Reset()
+	a.fileClip = nil
+	a.fileClipRemote = false
+	a.fileCut = false
 	a.dropPickerRemote()
 	a.store = s
 	a.treeOpen = true
 	a.serverAlias = host
 	a.remotePath = remotePath
-	a.remoteCache = cache
 	a.layoutPath = a.projectLayoutPath("remote:" + host + ":" + remotePath)
 	a.rememberRemoteProject(remoteProject{Host: host, Path: remotePath})
 	a.tabs = nil
@@ -652,7 +616,6 @@ func (a *app) serverRow(c *ui.Context, k *colors, host, label string) {
 				a.closeRemote()
 				a.serverAlias = ""
 				a.remotePath = ""
-				a.remoteCache = ""
 				a.saveSettings()
 				if a.project != "" {
 					a.openProject(a.project)
@@ -712,53 +675,6 @@ func (a *app) remoteProjectRows(c *ui.Context, k *colors) {
 	}
 }
 
-// syncRemoteProject uploads the local mirror, except .git, and removes
-// files that were deleted locally. It is used after file operations; text
-// saves use the per-file hook instead.
-func (a *app) syncRemoteProject() {
-	if a.remote == nil || a.remote.client == nil || a.remotePath == "" || a.remoteCache == "" {
-		return
-	}
-	local := map[string]bool{}
-	err := filepath.WalkDir(a.remoteCache, func(p string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return nil
-		}
-		rel, err := filepath.Rel(a.remoteCache, p)
-		if err != nil || rel == ".git" || strings.HasPrefix(rel, ".git"+string(filepath.Separator)) {
-			return nil
-		}
-		rel = filepath.ToSlash(rel)
-		data, err := os.ReadFile(p)
-		if err != nil {
-			return nil
-		}
-		if err := a.remote.client.WriteFile(path.Join(a.remotePath, rel), data); err == nil {
-			local[rel] = true
-		}
-		return nil
-	})
-	if err != nil {
-		return
-	}
-	old := readRemoteManifest(a.remoteCache)
-	entries, err := a.remote.client.ListTree(a.remotePath)
-	if err != nil {
-		return
-	}
-	for _, e := range entries {
-		if e.Dir || local[e.Rel] || !old[e.Rel] || e.Rel == ".git" || strings.HasPrefix(e.Rel, ".git/") {
-			continue
-		}
-		_ = a.remote.client.Remove(path.Join(a.remotePath, e.Rel))
-	}
-	files := make([]string, 0, len(local))
-	for rel := range local {
-		files = append(files, rel)
-	}
-	writeRemoteManifest(a.remoteCache, files)
-}
-
 // hostConfig is a server the user added in Settings › Hosts. Address is
 // anything the system ssh accepts, such as buildbox, me@devbox or
 // ssh://me@devbox:2222 (the last is passed through as ssh accepts it).
@@ -797,18 +713,6 @@ func (a *app) addHost(name, address string) {
 		}
 	}
 	a.hosts = append(a.hosts, hostConfig{Name: name, Address: address})
-	a.saveSettings()
-	a.invalidate()
-}
-
-func (a *app) removeHost(address string) {
-	out := a.hosts[:0]
-	for _, h := range a.hosts {
-		if h.Address != address {
-			out = append(out, h)
-		}
-	}
-	a.hosts = out
 	a.saveSettings()
 	a.invalidate()
 }

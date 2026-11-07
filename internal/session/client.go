@@ -41,23 +41,75 @@ func ConnectAt(path string) (*Client, error) {
 }
 
 func connectAt(path string, spawn bool) (*Client, error) {
+	c, err := dialAt(path, spawn)
+	if err != nil {
+		return nil, err
+	}
+	h, helloErr := c.Hello()
+	if helloErr == nil && h.Version == ProtocolVersion {
+		return c, nil
+	}
+	// A detached server from an older build (or one whose hello failed)
+	// cannot be trusted with this build's protocol. A local server can be
+	// replaced; a remote one is left for its caller to restart.
+	if spawn {
+		// The old server may need a moment to release its lock and socket;
+		// ask it to stop and try a fresh one a few times.
+		for attempt := 0; attempt < 3; attempt++ {
+			_ = c.Shutdown()
+			_ = c.Close()
+			time.Sleep(100 * time.Millisecond)
+			next, err := dialAt(path, true)
+			if err != nil {
+				if attempt == 2 {
+					return nil, err
+				}
+				continue
+			}
+			h, helloErr := next.Hello()
+			if helloErr == nil && h.Version == ProtocolVersion {
+				return next, nil
+			}
+			c = next
+			if helloErr == nil {
+				helloErr = &ProtocolError{Server: h.Version, Client: ProtocolVersion}
+			}
+			if attempt == 2 {
+				_ = next.Close()
+				return nil, helloErr
+			}
+		}
+	}
+	_ = c.Close()
+	if helloErr != nil {
+		return nil, helloErr
+	}
+	return nil, &ProtocolError{Server: h.Version, Client: ProtocolVersion}
+}
+
+// dialAt connects, starting a local server first when spawn is set.
+func dialAt(path string, spawn bool) (*Client, error) {
 	conn, err := net.Dial("unix", path)
 	if err != nil && spawn {
-		if spawnErr := Spawn(); spawnErr != nil {
-			return nil, fmt.Errorf("session: starting the server: %w", spawnErr)
-		}
-		deadline := time.Now().Add(5 * time.Second)
+		deadline := time.Now().Add(8 * time.Second)
 		for {
-			time.Sleep(30 * time.Millisecond)
-			conn, err = net.Dial("unix", path)
-			if err == nil {
-				break
+			// An older server may still hold the lock while it exits: ask
+			// for another and keep trying, instead of failing on its
+			// "already runs" once.
+			_ = Spawn()
+			for i := 0; i < 10; i++ {
+				time.Sleep(30 * time.Millisecond)
+				conn, err = net.Dial("unix", path)
+				if err == nil {
+					goto connected
+				}
 			}
 			if time.Now().After(deadline) {
 				return nil, fmt.Errorf("session: connecting to the server: %w", err)
 			}
 		}
 	}
+connected:
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +127,7 @@ func (c *Client) Closed() <-chan struct{} { return c.closed }
 func (c *Client) read() {
 	r := bufio.NewReaderSize(c.conn, 1<<20)
 	for {
-		line, err := r.ReadBytes('\n')
+		line, err := readLine(r, maxLine)
 		if err != nil {
 			c.mu.Lock()
 			c.err = err
@@ -314,8 +366,18 @@ func (c *Client) Rename(from, to string) error {
 	return c.call(Request{Op: "rename", Path: from, To: to}, nil)
 }
 func (c *Client) Remove(path string) error { return c.call(Request{Op: "remove", Path: path}, nil) }
-func (c *Client) Archive(root string) (data []byte, err error) {
-	err = c.call(Request{Op: "archive", Path: root}, &data)
+func (c *Client) Stat(path string) (entry FileEntry, err error) {
+	err = c.call(Request{Op: "stat", Path: path}, &entry)
+	return
+}
+func (c *Client) Copy(from, to string) error {
+	return c.call(Request{Op: "copy", Path: from, To: to}, nil)
+}
+func (c *Client) Exec(dir string, args, env []string, timeout time.Duration) (res ExecResult, err error) {
+	err = c.call(Request{
+		Op: "exec", Dir: dir, Args: args, Env: env,
+		Timeout: int(timeout / time.Millisecond),
+	}, &res)
 	return
 }
 func (c *Client) ListDirs(path string) (out []FileEntry, err error) {

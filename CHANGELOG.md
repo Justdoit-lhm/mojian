@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- Remote projects now edit the host's files directly, like VS Code Remote:
+  the Explorer lists names and kinds, a file is read when it opens, saves
+  and file operations write straight back, and Git runs on the host. The
+  local mirror, its manifest and the full re-upload on every file operation
+  are gone; pictures and PDFs are fetched on demand.
+- A remote terminal ends with its SSH connection: the remote server is
+  transient and shuts down (taking its shells) shortly after the app
+  disconnects. Closing a terminal now signals the whole foreground process
+  group, so `npm run dev`, `ssh` and `vim` no longer survive the pane.
+- The session protocol is version 2, checked with `hello` on connect; a
+  stale local server is replaced, and a remote one is restarted with the
+  current binary, compared by SHA-256 rather than file size. Session
+  frames are bounded, remote writes keep file modes and fsync, and the
+  remote archive op is gone.
+- Git: rename diffs now pair the old and new paths instead of showing the
+  file as new; an untracked file is sized before it is read; refreshing the
+  page on focus no longer resets the diff scroll; `GIT_DIR` and friends are
+  stripped from the environment.
 - Motion runs on short, critically damped springs: page and tab switches
   and the tree reverse from where they are when the state changes again
   mid-flight, instead of restarting a curve. Tree rows glide when a folder

@@ -7,11 +7,14 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
+	"mojian/internal/filekind"
 	"mojian/internal/icons"
 	"mojian/internal/motion"
+	"mojian/internal/session"
 )
 
 const (
@@ -52,6 +55,10 @@ type treeDraft struct {
 // buildTree caches the project as a tree, so every frame reads what a
 // refresh left instead of the disk.
 func (s *store) buildTree() {
+	if s.remote != nil {
+		s.tree = s.remoteTree()
+		return
+	}
 	if s.memory {
 		root := &fileNode{Name: "Mojian", Dir: true}
 		for _, n := range s.sorted() {
@@ -80,7 +87,7 @@ func (s *store) readDirTree(dir, rel string) *fileNode {
 		name := e.Name()
 		childRel := filepath.Join(rel, name)
 		if e.IsDir() {
-			if skipDir(name) {
+			if filekind.SkipDir(name) {
 				continue
 			}
 			folders = append(folders, s.readDirTree(filepath.Join(dir, name), childRel))
@@ -115,6 +122,12 @@ func (s *store) dirPath(rel string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if s.remote != nil {
+		if !s.dirExists(rel) {
+			return "", fmt.Errorf("%s is not a folder", rel)
+		}
+		return p, nil
+	}
 	info, err := os.Stat(p)
 	if err != nil {
 		return "", err
@@ -126,6 +139,9 @@ func (s *store) dirPath(rel string) (string, error) {
 }
 
 func (s *store) dirExists(rel string) bool {
+	if s.remote != nil {
+		return s.existsRel(rel) && (rel == "" || s.dirs[rel])
+	}
 	_, err := s.dirPath(rel)
 	return err == nil
 }
@@ -133,6 +149,27 @@ func (s *store) dirExists(rel string) bool {
 // newFolder makes a folder in parent and returns its path within the
 // project. An existing name takes the next number.
 func (s *store) newFolder(parent, name string) (string, error) {
+	if s.remote != nil {
+		name = folderName(name)
+		for i := 1; i < 1000; i++ {
+			candidate := name
+			if i > 1 {
+				candidate = fmt.Sprintf("%s %d", name, i)
+			}
+			rel := filepath.Join(parent, candidate)
+			if s.existsRel(rel) {
+				continue
+			}
+			if err := s.mkdirRel(rel); err != nil {
+				return "", err
+			}
+			s.dirs[rel] = true
+			s.entries = append(s.entries, session.FileEntry{Rel: filepath.ToSlash(rel), Dir: true, Mod: time.Now()})
+			s.buildTree()
+			return rel, nil
+		}
+		return "", fmt.Errorf("too many folders named %q", name)
+	}
 	dir, err := s.dirPath(parent)
 	if err != nil {
 		return "", err

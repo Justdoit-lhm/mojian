@@ -199,11 +199,11 @@ func TestTerminalPaneAndSharedLimit(t *testing.T) {
 	if a.tab().Focus.Term == nil {
 		t.Fatal("the new terminal pane is not focused")
 	}
-	a.splitTerminal(a.tab().Focus)
+	a.splitTerminalSide(a.tab().Focus, splitRight)
 	if got := len(a.tab().panes()); got != 4 {
 		t.Fatalf("panes after fourth: %d", got)
 	}
-	a.splitTerminal(a.tab().Focus)
+	a.splitTerminalSide(a.tab().Focus, splitRight)
 	if got := len(a.tab().panes()); got != 5 {
 		t.Fatalf("panes after fifth: %d", got)
 	}

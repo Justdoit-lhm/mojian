@@ -4,16 +4,47 @@
 package session
 
 import (
+	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"os"
 	"path/filepath"
 	"time"
+
+	"mojian/internal/filekind"
 )
 
+// readLine reads one newline-terminated frame, refusing one longer than
+// max bytes, so a peer cannot make the server or the app allocate without
+// bound.
+func readLine(r *bufio.Reader, max int) ([]byte, error) {
+	var out []byte
+	for {
+		frag, err := r.ReadSlice('\n')
+		if len(out)+len(frag) > max {
+			return nil, errors.New("session: frame too long")
+		}
+		out = append(out, frag...)
+		if err == nil {
+			return out, nil
+		}
+		if err != bufio.ErrBufferFull {
+			return out, err
+		}
+	}
+}
+
 // ProtocolVersion changes when the wire protocol does.
-const ProtocolVersion = 1
+const ProtocolVersion = 2
+
+// ProtocolError says a running server speaks another protocol version.
+type ProtocolError struct{ Server, Client int }
+
+func (e *ProtocolError) Error() string {
+	return fmt.Sprintf("session: server protocol %d, app needs %d", e.Server, e.Client)
+}
 
 // Request is one line of a control connection.
 type Request struct {
@@ -26,6 +57,11 @@ type Request struct {
 	Path   string         `json:"path,omitempty"`
 	To     string         `json:"to,omitempty"`
 	Data   []byte         `json:"data,omitempty"`
+	Dir    string         `json:"dir,omitempty"`
+	Args   []string       `json:"args,omitempty"`
+	Env    []string       `json:"env,omitempty"`
+	// Timeout is how long a command may run, in milliseconds.
+	Timeout int `json:"timeout,omitempty"`
 }
 
 // Response answers a Request with the same ID.
@@ -60,10 +96,18 @@ type SessionInfo struct {
 // Hello is the answer to "hello".
 // FileEntry describes a path in a remote project.
 type FileEntry struct {
-	Rel  string    `json:"rel"`
-	Dir  bool      `json:"dir,omitempty"`
-	Size int64     `json:"size,omitempty"`
-	Mod  time.Time `json:"mod,omitempty"`
+	Rel  string        `json:"rel"`
+	Dir  bool          `json:"dir,omitempty"`
+	Size int64         `json:"size,omitempty"`
+	Mod  time.Time     `json:"mod,omitempty"`
+	Kind filekind.Kind `json:"kind,omitempty"`
+}
+
+// ExecResult is what a command run on the server left.
+type ExecResult struct {
+	Stdout string `json:"stdout,omitempty"`
+	Stderr string `json:"stderr,omitempty"`
+	Code   int    `json:"code,omitempty"`
 }
 
 type Hello struct {
@@ -93,16 +137,24 @@ func Dir() string {
 }
 
 // SocketPath returns the server's socket, short enough for a Unix path.
-func SocketPath() string {
-	p := filepath.Join(Dir(), "sessions.sock")
+func SocketPath() string { return SocketPathIn(Dir()) }
+
+// SocketPathIn returns the socket a server started with dir would bind,
+// so a forwarded socket and the server agree even when the path is long.
+func SocketPathIn(dir string, uid ...int) string {
+	p := filepath.Join(dir, "sessions.sock")
 	if len(p) < 100 {
 		return p
+	}
+	id := os.Getuid()
+	if len(uid) > 0 {
+		id = uid[0]
 	}
 	h := fnv.New32a()
 	h.Write([]byte(p))
 	name := fmt.Sprintf("mojian-%x.sock", h.Sum32())
-	if uid := os.Getuid(); uid >= 0 {
-		name = fmt.Sprintf("mojian-%d-%x.sock", uid, h.Sum32())
+	if id >= 0 {
+		name = fmt.Sprintf("mojian-%d-%x.sock", id, h.Sum32())
 	}
 	return filepath.Join(os.TempDir(), name)
 }

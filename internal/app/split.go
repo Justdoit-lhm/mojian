@@ -27,7 +27,7 @@ func (a *app) splitWith(n *note) {
 // splitWithSide opens n on the named side of the focused pane.
 func (a *app) splitWithSide(n *note, side splitSide) {
 	t := a.tab()
-	if t == nil || t.Focus == nil || n == nil {
+	if t == nil || t.Focus == nil || !a.loadNote(n) {
 		return
 	}
 	with := newPane(n)

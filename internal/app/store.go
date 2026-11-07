@@ -1,7 +1,6 @@
 package app
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -12,6 +11,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"mojian/internal/filekind"
+	"mojian/internal/session"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
@@ -27,6 +29,9 @@ type note struct {
 	Title string
 	Saved string // the text as last read or written
 	Mod   time.Time
+	// loaded reports whether Saved holds the file. A remote project lists
+	// its notes without their text and reads one the first time it opens.
+	loaded bool
 
 	buf *editor.Buffer
 }
@@ -39,16 +44,28 @@ type assetFile struct {
 	Name string
 	Size int64
 	Mod  time.Time
+	// local is where a remote picture or PDF was fetched for its viewer;
+	// empty for a local project, where Path is the file.
+	local string
 
 	once sync.Once
 	img  ui.ImageSource
 	err  error
 }
 
+// localPath is the file the viewer reads: the fetched copy for a remote
+// project, the project file otherwise.
+func (f *assetFile) localPath() string {
+	if f.local != "" {
+		return f.local
+	}
+	return f.Path
+}
+
 // image decodes the picture once, on the frame that first shows it.
 func (f *assetFile) image() (ui.ImageSource, error) {
 	f.once.Do(func() {
-		data, err := os.ReadFile(f.Path)
+		data, err := os.ReadFile(f.localPath())
 		if err != nil {
 			f.err = err
 			return
@@ -135,20 +152,22 @@ func noteTitle(body, path string) string {
 	return stem
 }
 
-// store is a project: the text files it holds, by path.
+// store is a project: the text files it holds, by path. A remote
+// project's bodies live on its host; the listing is cached here and a
+// note is read when it opens.
 type store struct {
 	dir    string
 	memory bool
-	notes  []*note
-	byPath map[string]*note
-	byRel  map[string]*note
-	seq    int
-	tree   *fileNode
-	assets map[string]*assetFile
-
-	// onSave, when set by a remote project, uploads a note after its
-	// local cache write.
-	onSave func(*note) error
+	remote *remoteFS
+	// entries and dirs are a remote project's last listing.
+	entries []session.FileEntry
+	dirs    map[string]bool
+	notes   []*note
+	byPath  map[string]*note
+	byRel   map[string]*note
+	seq     int
+	tree    *fileNode
+	assets  map[string]*assetFile
 }
 
 // openStore opens the folder at $MOJIAN_VAULT, else ~/Documents/Mojian,
@@ -157,8 +176,8 @@ type store struct {
 func openStore() (*store, error) {
 	if runtime.GOOS == "js" {
 		s := &store{memory: true, byPath: map[string]*note{}, byRel: map[string]*note{}, assets: map[string]*assetFile{}}
-		s.add(&note{Path: "Welcome.md", Title: "Welcome to Mojian", Saved: welcomeNote, Mod: time.Now()})
-		s.add(&note{Path: "Reading notes.md", Title: "Reading notes", Saved: sampleNote, Mod: time.Now().Add(-time.Minute)})
+		s.add(&note{Path: "Welcome.md", Title: "Welcome to Mojian", Saved: welcomeNote, Mod: time.Now(), loaded: true})
+		s.add(&note{Path: "Reading notes.md", Title: "Reading notes", Saved: sampleNote, Mod: time.Now().Add(-time.Minute), loaded: true})
 		s.buildTree()
 		return s, nil
 	}
@@ -175,8 +194,7 @@ func openStore() (*store, error) {
 		return nil, err
 	}
 	if len(s.notes) == 0 {
-		path := filepath.Join(s.dir, "Welcome.md")
-		if err := s.write(path, welcomeNote); err != nil {
+		if err := s.writeRel("Welcome.md", welcomeNote); err != nil {
 			return nil, err
 		}
 		if err := s.refresh(); err != nil {
@@ -215,6 +233,9 @@ func (s *store) refresh() error {
 		s.buildTree()
 		return nil
 	}
+	if s.remote != nil {
+		return s.refreshRemote()
+	}
 	seen := make(map[string]bool, len(s.notes))
 	previousAssets := s.assets
 	assets := map[string]*assetFile{}
@@ -223,7 +244,7 @@ func (s *store) refresh() error {
 			return nil // an unreadable folder is skipped, not fatal
 		}
 		if d.IsDir() {
-			if path != s.dir && skipDir(d.Name()) {
+			if path != s.dir && filekind.SkipDir(d.Name()) {
 				return fs.SkipDir
 			}
 			return nil
@@ -265,9 +286,10 @@ func (s *store) refresh() error {
 			return nil
 		}
 		n := &note{
-			Path:  path,
-			Saved: string(data),
-			Mod:   info.ModTime(),
+			Path:   path,
+			Saved:  string(data),
+			Mod:    info.ModTime(),
+			loaded: true,
 		}
 		n.Title = noteTitle(n.Saved, path)
 		s.add(n)
@@ -294,18 +316,6 @@ func (s *store) refresh() error {
 	return nil
 }
 
-// skipDir keeps generated trees and version control out of the vault
-// view; a code project's own sources still show.
-func skipDir(name string) bool {
-	switch name {
-	case ".git", ".svn", ".hg", "node_modules", "__pycache__", ".venv", "venv",
-		"dist", "build", ".next", ".cache", ".turbo", "target", "vendor",
-		".idea", ".gradle", "Pods", "DerivedData":
-		return true
-	}
-	return false
-}
-
 // isMarkdownPath reports whether a file is Markdown: prose, with soft
 // wrap, rather than source code.
 func isMarkdownPath(path string) bool {
@@ -313,35 +323,7 @@ func isMarkdownPath(path string) bool {
 	return l != nil && l.Name == "Markdown"
 }
 
-// textExts are text files MyGo has no highlighter for, or the editor
-// shows as plain text.
-var textExts = map[string]bool{
-	".txt": true, ".text": true, ".log": true, ".csv": true, ".tsv": true,
-	".rst": true, ".org": true, ".tex": true, ".bib": true, ".nfo": true,
-}
-
-// binaryExts are never read as text, even if a prefix could pass.
-var binaryExts = map[string]bool{
-	".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true,
-	".ico": true, ".icns": true, ".pdf": true, ".zip": true, ".gz": true,
-	".tar": true, ".7z": true, ".rar": true, ".dmg": true, ".app": true,
-	".mp3": true, ".mp4": true, ".mov": true, ".woff": true, ".woff2": true,
-	".ttf": true, ".otf": true, ".exe": true, ".dylib": true, ".so": true,
-	".a": true, ".o": true, ".class": true, ".jar": true, ".wasm": true,
-	".sqlite": true, ".db": true,
-}
-
-// viewableAssetExts are the files the viewer shows: pictures MyGo can
-// decode, and PDFs it previews through the system.
-var viewableAssetExts = map[string]bool{
-	".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true,
-	".bmp": true, ".tif": true, ".tiff": true, ".ico": true, ".svg": true,
-	".pdf": true,
-}
-
-func isViewableAsset(path string) bool {
-	return viewableAssetExts[strings.ToLower(filepath.Ext(path))]
-}
+func isViewableAsset(path string) bool { return filekind.IsAsset(path) }
 
 func (s *store) assetByRel(rel string) *assetFile {
 	if s == nil {
@@ -354,40 +336,8 @@ func (s *store) assetByRel(rel string) *assetFile {
 // language MyGo highlights, a plain text kind, or a file whose start
 // looks like text.
 func isTextFile(path string) bool {
-	ext := strings.ToLower(filepath.Ext(path))
-	if binaryExts[ext] {
-		return false
-	}
-	if editor.LanguageFor(path) != nil || textExts[ext] {
-		return true
-	}
-	return looksText(path)
-}
-
-// looksText reads the start of a file for the signs of text: no NUL
-// bytes, and few control characters.
-func looksText(path string) bool {
-	f, err := os.Open(path)
-	if err != nil {
-		return false
-	}
-	defer f.Close()
-	prefix := make([]byte, 8192)
-	n, _ := f.Read(prefix)
-	prefix = prefix[:n]
-	if len(prefix) == 0 {
-		return true
-	}
-	if bytes.IndexByte(prefix, 0) >= 0 {
-		return false
-	}
-	controls := 0
-	for _, b := range prefix {
-		if b < 0x09 || b > 0x0d && b < 0x20 {
-			controls++
-		}
-	}
-	return controls*100 < len(prefix)
+	kind, err := filekind.ClassifyFile(path)
+	return err == nil && kind == filekind.Text
 }
 
 func (s *store) add(n *note) {
@@ -395,7 +345,9 @@ func (s *store) add(n *note) {
 		s.seq++
 		n.Path = fmt.Sprintf("Untitled %d.md", s.seq)
 	}
-	n.Rel = relPath(s.dir, n.Path)
+	if n.Rel == "" {
+		n.Rel = relPath(s.dir, n.Path)
+	}
 	s.notes = append(s.notes, n)
 	s.byPath[n.Path] = n
 	s.byRel[n.Rel] = n
@@ -424,6 +376,24 @@ func (s *store) newNoteIn(rel string) (*note, error) {
 // newFileIn writes a text file with the given name and body in the folder
 // rel, or at the root for an empty rel. It returns the loaded note.
 func (s *store) newFileIn(rel, name, body string) (*note, error) {
+	if s.remote != nil {
+		name = fileName(name, "untitled.txt")
+		rel = uniqueRel(s, rel, name)
+		if err := s.writeRel(rel, body); err != nil {
+			return nil, err
+		}
+		n := &note{
+			Rel: rel, Path: s.remote.abs(rel), Title: noteTitle(body, rel),
+			Saved: body, Mod: time.Now(), loaded: true,
+		}
+		s.entries = append(s.entries, session.FileEntry{
+			Rel: filepath.ToSlash(rel), Size: int64(len(body)),
+			Mod: n.Mod, Kind: filekind.Text,
+		})
+		s.add(n)
+		s.buildTree()
+		return n, nil
+	}
 	dir := s.dir
 	if s.memory {
 		rel = ""
@@ -453,10 +423,26 @@ func (s *store) newFileIn(rel, name, body string) (*note, error) {
 			return nil, err
 		}
 	}
-	n := &note{Path: path, Title: noteTitle(body, path), Saved: body, Mod: time.Now()}
+	n := &note{Path: path, Title: noteTitle(body, path), Saved: body, Mod: time.Now(), loaded: true}
 	s.add(n)
 	s.buildTree()
 	return n, nil
+}
+
+// uniqueRel returns folder/name, numbered before its extension when the
+// name is taken in a remote project.
+func uniqueRel(s *store, folder, name string) string {
+	rel := filepath.Join(folder, name)
+	if !s.existsRel(rel) {
+		return rel
+	}
+	stem, ext := splitExt(name)
+	for i := 2; ; i++ {
+		rel = filepath.Join(folder, fmt.Sprintf("%s %d%s", stem, i, ext))
+		if !s.existsRel(rel) {
+			return rel
+		}
+	}
 }
 
 // splitExt separates a file name's extension for a numbered sibling.
@@ -503,13 +489,8 @@ func (s *store) save(n *note) error {
 	if body == n.Saved {
 		return nil
 	}
-	if err := s.write(n.Path, body); err != nil {
+	if err := s.writeRel(n.Rel, body); err != nil {
 		return err
-	}
-	if s.onSave != nil {
-		if err := s.onSave(n); err != nil {
-			return err
-		}
 	}
 	n.Saved = body
 	n.Title = noteTitle(body, n.Path)
@@ -534,26 +515,12 @@ func (s *store) saveAll() error {
 	return first
 }
 
+// write replaces a local file atomically.
 func (s *store) write(path, body string) error {
 	if s.memory {
 		return nil
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, []byte(body), 0o644); err != nil {
-		return err
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		// Windows will not rename over an existing file.
-		if removeErr := os.Remove(path); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
-			os.Remove(tmp)
-			return err
-		}
-		if err := os.Rename(tmp, path); err != nil {
-			os.Remove(tmp)
-			return err
-		}
-	}
-	return nil
+	return writeFileAtomic(path, []byte(body))
 }
 
 // sorted returns the notes, most recently touched first.
@@ -580,20 +547,6 @@ func (s *store) byRelPath(rel string) *note {
 		return s.byPath[filepath.Join(s.dir, rel)]
 	}
 	return nil
-}
-
-// displayDir is the vault's path as the title bar shows it.
-func (s *store) displayDir() string {
-	if s.memory {
-		return "in memory"
-	}
-	home, err := os.UserHomeDir()
-	if err == nil {
-		if rest, ok := strings.CutPrefix(s.dir, home); ok {
-			return "~" + rest
-		}
-	}
-	return s.dir
 }
 
 const welcomeNoteText = `# Welcome to Mojian

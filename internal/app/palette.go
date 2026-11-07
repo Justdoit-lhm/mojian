@@ -17,7 +17,6 @@ type command struct {
 	// the icon of its row.
 	accel, keys, glyph string
 	run                func(*app)
-	hidden             bool
 }
 
 var (

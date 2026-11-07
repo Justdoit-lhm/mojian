@@ -85,12 +85,6 @@ func (a *app) toggleTerminal() {
 	a.newTerminalPane()
 }
 
-// splitFocused splits the focused pane: a terminal makes another shell,
-// a file asks which file the new editor should show.
-func (a *app) splitFocused() {
-	a.splitFocusedSide(splitRight)
-}
-
 // splitFocusedSide splits the focused pane to either side.
 func (a *app) splitFocusedSide(side splitSide) {
 	t := a.tab()
@@ -104,12 +98,6 @@ func (a *app) splitFocusedSide(side splitSide) {
 	a.emptyPaneSide(side)
 }
 
-// splitTerminal starts another shell beside the terminal pane that asked
-// for the split.
-func (a *app) splitTerminal(from *pane) {
-	a.splitTerminalSide(from, splitRight)
-}
-
 func (a *app) splitTerminalSide(from *pane, side splitSide) {
 	t := a.tab()
 	if t == nil || from == nil || from.Term == nil || !t.contains(from) {
@@ -121,12 +109,6 @@ func (a *app) splitTerminalSide(from *pane, side splitSide) {
 		return
 	}
 	a.addSplitTerminalSide(from, tt, side)
-}
-
-// addSplitTerminal inserts an already started shell beside a terminal
-// pane. Tests use it without starting a process.
-func (a *app) addSplitTerminal(from *pane, tt *termTab) *pane {
-	return a.addSplitTerminalSide(from, tt, splitRight)
 }
 
 func (a *app) addSplitTerminalSide(from *pane, tt *termTab, side splitSide) *pane {

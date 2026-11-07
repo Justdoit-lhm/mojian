@@ -38,6 +38,16 @@ func TestStreamUsesTheClientsSocket(t *testing.T) {
 			return
 		}
 		defer control.Close()
+		// ConnectAt says hello; a server answers before the test goes on.
+		rd := bufio.NewReader(control)
+		if line, err := rd.ReadBytes('\n'); err == nil {
+			var req Request
+			if json.Unmarshal(line, &req) == nil {
+				data, _ := json.Marshal(Hello{Version: ProtocolVersion})
+				res, _ := json.Marshal(Response{ID: req.ID, Data: data})
+				_, _ = control.Write(append(res, '\n'))
+			}
+		}
 		close(controlAccepted)
 		stream, err := ln.Accept()
 		if err != nil {

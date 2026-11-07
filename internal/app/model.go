@@ -643,13 +643,13 @@ func (a *app) restorePane(lp layoutPane, byID map[string]*pane) *pane {
 		p.Term = newTermPaneSpec(termSpec{Host: lp.Terminal.Host}, lp.Terminal.SID)
 	case lp.Note != "":
 		n := a.store.byRelPath(lp.Note)
-		if n == nil {
+		if n == nil || !a.loadNote(n) {
 			return nil
 		}
 		p.Note = n
 	case lp.Asset != "":
 		f := a.store.assetByRel(lp.Asset)
-		if f == nil {
+		if f == nil || !a.loadAsset(f) {
 			return nil
 		}
 		p.Asset = f

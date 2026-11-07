@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,13 +27,44 @@ const headerH = 33
 
 type Change struct {
 	Path    string // relative to the repository root, for git
+	OldPath string // where a rename or copy came from, for git
 	Display string // relative to the project, for people
 	Status  string // M, A, D, R, U, C
+}
+
+// Runner runs Git and reads files where the project lives: locally, or
+// on an SSH host through the session server.
+type Runner interface {
+	Run(dir string, args ...string) (stdout string, err error)
+	// ReadFile reads at most limit bytes of rel under dir; more than
+	// limit means the caller should treat the file as too large. The
+	// returned slice may hold limit+1 bytes to say so.
+	ReadFile(dir, rel string, limit int) ([]byte, error)
+	// RealPath resolves symlinks where the project lives. A remote path
+	// must be resolved on its host, not here.
+	RealPath(path string) (string, error)
+}
+
+// LocalRunner runs Git in the local project.
+type LocalRunner struct{}
+
+func (LocalRunner) Run(dir string, args ...string) (string, error) { return runGit(dir, args...) }
+
+func (LocalRunner) RealPath(path string) (string, error) { return filepath.EvalSymlinks(path) }
+
+func (LocalRunner) ReadFile(dir, rel string, limit int) ([]byte, error) {
+	f, err := os.Open(filepath.Join(dir, filepath.FromSlash(rel)))
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return io.ReadAll(io.LimitReader(f, int64(limit)+1))
 }
 
 // Host is what the page needs from the window around it.
 type Host interface {
 	ProjectDir() (string, bool)
+	GitRunner() Runner
 	Window() *mygo.Window
 	Invalidate()
 	Fail(error)
@@ -59,7 +91,8 @@ type Page struct {
 	DiffSeq    int
 	DiffScroll ui.ScrollState
 
-	h Host
+	h      Host
+	runner Runner
 }
 
 type StatusData struct {
@@ -72,6 +105,7 @@ type StatusData struct {
 
 func (p *Page) Toggle(h Host) {
 	p.h = h
+	p.runner = h.GitRunner()
 	if p.Open {
 		p.Open = false
 		h.Invalidate()
@@ -97,18 +131,19 @@ func (p *Page) Refresh() {
 	if !hasProject(h) {
 		return
 	}
+	p.runner = h.GitRunner()
 	p.Loading = true
 	p.Err = ""
 	p.Seq++
 	seq := p.Seq
 	root := mustDir(h)
 	if h.Window() == nil {
-		p.applyStatus(seq, ReadStatus(root))
+		p.applyStatus(seq, ReadStatus(p.runner, root))
 		return
 	}
 	win := h.Window()
 	go func() {
-		data := ReadStatus(root)
+		data := ReadStatus(p.runner, root)
 		win.Update(func() {
 			if seq == p.Seq {
 				p.applyStatus(seq, data)
@@ -134,8 +169,24 @@ func (p *Page) applyStatus(seq int, data StatusData) {
 		p.DiffPath = ""
 		return
 	}
-	p.Sel = min(max(p.Sel, 0), len(data.Changes)-1)
-	p.loadDiff(p.Sel)
+	sel := min(max(p.Sel, 0), len(data.Changes)-1)
+	if sel != p.Sel || p.DiffPath != data.Changes[sel].Display ||
+		p.Diff == "" && p.DiffErr == "" && !p.DiffLoad {
+		p.Sel = sel
+		p.loadDiff(sel)
+		return
+	}
+	p.Sel = sel
+}
+
+// Reset drops the page's in-flight reads, for a project switch.
+func (p *Page) Reset() {
+	p.Loading = false
+	p.DiffLoad = false
+	p.Err = ""
+	p.DiffErr = ""
+	p.Seq++
+	p.DiffSeq++
 }
 
 func (p *Page) Select(i int) {
@@ -163,13 +214,13 @@ func (p *Page) loadDiff(i int) {
 	seq := p.DiffSeq
 	root := p.Root
 	if h.Window() == nil {
-		diff, err := ReadDiff(root, change)
+		diff, err := ReadDiff(p.runner, root, change)
 		p.applyDiff(seq, diff, err)
 		return
 	}
 	win := h.Window()
 	go func() {
-		diff, err := ReadDiff(root, change)
+		diff, err := ReadDiff(p.runner, root, change)
 		win.Update(func() {
 			if seq == p.DiffSeq {
 				p.applyDiff(seq, diff, err)
@@ -192,12 +243,15 @@ func (p *Page) applyDiff(seq int, diff string, err error) {
 
 // ReadStatus reads the repository's branch and changed files under
 // the project.
-func ReadStatus(project string) StatusData {
-	if resolved, err := filepath.EvalSymlinks(project); err == nil {
+func ReadStatus(r Runner, project string) StatusData {
+	if r == nil {
+		r = LocalRunner{}
+	}
+	if resolved, err := r.RealPath(project); err == nil && resolved != "" {
 		project = resolved
 	}
 	d := StatusData{Root: project}
-	out, err := runGit(project, "rev-parse", "--show-toplevel")
+	out, err := r.Run(project, "rev-parse", "--show-toplevel")
 	if err != nil {
 		d.Err = "This folder is not a Git repository."
 		return d
@@ -206,9 +260,9 @@ func ReadStatus(project string) StatusData {
 	if r, err := filepath.Rel(d.Root, project); err == nil && r != "." && r != "" {
 		d.Prefix = filepath.ToSlash(r)
 	}
-	if branch, err := runGit(d.Root, "rev-parse", "--abbrev-ref", "HEAD"); err == nil {
+	if branch, err := r.Run(d.Root, "rev-parse", "--abbrev-ref", "HEAD"); err == nil {
 		d.Branch = strings.TrimSpace(branch)
-	} else if branch, err := runGit(d.Root, "symbolic-ref", "--short", "HEAD"); err == nil {
+	} else if branch, err := r.Run(d.Root, "symbolic-ref", "--short", "HEAD"); err == nil {
 		d.Branch = strings.TrimSpace(branch)
 	}
 	if d.Branch == "" || d.Branch == "HEAD" {
@@ -218,7 +272,7 @@ func ReadStatus(project string) StatusData {
 	if d.Prefix != "" {
 		pathspec = d.Prefix
 	}
-	status, err := runGit(d.Root, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--", pathspec)
+	status, err := r.Run(d.Root, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--", pathspec)
 	if err != nil {
 		d.Err = err.Error()
 		return d
@@ -238,8 +292,14 @@ func parseStatus(out, prefix string) []Change {
 		}
 		code := entry[:2]
 		path := entry[3:]
+		oldPath := ""
 		if code[0] == 'R' || code[0] == 'C' {
-			i++ // the old path follows
+			// The old path follows: keep it so git can pair the rename
+			// instead of reporting the whole file as new.
+			if i+1 < len(parts) {
+				oldPath = parts[i+1]
+			}
+			i++
 		}
 		rootPath := path
 		display := path
@@ -253,6 +313,7 @@ func parseStatus(out, prefix string) []Change {
 		status := statusLetter(code)
 		changes = append(changes, Change{
 			Path:    rootPath,
+			OldPath: oldPath,
 			Display: display,
 			Status:  status,
 		})
@@ -288,22 +349,29 @@ func statusLetter(code string) string {
 
 // ReadDiff reads one file's diff against HEAD, including staged and
 // unstaged work. Untracked files are shown as additions.
-func ReadDiff(root string, c Change) (string, error) {
+func ReadDiff(r Runner, root string, c Change) (string, error) {
+	if r == nil {
+		r = LocalRunner{}
+	}
 	path := c.Path
 	if c.Status == "U" {
-		return untrackedDiff(root, path, c.Display)
+		return untrackedDiff(r, root, path, c.Display)
 	}
-	out, err := runGit(root, "diff", "--no-color", "--no-ext-diff", "HEAD", "--", path)
+	paths := []string{path}
+	if c.OldPath != "" && c.OldPath != path {
+		paths = append([]string{c.OldPath}, paths...)
+	}
+	out, err := r.Run(root, append([]string{"diff", "--no-color", "--no-ext-diff", "HEAD", "--"}, paths...)...)
 	if err != nil && (strings.Contains(err.Error(), "unknown revision") ||
 		strings.Contains(err.Error(), "bad revision") ||
 		strings.Contains(err.Error(), "ambiguous argument")) {
-		out, err = runGit(root, "diff", "--no-color", "--no-ext-diff", "--cached", "--", path)
+		out, err = r.Run(root, append([]string{"diff", "--no-color", "--no-ext-diff", "--cached", "--"}, paths...)...)
 	}
 	if err != nil {
 		return "", err
 	}
 	if strings.TrimSpace(out) == "" {
-		out, err = runGit(root, "diff", "--no-color", "--no-ext-diff", "--cached", "--", path)
+		out, err = r.Run(root, append([]string{"diff", "--no-color", "--no-ext-diff", "--cached", "--"}, paths...)...)
 		if err != nil {
 			return "", err
 		}
@@ -312,17 +380,19 @@ func ReadDiff(root string, c Change) (string, error) {
 }
 
 // untrackedDiff makes a new-file diff for a file Git does not track.
-func untrackedDiff(root, path, display string) (string, error) {
-	abs := filepath.Join(root, filepath.FromSlash(path))
-	data, err := os.ReadFile(abs)
+func untrackedDiff(r Runner, root, path, display string) (string, error) {
+	data, err := r.ReadFile(root, path, 512*1024)
 	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "is a directory") {
+			return "This is a folder Git does not track.\n", nil
+		}
 		return "", err
-	}
-	if bytes.IndexByte(data, 0) >= 0 {
-		return "Binary file not shown.\n", nil
 	}
 	if len(data) > 512*1024 {
 		return "File is too large to show here.\n", nil
+	}
+	if bytes.IndexByte(data, 0) >= 0 {
+		return "Binary file not shown.\n", nil
 	}
 	text := strings.ReplaceAll(string(data), "\r\n", "\n")
 	lines := strings.Split(text, "\n")
@@ -345,8 +415,7 @@ func runGit(dir string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
-	cmd.Env = append(os.Environ(),
-		"GIT_PAGER=cat", "GIT_TERMINAL_PROMPT=0", "LC_ALL=C")
+	cmd.Env = append(gitEnv(), "GIT_PAGER=cat", "GIT_TERMINAL_PROMPT=0", "LC_ALL=C")
 	var out, errb cappedBuffer
 	out.limit = 2 << 20
 	errb.limit = 64 << 10
@@ -364,6 +433,24 @@ func runGit(dir string, args ...string) (string, error) {
 		return out.String(), errors.New(msg)
 	}
 	return out.String(), nil
+}
+
+// gitEnv is the inherited environment without the variables a shell
+// could set to point Git at another repository.
+func gitEnv() []string {
+	drop := map[string]bool{
+		"GIT_DIR": true, "GIT_WORK_TREE": true, "GIT_INDEX_FILE": true,
+		"GIT_OBJECT_DIRECTORY": true, "GIT_ALTERNATE_OBJECT_DIRECTORIES": true,
+		"GIT_COMMON_DIR": true,
+	}
+	out := make([]string, 0, len(os.Environ()))
+	for _, kv := range os.Environ() {
+		if i := strings.IndexByte(kv, '='); i > 0 && drop[kv[:i]] {
+			continue
+		}
+		out = append(out, kv)
+	}
+	return out
 }
 
 type cappedBuffer struct {
