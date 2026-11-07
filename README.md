@@ -120,8 +120,9 @@ insert it there, or use `Option+Shift` / `Alt+Shift` and the arrows.
 `Ctrl+Shift+M` on Linux and Windows zooms the focused pane.
 
 `Shift+Cmd+B` / `Ctrl+Shift+B` toggles the Explorer. Its search field
-filters files, and **Open File** (`Shift+Cmd+O` / `Ctrl+Shift+O`) opens the
-Explorer with that field focused. The Explorer creates files and folders;
+filters files, and **Open File** (`Shift+Cmd+O` / `Ctrl+Shift+O`) opens a
+picker over every file in the project: type to filter, then press Enter or
+click a file to open it in the active tab. The Explorer creates files and folders;
 right-click offers open, rename, duplicate, copy, cut, copy path, reveal
 and move to trash; folders and empty space accept paste. Generated trees
 such as `.git`, `node_modules`, `dist` and `build` stay out of sight.

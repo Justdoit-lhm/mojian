@@ -41,7 +41,7 @@ Frame conventions that keep this correct:
 | `internal/theme/` | Light/dark `Colors`, `Radius`, background painting, editor theme, font registration. |
 | `internal/icons/` | Lucide action icons and Material Icon Theme file icons, cached from embedded SVG. |
 | `internal/assets/` | `embed.FS` of icons, brand marks and JetBrains Mono. |
-| `internal/motion/` | `ui.ElementTransition` values (`Page`, `Tab`, `Tree`). |
+| `internal/motion/` | `ui.ElementTransition` values (`Page`, `Tab`, `Tree`, `Row`, `Pane`, `Colors`), springs for interruptible changes. |
 | `internal/remotebin/` | Embedded Linux `mojian-server` binaries and libghostty `.so` files (generated). |
 | `test/` | Black-box integration tests (`package integration`, import path `mojian/test`). |
 | `tools/build-remote.sh` | Cross-compiles the remote server into `internal/remotebin`. |
@@ -72,7 +72,7 @@ sh tools/build-remote.sh  # rebuild embedded Linux servers (needed after server/
 - **Concurrency.** Mutate `app` state only on the UI thread. Views must not start goroutines or keep elements/parts — store `ui.Handle`, app data and widget state instead. Give stateful widgets stable identity with `c.Key(key)` before construction; bind persistent fields with `.Bind(&handle)` / `.FocusBind(&field, value)`; read committed focus via `handle.Focused(c)`.
 - **Deferred input.** Bound values update after construction; `OnClick`/`OnShortcut` run after construction, `OnChange`/`OnSubmit` observe the rebuilt view. Prefer `handle.OnShortcut(c, mods, key, fn)` for scoped commands.
 - **Writes.** Anything user-visible on disk goes through `writeFileAtomic`; never write in place.
-- **Motion.** Use `internal/motion` transitions and short durations; MyGo keeps the fade and drops movement when the system asks for less motion.
+- **Motion.** Use `internal/motion` transitions: critically damped springs for pages, tabs, the tree and panes so a change mid-flight reverses instead of restarting, matched geometry for a pane the layout moves, and a short color curve for hover. A new pane fades and slides in with `AnimateTo` because its split is new too; terminals skip the size match so their grid does not reflow. MyGo keeps the fade and drops movement when the system asks for less motion.
 - **Formatting.** `gofmt` clean, stdlib import block first. Long fluent UI chains go one call per line. Comments are prose sentences explaining why, and cite the reference product (Kero, GoRex, Ghostty) when a design follows one.
 - **Platform split.** Real implementations carry `//go:build darwin || linux`; stubs in `*_other.go` return `errUnsupported`. Browser builds are guarded with `runtime.GOOS == "js"`.
 

@@ -27,6 +27,7 @@ func (a *app) openProjectPicker() {
 	}
 	a.projectOpen = false
 	a.paletteOpen = false
+	a.quickOpen = false
 	a.projectPicker = true
 	a.pickerSel = -1
 	a.pickerErr = ""

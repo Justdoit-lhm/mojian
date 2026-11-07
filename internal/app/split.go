@@ -1,5 +1,23 @@
 package app
 
+// enterSide points a new pane's entrance away from where it lands, so it
+// slides in from the edge of the split: a pane on the right starts to the
+// right and slides left into place.
+func (p *pane) enterSide(side splitSide) {
+	const d = float32(28)
+	p.enter = true
+	switch side {
+	case splitLeft:
+		p.enterX = -d
+	case splitRight:
+		p.enterX = d
+	case splitUp:
+		p.enterY = -d
+	case splitDown:
+		p.enterY = d
+	}
+}
+
 // splitWith opens n in a new pane; tests and direct callers that have
 // already chosen a file use it.
 func (a *app) splitWith(n *note) {
@@ -13,6 +31,7 @@ func (a *app) splitWithSide(n *note, side splitSide) {
 		return
 	}
 	with := newPane(n)
+	with.enterSide(side)
 	if !t.splitSide(t.Focus, with, side) {
 		return
 	}
@@ -31,6 +50,7 @@ func (a *app) emptyPaneSide(side splitSide) {
 		return
 	}
 	with := &pane{ID: nextID("p")}
+	with.enterSide(side)
 	if !t.splitSide(t.Focus, with, side) {
 		return
 	}

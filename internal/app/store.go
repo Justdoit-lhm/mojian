@@ -606,7 +606,7 @@ Mojian is a quiet text editor for plain files, built with [MyGo](https://mygo.eg
 - **⇧⌘B** shows the file tree.
 - **⌘N** names a new file; **⇧⌘N** makes a folder.
 - **⇧⌘D** splits the editor, so you can work in two places at once.
-- **⇧⌘O** searches the files of the project.
+- **⇧⌘O** opens any file of the project.
 - **⇧⌘T** opens a terminal on the right, in the folder you are in.
 - **⇧⌘P** opens the command palette.
 

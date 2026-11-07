@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- Motion runs on short, critically damped springs: page and tab switches
+  and the tree reverse from where they are when the state changes again
+  mid-flight, instead of restarting a curve. Tree rows glide when a folder
+  opens or closes, and the folder's children fold instead of letting the
+  rows below jump. Hover colors share one 120 ms curve.
+- Opening a pane or a terminal fades and slides the new card in from the
+  edge of its split, while the pane it splits glides to its new width; a
+  pane the layout moves into another split, or back to full width when one
+  closes, follows from where it showed. Terminals skip the size animation,
+  so their grid is not reflowed at every width on the way.
+- **Open File** now opens a file picker over the window instead of
+  focusing the Explorer's search field. Every file of the project is
+  listed, typing filters them, and Enter or a click opens one in the
+  active tab. This fixes the welcome page's row, which did nothing visible
+  when the Explorer was already open.
+
 ## 0.1.2
 
 - Settings › Updates now has **Check for Updates**, **Install Update** and

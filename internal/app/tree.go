@@ -307,16 +307,6 @@ func (a *app) toggleTree() {
 	a.invalidate()
 }
 
-// openTreeSearch shows the tree with the search field focused.
-func (a *app) openTreeSearch() {
-	a.paletteOpen = false
-	a.treeOpen = true
-	a.treeQuery = ""
-	a.refreshProject()
-	a.later(func() { a.treeSearch.Focus() })
-	a.invalidate()
-}
-
 // revealInTree opens the folders of n and selects its row.
 func (a *app) revealInTree(n *note) {
 	if n == nil {
@@ -444,7 +434,8 @@ func (a *app) treeFolder(c *ui.Context, k *colors, n *fileNode, depth int) {
 			PaddingStart(5 + float32(depth)*13).PaddingEnd(6).Gap(5).Radius(radius).
 			AlignItems(ui.Center).Cursor(ui.CursorPointer).Role(ui.RoleTreeItem).
 			Focusable().FocusRing(false).Label(n.Name).ClipX().
-			PopoverMenu(func(m *ui.Menu) { a.nodeMenu(m, n.Rel, true) })
+			PopoverMenu(func(m *ui.Menu) { a.nodeMenu(m, n.Rel, true) }).
+			Transition(motion.Row)
 		if n.Rel == a.treeSel {
 			row.Background(k.PanelSel)
 		} else if row.Hovered() {
@@ -471,7 +462,7 @@ func (a *app) treeFolder(c *ui.Context, k *colors, n *fileNode, depth int) {
 	if !open {
 		return
 	}
-	ui.Column(c.Key("kids:" + n.Rel)).Transition(motion.Tree).Children(func() {
+	ui.Column(c.Key("kids:" + n.Rel)).Transition(motion.Tree(c.Preferences().ReduceMotion)).Children(func() {
 		a.treeChildren(c, k, n, depth+1)
 	})
 }
@@ -496,7 +487,8 @@ func (a *app) treeFile(c *ui.Context, k *colors, n *fileNode, depth int) {
 		AlignItems(ui.Center).Cursor(ui.CursorPointer).Role(ui.RoleTreeItem).
 		Focusable().FocusRing(false).Label(title).
 		Tooltip(title + " — " + n.Rel).ClipX().
-		PopoverMenu(func(m *ui.Menu) { a.nodeMenu(m, n.Rel, false) })
+		PopoverMenu(func(m *ui.Menu) { a.nodeMenu(m, n.Rel, false) }).
+		Transition(motion.Row)
 	if n.Rel == a.treeSel {
 		row.Background(k.PanelSel)
 	} else if n.Note != nil && a.currentNote() == n.Note {

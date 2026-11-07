@@ -4,7 +4,6 @@ import (
 	"runtime"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/ui"
@@ -46,6 +45,7 @@ func (a *app) view(c *ui.Context) {
 	a.remotePickerModal(c, k)
 	a.sshPicker(c, k)
 	a.palette(c, k)
+	a.quickOpenModal(c, k)
 	a.shortcuts(c)
 	a.persistLayout(c)
 	a.updateTitle()
@@ -155,7 +155,7 @@ func iconButton(c *ui.Context, k *colors, name, label string, size, iconSize flo
 	} else if b.Hovered() {
 		b.Background(k.Hover)
 	}
-	b.Transition(ui.ElementTransition{Colors: true, Duration: 120 * time.Millisecond})
+	b.Transition(motion.Colors)
 	col := k.IconMuted
 	if b.Hovered() {
 		col = k.Text
@@ -210,6 +210,30 @@ func (a *app) nodeView(c *ui.Context, k *colors, t *tab, n *node) ui.Element {
 func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 	focused := t.Focus == p
 	card := ui.Column(c.Key(p.ID)).Radius(radius).Clip().MinWidth(0).MinHeight(0)
+	// A pane moved into another split comes from where it showed; its
+	// colors follow focus. Terminals skip the match so their grid is not
+	// laid out at every width on the way.
+	tr := motion.Pane
+	if p.Term == nil {
+		tr.Match = p.ID
+	}
+	card.Transition(tr)
+	if p.enter {
+		// The split is new with the pane, so no Enter can run: start at
+		// the split's edge, transparent, and animate both here.
+		card.Jump("enter-alpha", 0)
+		card.Jump("enter-x", p.enterX)
+		card.Jump("enter-y", p.enterY)
+		p.enter = false
+	}
+	ex := card.AnimateTo("enter-x", 0, motion.PaneSlide)
+	ey := card.AnimateTo("enter-y", 0, motion.PaneSlide)
+	if ex != 0 || ey != 0 {
+		card.Translate(ex, ey)
+	}
+	if o := card.AnimateTo("enter-alpha", 1, motion.FadeIn); o < 1 {
+		card.Opacity(o)
+	}
 	bg, border, shadow := k.Card, k.CardBorder, k.Shadow
 	borderW := float32(1)
 	if focused {
@@ -656,7 +680,7 @@ func (a *app) emptyState(c *ui.Context, k *colors, vw, vh float32) {
 				actions.Children(func() {
 					a.welcomeAction(c, k, "file-plus", "New File…", cmdNewNote, func() { a.startNewFile() })
 					ui.Divider(c)
-					a.welcomeAction(c, k, "search", "Open File…", cmdNotes, func() { a.openTreeSearch() })
+					a.welcomeAction(c, k, "search", "Open File…", cmdNotes, func() { a.openQuickOpen() })
 					if runtime.GOOS != "js" {
 						ui.Divider(c)
 						a.welcomeAction(c, k, "folder-open", "Open Project…", cmdOpenProject, func() { a.openProjectPicker() })

@@ -135,6 +135,7 @@ func (a *app) addSplitTerminalSide(from *pane, tt *termTab, side splitSide) *pan
 		return nil
 	}
 	with := newTermPane(tt)
+	with.enterSide(side)
 	if !t.splitSide(from, with, side) {
 		return nil
 	}
@@ -191,6 +192,7 @@ func (a *app) addTerminalPane(tt *termTab) *pane {
 		return nil
 	}
 	p := newTermPane(tt)
+	p.enterSide(splitRight)
 	if t.Root == nil {
 		t.Root = &node{Pane: p}
 	} else {

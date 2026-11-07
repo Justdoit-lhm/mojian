@@ -62,7 +62,7 @@ var (
 	cmdPalette = &command{title: "Command Palette…", accel: "CmdOrCtrl+Shift+P", keys: "⇧⌘P", glyph: "command",
 		run: func(a *app) { a.openPalette() }}
 	cmdNotes = &command{title: "Open File…", accel: "CmdOrCtrl+Shift+O", keys: "⇧⌘O", glyph: "file-text",
-		run: func(a *app) { a.openTreeSearch() }}
+		run: func(a *app) { a.openQuickOpen() }}
 	cmdTree = &command{title: "Toggle File Tree", accel: "CmdOrCtrl+Shift+B", keys: "⇧⌘B", glyph: "panel-left",
 		run: func(a *app) { a.toggleTree() }}
 	cmdTerminal = &command{title: "Toggle Terminal", accel: "CmdOrCtrl+Shift+T", keys: "⇧⌘T", glyph: "square-terminal",
@@ -93,6 +93,7 @@ func (a *app) focusPane() *pane {
 
 func (a *app) openPalette() {
 	a.projectPicker = false
+	a.quickOpen = false
 	a.paletteOpen = true
 	a.paletteQuery = ""
 	a.paletteSel = 0

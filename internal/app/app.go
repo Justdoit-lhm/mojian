@@ -101,6 +101,10 @@ type app struct {
 	paletteQuery string
 	paletteSel   int
 
+	quickOpen  bool
+	quickQuery string
+	quickSel   int
+
 	rename      *tab
 	renameText  string
 	renameFocus bool

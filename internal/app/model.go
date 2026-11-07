@@ -26,6 +26,9 @@ type pane struct {
 	md            *markdown.Options
 	assetView     *assetView
 	dragging      bool
+	enter         bool // fades and slides in as a new pane, from a split or a terminal
+	enterX        float32
+	enterY        float32
 	emptyQuery    string // the file search in an empty pane
 	emptySel      int
 }
