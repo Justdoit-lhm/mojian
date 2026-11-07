@@ -193,7 +193,7 @@ func (a *app) addTerminalPane(tt *termTab) *pane {
 		return nil
 	}
 	p := newTermPane(tt)
-	p.W = 0.5
+	p.W = paneColumnWidth
 	if t.Root == nil {
 		p.W = 1
 		t.Root = &node{Pane: p}

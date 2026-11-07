@@ -59,12 +59,15 @@ type node struct {
 // tab is a workspace: a tree of panes, the one with the focus, and the
 // one zoomed, if any.
 type tab struct {
-	ID     string
-	Name   string // a name of its own, else the focused note's title
-	Root   *node
-	Focus  *pane
-	Zoom   *pane
-	scroll ui.ScrollState // where this tab's canvas is scrolled
+	ID    string
+	Name  string // a name of its own, else the focused note's title
+	Root  *node
+	Focus *pane
+	Zoom  *pane
+	// panX and panY are the top-left of the canvas shown in the
+	// viewport. The viewport follows the focused pane; the pointer does
+	// not scroll it.
+	panX, panY float32
 }
 
 var idSeq int
@@ -120,6 +123,66 @@ func (n *node) extent(vw, vh float32) (w, h float32) {
 		return max(aw, bw), ah + gap + bh
 	}
 	return aw + gap + bw, max(ah, bh)
+}
+
+// rectOf returns p's place on the canvas, in DIPs.
+func (n *node) rectOf(p *pane, vw, vh float32) (x, y, w, h float32, ok bool) {
+	if n == nil {
+		return
+	}
+	if n.Pane != nil {
+		if n.Pane != p {
+			return
+		}
+		return 0, 0, n.Pane.width() * vw, n.Pane.height() * vh, true
+	}
+	aw, ah := n.A.extent(vw, vh)
+	if n.Vertical {
+		if x, y, w, h, ok = n.A.rectOf(p, vw, vh); ok {
+			return
+		}
+		if x, y, w, h, ok = n.B.rectOf(p, vw, vh); ok {
+			return x, y + ah + gap, w, h, true
+		}
+		return
+	}
+	if x, y, w, h, ok = n.A.rectOf(p, vw, vh); ok {
+		return
+	}
+	if x, y, w, h, ok = n.B.rectOf(p, vw, vh); ok {
+		return x + aw + gap, y, w, h, true
+	}
+	return 0, 0, 0, 0, false
+}
+
+// followFocus pans as little as needed to show the focused pane.
+func (t *tab) followFocus(vw, vh float32) {
+	if t == nil || t.Root == nil || t.Focus == nil || vw <= 0 || vh <= 0 {
+		return
+	}
+	cw, ch := t.Root.extent(vw, vh)
+	x, y, w, h, ok := t.Root.rectOf(t.Focus, vw, vh)
+	if !ok {
+		return
+	}
+	t.panX = followAxis(t.panX, x, w, vw, cw)
+	t.panY = followAxis(t.panY, y, h, vh, ch)
+}
+
+func followAxis(pos, at, size, view, content float32) float32 {
+	if content <= view {
+		return 0
+	}
+	margin := float32(gap)
+	switch {
+	case size >= view:
+		pos = at
+	case at < pos+margin:
+		pos = at - margin
+	case at+size > pos+view-margin:
+		pos = at + size - view + margin
+	}
+	return min(max(pos, 0), content-view)
 }
 
 func newTab(n *note) *tab {
@@ -217,6 +280,10 @@ func (t *tab) dirty() bool {
 	return false
 }
 
+// paneColumnWidth is just under half a viewport so two columns and their
+// gap fit the window without a sliver being clipped.
+const paneColumnWidth = 0.495
+
 // splitSide is where a split puts the new pane relative to the pane it
 // splits. The tree can grow in every direction, without a limit.
 type splitSide int
@@ -277,15 +344,17 @@ func (t *tab) splitSide(p, with *pane, side splitSide) bool {
 	// New columns are half a viewport wide, and new rows are a full
 	// viewport high. The canvas grows around them instead of squeezing
 	// the panes that were already there.
-	const columnWidth = 0.5
 	switch side {
 	case splitRight, splitLeft:
-		if p.width() > columnWidth {
-			p.W = columnWidth
+		if p.width() > paneColumnWidth {
+			p.W = paneColumnWidth
 		}
-		with.W, with.H = columnWidth, p.height()
+		with.W, with.H = paneColumnWidth, 1
 	case splitDown, splitUp:
-		with.W, with.H = p.width(), 1
+		// A vertical extension is a full screen of its own: both panes
+		// span the viewport, and the canvas grows to show the new one.
+		p.W = 1
+		with.W, with.H = 1, 1
 	}
 	t.Focus = with
 	t.Zoom = nil
@@ -398,12 +467,12 @@ func (n *node) wrapLeaf(p *pane, replacement *node) bool {
 	return n.B != nil && n.B.wrapLeaf(p, replacement)
 }
 
-// focusDirection moves the focus to the nearest pane in a direction,
-// climbing out of splits that run the other way. It is how niri's focus
-// commands move around a tiling.
-func (t *tab) focusDirection(dir paneDirection) bool {
+// paneInDirection finds the nearest pane in a direction, climbing out
+// of splits that run the other way. It is how niri's focus commands move
+// around a tiling.
+func (t *tab) paneInDirection(dir paneDirection) *pane {
 	if t.Root == nil || t.Focus == nil {
-		return false
+		return nil
 	}
 	path := t.Root.pathTo(t.Focus)
 	for i := len(path) - 2; i >= 0; i-- {
@@ -421,11 +490,20 @@ func (t *tab) focusDirection(dir paneDirection) bool {
 			target = firstPane(n.B)
 		}
 		if target != nil && target != t.Focus {
-			t.Focus = target
-			return true
+			return target
 		}
 	}
-	return false
+	return nil
+}
+
+// focusDirection moves the focus to the nearest pane in a direction.
+func (t *tab) focusDirection(dir paneDirection) bool {
+	target := t.paneInDirection(dir)
+	if target == nil {
+		return false
+	}
+	t.Focus = target
+	return true
 }
 
 // pathTo returns the nodes from the root to p, or nil.

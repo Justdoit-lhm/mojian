@@ -42,6 +42,7 @@ func (a *app) view(c *ui.Context) {
 	}
 	a.overviewChrome(c, k)
 	a.overviewKeys(c)
+	a.paneKeys(c)
 	a.projectPickerModal(c, k)
 	a.splitPicker(c, k)
 	a.remotePickerModal(c, k)
@@ -165,18 +166,22 @@ func iconButton(c *ui.Context, k *colors, name, label string, size, iconSize flo
 	return b
 }
 
-// tabContent lays out the panes of a tab, or the one zoomed. Panes keep
-// their own canvas sizes; the canvas grows and scrolls instead of
-// squeezing every pane into the viewport.
+// tabContent lays out the panes of a tab, or the one zoomed. The
+// viewport follows the focused pane; there is no manual scrolling.
 func (a *app) tabContent(c *ui.Context, k *colors, t *tab, vw, vh float32) {
 	if t.Root == nil {
 		a.emptyState(c, k)
 		return
 	}
-	if t.Zoom != nil {
+	if t.Zoom != nil && !a.overview {
 		a.paneCard(c, k, t, t.Zoom).Grow(1)
 		return
 	}
+	if a.overview {
+		a.overviewCanvas(c, k, t, vw, vh)
+		return
+	}
+	t.followFocus(vw, vh)
 	cw, ch := t.Root.extent(vw, vh)
 	if cw < vw {
 		cw = vw
@@ -184,36 +189,52 @@ func (a *app) tabContent(c *ui.Context, k *colors, t *tab, vw, vh float32) {
 	if ch < vh {
 		ch = vh
 	}
-	ui.ScrollBoth(c.Key("canvas-scroll:" + t.ID)).Grow(1).
-		TrackScroll(&t.scroll).Children(func() {
-		ui.Box(c.Key("canvas:" + t.ID)).Width(cw).Height(ch).Children(func() {
-			a.canvasNode(c, k, t, t.Root, vw, vh)
+	viewport := ui.Box(c.Key("canvas-viewport:" + t.ID)).Grow(1).
+		MinWidth(0).MinHeight(0).Clip()
+	viewport.Children(func() {
+		ui.Box(c.Key("canvas:" + t.ID)).Absolute().
+			Left(-t.panX).Top(-t.panY).Width(cw).Height(ch).Children(func() {
+			a.canvasNode(c, k, t, t.Root, vw, vh, false)
 		})
 	})
 }
 
-// canvasNode lays out a split on the infinite canvas. Its children keep
-// their declared sizes; a shorter sibling leaves empty canvas rather
-// than being stretched.
-func (a *app) canvasNode(c *ui.Context, k *colors, t *tab, n *node, vw, vh float32) ui.Element {
+// overviewCanvas shrinks the whole canvas to fit the viewport and draws
+// lightweight pane previews. It is the live tiling's spacing without the
+// cost of painting every editor at a fractional scale.
+func (a *app) overviewCanvas(c *ui.Context, k *colors, t *tab, vw, vh float32) {
+	cw, ch := t.Root.extent(vw, vh)
+	scale := float32(1)
+	if cw > 0 && ch > 0 {
+		scale = min((vw-2*gap)/cw, (vh-2*gap)/ch, 1)
+	}
+	scale = max(scale, 0.15)
+	scw, sch := cw*scale, ch*scale
+	ox, oy := (vw-scw)/2, (vh-sch)/2
+	viewport := ui.Box(c.Key("overview-viewport:" + t.ID)).Grow(1).
+		MinWidth(0).MinHeight(0).Clip()
+	viewport.Children(func() {
+		ui.Box(c.Key("overview-canvas:" + t.ID)).Absolute().Left(ox).Top(oy).
+			Width(scw).Height(sch).Children(func() {
+			a.canvasNode(c, k, t, t.Root, vw*scale, vh*scale, true)
+		})
+	})
+}
+
+// canvasNode lays out a split on the canvas. Its children keep their
+// declared sizes; a shorter sibling leaves empty canvas rather than
+// being stretched.
+func (a *app) canvasNode(c *ui.Context, k *colors, t *tab, n *node, vw, vh float32, preview bool) ui.Element {
 	if n == nil {
 		return ui.Box(c)
 	}
 	if n.Pane != nil {
 		p := n.Pane
-		reveal := a.focusReq == p
-		card := a.paneCard(c, k, t, p).Width(p.width() * vw).Height(p.height() * vh)
-		if reveal {
-			card.ScrollIntoView()
-			// Panes without a keyboard control consume no focus request;
-			// clear it so the canvas does not keep scrolling back.
-			if a.focusReq == p {
-				if !(p.Note != nil && !p.Preview) && !(p.Term != nil && p.Term.Term != nil) {
-					a.focusReq = nil
-				}
-			}
+		w, h := p.width()*vw, p.height()*vh
+		if preview {
+			return a.overviewPaneCard(c, k, t, p).Width(w).Height(h)
 		}
-		return card
+		return a.paneCard(c, k, t, p).Width(w).Height(h)
 	}
 	aw, ah := n.A.extent(vw, vh)
 	bw, bh := n.B.extent(vw, vh)
@@ -231,37 +252,45 @@ func (a *app) canvasNode(c *ui.Context, k *colors, t *tab, n *node, vw, vh float
 		box = ui.Row(c.Key(key)).Width(width).Height(height).AlignItems(ui.Start)
 	}
 	box.Children(func() {
-		a.canvasNode(c, k, t, n.A, vw, vh).Width(aw).Height(ah)
-		div := ui.Box(c.Key("divider")).Role(ui.RoleSplitter).Label("Divider")
-		if n.Vertical {
-			div.Height(gap).Width(width).Cursor(ui.CursorResizeRow)
-		} else {
-			div.Width(gap).Height(height).Cursor(ui.CursorResizeColumn)
-		}
-		if dx, dy, ok := div.Dragged(); ok {
-			d := dx
+		a.canvasNode(c, k, t, n.A, vw, vh, preview).Width(aw).Height(ah)
+		if preview {
 			if n.Vertical {
-				d = dy
+				ui.Box(c.Key("divider")).Width(width).Height(gap)
+			} else {
+				ui.Box(c.Key("divider")).Width(gap).Height(height)
 			}
-			n.resize(d, vw, vh)
-			a.changed()
-		}
-		if div.DoubleClicked() {
-			n.balance()
-			a.changed()
-		}
-		if div.Hovered() || div.Dragging() || div.Pressed() {
-			div.Draw(func(p *ui.Painter, r ui.Rect) {
+		} else {
+			div := ui.Box(c.Key("divider")).Role(ui.RoleSplitter).Label("Divider")
+			if n.Vertical {
+				div.Height(gap).Width(width).Cursor(ui.CursorResizeRow)
+			} else {
+				div.Width(gap).Height(height).Cursor(ui.CursorResizeColumn)
+			}
+			if dx, dy, ok := div.Dragged(); ok {
+				d := dx
 				if n.Vertical {
-					p.Fill(ui.Rect{X: r.X + r.W/2 - 18, Y: r.Y + r.H/2 - 1.5, W: 36, H: 3},
-						k.IconMuted.Alpha(0.6), 1.5)
-				} else {
-					p.Fill(ui.Rect{X: r.X + r.W/2 - 1.5, Y: r.Y + r.H/2 - 18, W: 3, H: 36},
-						k.IconMuted.Alpha(0.6), 1.5)
+					d = dy
 				}
-			})
+				n.resize(d, vw, vh)
+				a.changed()
+			}
+			if div.DoubleClicked() {
+				n.balance()
+				a.changed()
+			}
+			if div.Hovered() || div.Dragging() || div.Pressed() {
+				div.Draw(func(p *ui.Painter, r ui.Rect) {
+					if n.Vertical {
+						p.Fill(ui.Rect{X: r.X + r.W/2 - 18, Y: r.Y + r.H/2 - 1.5, W: 36, H: 3},
+							k.IconMuted.Alpha(0.6), 1.5)
+					} else {
+						p.Fill(ui.Rect{X: r.X + r.W/2 - 1.5, Y: r.Y + r.H/2 - 18, W: 3, H: 36},
+							k.IconMuted.Alpha(0.6), 1.5)
+					}
+				})
+			}
 		}
-		a.canvasNode(c, k, t, n.B, vw, vh).Width(bw).Height(bh)
+		a.canvasNode(c, k, t, n.B, vw, vh, preview).Width(bw).Height(bh)
 	})
 	return box
 }

@@ -431,6 +431,22 @@ func (a *app) settingsKeyboardPage(c *ui.Context, k *colors) {
 			}
 		}
 	})
+	a.settingsSection(c, k, "PANE NAVIGATION", func() {
+		for _, row := range []struct {
+			label, keys string
+		}{
+			{"Move selection", "⌥←  ⌥→  ⌥↑  ⌥↓"},
+			{"Move selected pane", "⌥⇧←  ⌥⇧→  ⌥⇧↑  ⌥⇧↓"},
+		} {
+			ui.Row(c).Height(34).Padding(0, 14).Gap(12).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, row.label).FontSize(12.5).TextColor(k.Text).Grow(1)
+				ui.Text(c, row.keys).FontSize(11.5).TextColor(k.TextFaint).Font(noteFont.Family)
+			})
+			ui.Divider(c).Margin(0, 14)
+		}
+		ui.Text(c, "The canvas follows the focused pane; it has no scrollbar and the mouse wheel does not pan it.").
+			FontSize(11.5).TextColor(k.TextFaint).Padding(0, 14, 14)
+	})
 	ui.Text(c, "Shortcuts are fixed for now; every command is also in the palette.").
 		FontSize(11.5).TextColor(k.TextFaint)
 }

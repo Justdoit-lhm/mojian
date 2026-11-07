@@ -62,9 +62,8 @@ type app struct {
 
 	// overview is niri's zoomed-out pane switcher: Option+Tab shrinks
 	// the workspace, and Tab, the arrows, a click or Return choose a pane.
-	overview       bool
-	overviewFocus  bool
-	overviewReveal bool
+	overview      bool
+	overviewFocus bool
 
 	focusReq *pane
 

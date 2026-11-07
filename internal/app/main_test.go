@@ -131,7 +131,7 @@ func TestLayoutRoundTrip(t *testing.T) {
 	if b.tabs[0].Root.Vertical {
 		t.Error("the layout lost the side by side split")
 	}
-	if got := b.tabs[0].Root.A.Pane.W; got != 0.5 {
+	if got := b.tabs[0].Root.A.Pane.W; got != paneColumnWidth {
 		t.Errorf("the layout lost the canvas width: %v", got)
 	}
 }
@@ -251,7 +251,7 @@ func TestSplitUsesCanvasSizes(t *testing.T) {
 	if root == nil || root.Vertical {
 		t.Fatal("a right split should be side by side")
 	}
-	if first.W != 0.5 || a.tab().Focus.W != 0.5 {
+	if first.W != paneColumnWidth || a.tab().Focus.W != paneColumnWidth {
 		t.Fatalf("right split widths: %v and %v, want half a viewport",
 			first.W, a.tab().Focus.W)
 	}
@@ -261,8 +261,9 @@ func TestSplitUsesCanvasSizes(t *testing.T) {
 	}
 	focus := a.tab().Focus
 	a.splitWith(a.store.byRelPath("scripts/tasks.py"), true)
-	if a.tab().Focus == focus || a.tab().Focus.H != 1 {
-		t.Fatalf("down split height: %v, want a full viewport", a.tab().Focus.H)
+	if a.tab().Focus == focus || a.tab().Focus.H != 1 || a.tab().Focus.W != 1 {
+		t.Fatalf("down split size: %v x %v, want a full screen",
+			a.tab().Focus.W, a.tab().Focus.H)
 	}
 }
 

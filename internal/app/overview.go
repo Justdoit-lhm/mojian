@@ -9,8 +9,8 @@ import (
 	"mojian/internal/icons"
 )
 
-// toggleOverview opens the pane switcher, or closes it. The live canvas
-// keeps running underneath; the switcher draws only lightweight tiles.
+// toggleOverview opens the pane overview, or closes it. The canvas is
+// shown at a smaller scale as a spatial overview, not as a list.
 func (a *app) toggleOverview() {
 	if a.overview {
 		a.closeOverview()
@@ -27,20 +27,18 @@ func (a *app) toggleOverview() {
 	a.remotePicker = false
 	a.overview = true
 	a.overviewFocus = true
-	a.overviewReveal = true
 	a.focusReq = nil
 	a.changed()
 	a.invalidate()
 }
 
-// closeOverview leaves the switcher, keeping the selected pane focused.
+// closeOverview leaves the overview, keeping the selected pane focused.
 func (a *app) closeOverview() {
 	if !a.overview {
 		return
 	}
 	a.overview = false
 	a.overviewFocus = false
-	a.overviewReveal = false
 	if t := a.tab(); t != nil {
 		focus := t.Focus
 		if t.Zoom != nil {
@@ -52,7 +50,7 @@ func (a *app) closeOverview() {
 	a.invalidate()
 }
 
-// selectOverviewPane chooses p, exits the switcher and shows p's view.
+// selectOverviewPane chooses p, exits the overview and shows p's view.
 func (a *app) selectOverviewPane(t *tab, p *pane) {
 	if t == nil || t != a.tab() || p == nil || !t.contains(p) {
 		return
@@ -61,7 +59,6 @@ func (a *app) selectOverviewPane(t *tab, p *pane) {
 	t.Zoom = nil
 	a.overview = false
 	a.overviewFocus = false
-	a.overviewReveal = false
 	if p.Note != nil || p.Term != nil {
 		a.focusReq = p
 	} else {
@@ -90,21 +87,19 @@ func (a *app) cycleOverview(delta int) {
 		}
 	}
 	t.Focus = panes[(i+delta+len(panes))%len(panes)]
-	a.overviewReveal = true
 	a.focusReq = nil
 	a.changed()
 }
 
 func (a *app) focusOverviewDirection(dir paneDirection) {
 	if t := a.tab(); t != nil && t.focusDirection(dir) {
-		a.overviewReveal = true
 		a.focusReq = nil
 		a.changed()
 	}
 }
 
-// overviewKeys registers the switcher's keys. The focusable pill keeps
-// the editor from taking Tab and the arrows while the switcher is open.
+// overviewKeys register the overview's own keys. The focusable pill
+// keeps the editor from taking Tab while the overview is open.
 func (a *app) overviewKeys(c *ui.Context) {
 	c.OnShortcut(ui.Alt, ui.KeyTab, func() { a.toggleOverview() })
 	if !a.overview {
@@ -119,100 +114,134 @@ func (a *app) overviewKeys(c *ui.Context) {
 			a.selectOverviewPane(t, t.Focus)
 		}
 	})
-	c.OnShortcut(ui.Alt, ui.KeyLeft, func() { a.focusOverviewDirection(paneLeft) })
-	c.OnShortcut(ui.Alt, ui.KeyRight, func() { a.focusOverviewDirection(paneRight) })
-	c.OnShortcut(ui.Alt, ui.KeyUp, func() { a.focusOverviewDirection(paneUp) })
-	c.OnShortcut(ui.Alt, ui.KeyDown, func() { a.focusOverviewDirection(paneDown) })
 }
 
-// overviewChrome draws the switcher as a compact grid of pane cards.
-// It is deliberately lighter than the editors and terminals themselves:
-// opening it never has to repaint or scale the live canvas.
+// paneKeys moves the selection, and with Shift the selected pane, with
+// Option and the arrows. No mouse wheel or scrollbar moves the canvas.
+func (a *app) paneKeys(c *ui.Context) {
+	for _, k := range []struct {
+		key ui.Key
+		dir paneDirection
+	}{
+		{ui.KeyLeft, paneLeft},
+		{ui.KeyRight, paneRight},
+		{ui.KeyUp, paneUp},
+		{ui.KeyDown, paneDown},
+	} {
+		k := k
+		c.OnShortcut(ui.Alt, k.key, func() { a.moveFocusDirection(k.dir) })
+		c.OnShortcut(ui.Alt|ui.Shift, k.key, func() { a.moveSelectedPane(k.dir) })
+	}
+}
+
+func (a *app) moveFocusDirection(dir paneDirection) {
+	if a.overview {
+		a.focusOverviewDirection(dir)
+		return
+	}
+	t := a.tab()
+	if t == nil || !t.focusDirection(dir) {
+		return
+	}
+	a.focusReq = t.Focus
+	a.changed()
+	a.invalidate()
+}
+
+// moveSelectedPane moves the pane itself toward a neighbor with Option
+// and Shift. The canvas follows the moved pane.
+func (a *app) moveSelectedPane(dir paneDirection) {
+	t := a.tab()
+	if t == nil || t.Focus == nil {
+		return
+	}
+	if a.overview {
+		a.focusOverviewDirection(dir)
+		return
+	}
+	target := t.paneInDirection(dir)
+	if target == nil || target == t.Focus {
+		return
+	}
+	zone := dropLeft
+	switch dir {
+	case paneRight:
+		zone = dropRight
+	case paneUp:
+		zone = dropAbove
+	case paneDown:
+		zone = dropBelow
+	}
+	from := t.Focus
+	if !t.movePane(from, target, zone) {
+		return
+	}
+	a.focusReq = from
+	a.changed()
+	a.invalidate()
+}
+
+// overviewChrome is only the hint and the keyboard focus holder; the
+// shrunken panes themselves are the overview.
 func (a *app) overviewChrome(c *ui.Context, k *colors) {
 	if !a.overview {
 		return
 	}
 	t := a.tab()
-	if t == nil {
-		return
-	}
-	panes := t.panes()
-	if len(panes) == 0 {
+	if t == nil || len(t.panes()) == 0 {
 		return
 	}
 	name, _ := t.label()
-	cols := 2
-	if len(panes) > 4 {
-		cols = 3
-	}
+	count := len(t.panes())
 	ui.Overlay(c, func() {
-		back := ui.Box(c).Fill().Background(k.Backdrop.Alpha(0.55)).Center()
-		back.Children(func() {
-			panel := ui.Column(c.Key("overview-panel")).WidthPercent(86).MaxWidth(760).
-				MaxHeightPercent(82).Padding(18, 20).Gap(12).Radius(16).
-				Background(k.Panel).Border(1, k.PanelBorder).
-				Shadow(0, 24, 60, -8, k.ShadowFocused).
-				Focusable().FocusRing(false)
+		ui.Row(c).Absolute().Bottom(18).Left(0).Right(0).Justify(ui.Center).
+			PassThrough().Children(func() {
+			pill := ui.Row(c.Key("overview-pill")).Padding(7, 12).Gap(9).
+				AlignItems(ui.Center).Radius(12).Background(k.Panel).
+				Border(1, k.PanelBorder).
+				Shadow(0, 10, 30, -6, k.ShadowFocused).
+				Focusable().FocusRing(false).
+				Label("Pane overview. Tab or arrow keys switch panes; Return focuses; Escape closes.")
 			if a.overviewFocus {
-				panel.Focus()
+				pill.Focus()
 				a.overviewFocus = false
 			}
-			panel.Label("Pane overview. Tab or arrow keys switch panes; Return focuses; Escape closes.")
-			panel.Children(func() {
-				ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
-					ui.Box(c).Size(30, 30).Radius(8).Background(k.Hover).Center().Children(func() {
-						ui.Icon(c, icons.Icon("layout-grid")).Size(15, 15).TextColor(k.TextMuted)
-					})
-					ui.Column(c).Gap(1).Children(func() {
-						ui.Text(c, "Panes").FontSize(15).FontWeight(650).TextColor(k.Text)
-						ui.Text(c, fmt.Sprintf("%s · %d %s", name, len(panes), plural(len(panes), "pane", "panes"))).
-							FontSize(11.5).TextColor(k.TextFaint).SingleLine().Ellipsis("…")
-					})
-					ui.Spacer(c)
-					ui.Text(c, "⌥⇥").FontSize(11).FontWeight(600).TextColor(k.TextMuted).
-						Padding(3, 7).Radius(6).Background(k.Hover)
-				})
-				ui.Scroll(c).MaxHeight(430).Scrollbars(false).Children(func() {
-					ui.Grid(c).Columns(cols).Gap(10).Children(func() {
-						for _, p := range panes {
-							p := p
-							a.overviewTile(c, k, t, p)
-						}
-					})
-				})
-				ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
-					keyHint(c, k, "⇥", "switch")
-					keyHint(c, k, "←↑↓→", "move")
-					keyHint(c, k, "↵", "focus")
-					keyHint(c, k, "esc", "close")
-				})
+			pill.Children(func() {
+				ui.Icon(c, icons.Icon("layout-grid")).Size(14, 14).TextColor(k.TextMuted)
+				ui.Text(c, "Panes").FontSize(12.5).FontWeight(650).TextColor(k.Text)
+				ui.Text(c, name).FontSize(12).TextColor(k.TextFaint).SingleLine().
+					Ellipsis("…").MaxWidth(150)
+				ui.Box(c).Width(1).Height(13).Background(k.PanelBorder)
+				ui.Text(c, fmt.Sprintf("%d %s", count, plural(count, "pane", "panes"))).
+					FontSize(11.5).TextColor(k.TextFaint)
+				keyHint(c, k, "⇥", "switch")
+				keyHint(c, k, "←↑↓→", "move")
+				keyHint(c, k, "↵", "focus")
+				keyHint(c, k, "esc", "close")
 			})
-			if panel.PressedOutside() {
-				a.later(func() { a.closeOverview() })
-			}
 		})
 	})
 }
 
-func (a *app) overviewTile(c *ui.Context, k *colors, t *tab, p *pane) {
+// overviewPaneCard is the cheap stand-in for a live editor or terminal
+// while the canvas is shrunk. It keeps the pane's place and identity
+// without painting the whole document.
+func (a *app) overviewPaneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 	title := paneName(p)
 	detail, excerpt := paneOverviewText(p)
-	tile := ui.Column(c.Key("overview-"+p.ID)).Padding(10, 11).Gap(6).Radius(10).
-		Background(k.Card).Border(1, k.CardBorder).Cursor(ui.CursorPointer).
-		Role(ui.RoleButton).Label("Focus pane " + title)
+	card := ui.Column(c.Key("preview-"+p.ID)).Radius(cardR).Clip().
+		Padding(10).Gap(5).Background(k.Card).Border(1, k.CardBorder).
+		Cursor(ui.CursorPointer).Role(ui.RoleButton).
+		Label("Focus pane " + title)
 	if t.Focus == p {
-		tile.Background(k.CardFocused).Border(2, k.Text)
-		if a.overviewReveal {
-			tile.ScrollIntoView()
-			a.overviewReveal = false
-		}
-	} else if tile.Hovered() {
-		tile.Background(k.CardFocused)
+		card.Background(k.CardFocused).Border(2, k.Text)
+	} else if card.Hovered() {
+		card.Background(k.CardFocused)
 	}
-	if tile.Clicked() {
+	if card.Clicked() {
 		a.later(func() { a.selectOverviewPane(t, p) })
 	}
-	tile.Children(func() {
+	card.Children(func() {
 		ui.Row(c).Gap(7).AlignItems(ui.Center).Children(func() {
 			ic := icons.Icon("file-text")
 			switch {
@@ -223,7 +252,7 @@ func (a *app) overviewTile(c *ui.Context, k *colors, t *tab, p *pane) {
 			case p.Note != nil:
 				ic = icons.FileIcon(p.Note.Path)
 			}
-			ui.Icon(c, ic).Size(15, 15).TextColor(k.Text)
+			ui.Icon(c, ic).Size(16, 16).TextColor(k.Text)
 			ui.Text(c, title).FontSize(12.5).FontWeight(600).TextColor(k.Text).
 				SingleLine().Ellipsis("…").Grow(1).MinWidth(0)
 		})
@@ -236,6 +265,7 @@ func (a *app) overviewTile(c *ui.Context, k *colors, t *tab, p *pane) {
 				SingleLine().Ellipsis("…")
 		}
 	})
+	return card
 }
 
 func paneOverviewText(p *pane) (detail, excerpt string) {

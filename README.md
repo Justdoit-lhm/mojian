@@ -29,14 +29,17 @@ workspaces hold panes, and every pane edits a file with syntax highlighting.
   one. Split left, right, up or down and choose the file for the new pane; a
   split never opens the same file twice. A tab holds as many panes as you
   split, without a four-pane limit. A right split gives the new pane a
-  half-viewport column; a down or up split gives it a full viewport height.
-  The canvas grows around the panes and scrolls rather than squeezing them
-  into one window. Drag a pane's top-left grip onto another pane to swap
-  them, or onto its edge to put the pane above, below, left or right of it.
-  Drag a divider to resize, double-click it for a balanced split, zoom a
-  pane, or close it.
-  Option+Tab opens a fast pane overview: Tab, the arrow keys or a click
-  choose a pane, Return focuses it, and Escape closes the overview.
+  half-viewport column; a down or up split gives it a full screen of its
+  own. The canvas grows around the panes, and the viewport follows the
+  focused pane: there is no scrollbar and the mouse wheel does not pan it.
+  Option+left/right/up/down moves the selection; Option+Shift plus an
+  arrow moves the selected pane itself. Drag a pane's top-left grip onto
+  another pane to swap them, or onto its edge to put the pane above,
+  below, left or right of it. Drag a divider to resize, double-click it
+  for a balanced split, zoom a pane, or close it.
+  Option+Tab opens a fast spatial pane overview: the panes shrink in
+  place, and Tab, the arrow keys or a click choose one. Return focuses it,
+  and Escape closes the overview.
   ![The pane overview](docs/overview.png)
 - **Markdown, source or rendered.** A Markdown pane has a Preview button at
   the top right; `⇧⌘V` is not needed, and the setting opens new `.md` files
@@ -89,6 +92,8 @@ workspaces hold panes, and every pane edits a file with syntax highlighting.
 | `⇧⌘L` | Connect to an SSH host |
 | `⇧⌘G` | Show the Git diff page |
 | `⌥⇥` | Toggle the pane overview |
+| `⌥←` / `⌥→` / `⌥↑` / `⌥↓` | Move pane selection |
+| `⌥⇧←` / `⌥⇧→` / `⌥⇧↑` / `⌥⇧↓` | Move the selected pane |
 | `⇧⌘D` / `⇧⌘E` | Split right / down |
 | `⌥⌘←` / `⌥⌘↑` | Split left / up |
 | `⌘W` / `⇧⌘W` | Close pane / tab |
@@ -142,7 +147,7 @@ The pieces that stand on their own are packages of their own.
 | `cmd/mojian-server/` | the per-user server uploaded to SSH hosts |
 | `internal/remotebin/` | the embedded Linux server and libghostty-vt builds |
 
-| `internal/app/` | the window: shell, tabs, the scrollable pane canvas, Explorer, pickers, settings and the file operations |
+| `internal/app/` | the window: shell, tabs, the auto-follow pane canvas, Explorer, pickers, settings and the file operations |
 | `internal/git/` | the working-tree page: status, diffs, parsing and its view |
 | `internal/theme/` | light and dark palettes, the window gradient and fonts |
 | `internal/icons/` | Lucide action icons and Material Icon Theme file icons |
@@ -170,7 +175,7 @@ Inside `internal/app/`:
 | `picker.go` | the in-window project folder chooser |
 | `split.go` | the split file chooser |
 | `model.go` | files, tabs, panes, the split tree and the saved layout |
-| `view.go` | the title bar, the scrollable pane canvas and its splitters |
+| `view.go` | the title bar, the auto-follow pane canvas and its splitters |
 | `tabs.go` | the tab strip and tab menu |
 | `palette.go` | the command palette |
 | `settings.go` | the Kero-inspired settings window |

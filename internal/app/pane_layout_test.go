@@ -259,8 +259,8 @@ func TestCanvasExtendsPastTheViewport(t *testing.T) {
 	a.splitWith(a.store.byRelPath("Reading notes.md"), false)
 	t0 := a.tab()
 	cw, ch := t0.Root.extent(840, 600)
-	if cw <= 840 {
-		t.Fatalf("canvas width %v did not grow past the viewport", cw)
+	if cw < 840-1 {
+		t.Fatalf("two columns did not fit the viewport: %v", cw)
 	}
 	if ch > 600+1 {
 		t.Fatalf("a right split changed the height: %v", ch)
@@ -270,14 +270,16 @@ func TestCanvasExtendsPastTheViewport(t *testing.T) {
 	if ch <= 600 {
 		t.Fatalf("canvas height %v did not grow after a down split", ch)
 	}
+	a.splitWith(a.store.byRelPath("scripts/app.js"), false)
+	cw, _ = t0.Root.extent(840, 600)
 	if cw <= 840 {
-		t.Fatalf("canvas lost its width after a down split: %v", cw)
+		t.Fatalf("another column did not extend the canvas: %v", cw)
 	}
 	tt := ui.NewTester(a.view, 1100, 700)
 	tt.Frame()
 	tt.Frame()
-	if t0.scroll.MaxY <= 0 {
-		t.Fatalf("the canvas has no vertical scroll to the focused pane: %+v", t0.scroll)
+	if t0.panY <= 0 {
+		t.Fatalf("the viewport did not follow the focused pane: panY=%v", t0.panY)
 	}
 }
 
@@ -289,7 +291,28 @@ func TestCanvasDividerResize(t *testing.T) {
 	right := t0.Root.B.Pane
 	before := left.W
 	t0.Root.resize(40, 840, 600)
-	if left.W <= before || right.W >= 0.5 {
+	if left.W <= before || right.W >= paneColumnWidth {
 		t.Fatalf("resize moved widths: left %v right %v", left.W, right.W)
+	}
+}
+
+func TestOptionArrowFocusAndMove(t *testing.T) {
+	a := newProjectApp(t)
+	first := a.tab().Focus
+	a.splitWith(a.store.byRelPath("Reading notes.md"), false)
+	tt := ui.NewTester(a.view, 1100, 700)
+	tt.Frame()
+	if a.tab().Focus == first {
+		t.Fatal("the split did not focus the right pane")
+	}
+	tt.Key(ui.Alt, ui.KeyLeft)
+	tt.Frame()
+	if a.tab().Focus != first {
+		t.Fatal("Option+Left did not select the pane on the left")
+	}
+	tt.Key(ui.Alt|ui.Shift, ui.KeyRight)
+	tt.Frame()
+	if got := a.tab().panes(); len(got) != 2 || got[0] == first || got[1] != first {
+		t.Fatalf("Option+Shift+Right did not move the selected pane right: %v", got)
 	}
 }
