@@ -136,8 +136,19 @@ func Dir() string {
 	return filepath.Join(base, "Mojian")
 }
 
+// RuntimeDir is where the server keeps its socket and lock. A remote
+// server sets MOJIAN_RUNTIME_DIR to a path sshd may reach with stream
+// local forwarding, such as one under XDG_RUNTIME_DIR; locally it is the
+// data directory.
+func RuntimeDir() string {
+	if d := os.Getenv("MOJIAN_RUNTIME_DIR"); d != "" {
+		return d
+	}
+	return Dir()
+}
+
 // SocketPath returns the server's socket, short enough for a Unix path.
-func SocketPath() string { return SocketPathIn(Dir()) }
+func SocketPath() string { return SocketPathIn(RuntimeDir()) }
 
 // SocketPathIn returns the socket a server started with dir would bind,
 // so a forwarded socket and the server agree even when the path is long.

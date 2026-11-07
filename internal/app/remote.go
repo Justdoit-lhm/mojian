@@ -125,15 +125,22 @@ func (a *app) connectRemote(host string) (*remoteConn, error) {
 	dir := home + "/.local/share/mojian"
 	binPath := dir + "/mojian-server"
 	libPath := dir + "/libghostty-vt.so"
-	// The server computes its socket the same way (SocketPathIn), so a
-	// long home that moves the socket to /tmp still forwards correctly.
-	// Resolve it with the host's uid, not this machine's.
+	// A socket under the home directory is not always reachable through
+	// sshd's stream-local forwarding (SELinux labels it data_home_t on
+	// Fedora). Put the socket in the user's runtime directory instead,
+	// and tell the server where with MOJIAN_RUNTIME_DIR.
 	uid := -1
 	if out, err := sshOutput(host, "id -u"); err == nil {
 		uid, _ = strconv.Atoi(strings.TrimSpace(out))
 	}
-	sock := session.SocketPathIn(dir, uid)
-	if _, err := sshOutput(host, "mkdir -p "+shellQuote(dir)+" && chmod 700 "+shellQuote(dir)); err != nil {
+	runtimeDir, err := sshOutput(host, `printf %s "${XDG_RUNTIME_DIR:-/tmp}/mojian-$(id -u)"`)
+	if err != nil || strings.TrimSpace(runtimeDir) == "" {
+		runtimeDir = "/tmp/mojian-" + strconv.Itoa(uid)
+	}
+	runtimeDir = strings.TrimSpace(runtimeDir)
+	sock := session.SocketPathIn(runtimeDir, uid)
+	if _, err := sshOutput(host, "mkdir -p "+shellQuote(dir)+" "+shellQuote(runtimeDir)+
+		" && chmod 700 "+shellQuote(dir)+" "+shellQuote(runtimeDir)); err != nil {
 		return nil, err
 	}
 	upload := func(path string, data []byte, mode string) error {
@@ -153,7 +160,8 @@ func (a *app) connectRemote(host string) (*remoteConn, error) {
 	start := func() error {
 		// A transient server ends with the app connection, taking its
 		// terminals with it; remote shells are not kept after a drop.
-		cmd := "MOJIAN_DIR=" + shellQuote(dir) + " MOJIAN_TRANSIENT=1 nohup " +
+		cmd := "MOJIAN_DIR=" + shellQuote(dir) + " MOJIAN_RUNTIME_DIR=" + shellQuote(runtimeDir) +
+			" MOJIAN_TRANSIENT=1 nohup " +
 			shellQuote(binPath) + " >>" + shellQuote(dir+"/server.log") + " 2>&1 &"
 		if _, err := sshOutput(host, cmd); err != nil {
 			return err

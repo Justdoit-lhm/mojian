@@ -62,7 +62,7 @@ type Server struct {
 
 // Serve runs the session server until it is shut down.
 func Serve() error {
-	dir := Dir()
+	dir := RuntimeDir()
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
