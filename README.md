@@ -19,12 +19,6 @@
 </p>
 <p align="center"><sub>Reading and writing</sub></p>
 
-<p align="center">
-  <img src="docs/ssh.png" alt="Connect to Server" width="430">
-  <img src="docs/settings.png" alt="The Settings window" width="350">
-</p>
-<p align="center"><sub>Servers and Settings</sub></p>
-
 ## About
 
 Mojian is a quiet editor for plain text. Every frame is drawn by [MyGo](https://mygo.egoist.dev)'s native UI: no webview, no cgo, no JavaScript build — one Go binary, rendered through Metal on macOS.

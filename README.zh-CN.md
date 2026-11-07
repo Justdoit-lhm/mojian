@@ -19,12 +19,6 @@
 </p>
 <p align="center"><sub>阅读与书写</sub></p>
 
-<p align="center">
-  <img src="docs/ssh.png" alt="连接远程服务器" width="430">
-  <img src="docs/settings.png" alt="墨间的设置窗口" width="350">
-</p>
-<p align="center"><sub>服务器与设置</sub></p>
-
 ## 关于
 
 墨间是一款为纯文本而生的编辑器。它以 [MyGo](https://mygo.egoist.dev) 的原生界面绘制每一帧：没有 WebView，没有 cgo，没有 JavaScript 构建——一枚 Go 二进制，在 macOS 上由 Metal 呈现。
