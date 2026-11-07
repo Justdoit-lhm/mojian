@@ -22,10 +22,7 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-const (
-	cardR   = 12
-	headerH = 33
-)
+const headerH = 33
 
 type Change struct {
 	Path    string // relative to the repository root, for git
@@ -386,7 +383,7 @@ func (b *cappedBuffer) Write(p []byte) (int, error) {
 // the left, the selected file's unified diff on the right.
 func (p *Page) View(c *ui.Context, k *theme.Colors, h Host) {
 	p.h = h
-	card := ui.Column(c).Grow(1).MinWidth(0).MinHeight(0).Radius(cardR).Clip().
+	card := ui.Column(c).Grow(1).MinWidth(0).MinHeight(0).Radius(theme.Radius).Clip().
 		Background(k.CardFocused).Border(1, k.CardBorder).
 		Shadow(0, 1, 2, 0, k.Shadow)
 	card.Children(func() {
@@ -405,7 +402,7 @@ func (p *Page) header(c *ui.Context, k *theme.Colors) {
 		ui.Icon(c, icons.Icon("git-branch")).Size(15, 15).TextColor(k.TextMuted)
 		ui.Text(c, "Changes").FontSize(12.5).FontWeight(600).TextColor(k.Text)
 		if p.Branch != "" {
-			ui.Row(c).Padding(2, 7).Radius(5).Background(k.Hover).Gap(4).
+			ui.Row(c).Padding(2, 7).Radius(theme.Radius).Background(k.Hover).Gap(4).
 				AlignItems(ui.Center).Children(func() {
 				ui.Icon(c, icons.Icon("git-branch")).Size(10, 10).TextColor(k.TextFaint)
 				ui.Text(c, p.Branch).FontSize(11).TextColor(k.TextMuted)
@@ -443,7 +440,7 @@ func (p *Page) files(c *ui.Context, k *theme.Colors) {
 			ui.Spacer(c)
 			if n := len(p.Changes); n > 0 {
 				ui.Text(c, fmt.Sprintf("%d", n)).FontSize(10).TextColor(k.TextFaint).
-					Padding(2, 5).Radius(4).Background(k.Hover)
+					Padding(2, 5).Radius(theme.Radius).Background(k.Hover)
 			}
 		})
 		ui.Divider(c)
@@ -472,7 +469,7 @@ func (p *Page) files(c *ui.Context, k *theme.Colors) {
 				i, ch := i, ch
 				selected := i == p.Sel
 				row := ui.Row(c.Key(fmt.Sprintf("git:%d", i))).Height(38).Padding(0, 7).
-					Gap(7).Radius(7).AlignItems(ui.Center).Cursor(ui.CursorPointer).
+					Gap(7).Radius(theme.Radius).AlignItems(ui.Center).Cursor(ui.CursorPointer).
 					Role(ui.RoleButton).Label(ch.Display).Tooltip(ch.Display + " — " + statusLabel(ch.Status)).
 					PopoverMenu(func(m *ui.Menu) { p.h.FileMenu(m, ch.Display) })
 				if selected {
@@ -543,7 +540,7 @@ func (p *Page) changeStatus() string {
 func (p *Page) statusBadge(c *ui.Context, k *theme.Colors, status string) {
 	col := statusColor(status, k)
 	ui.Text(c, statusLabel(status)).FontSize(9.5).FontWeight(700).
-		TextColor(col).Padding(2, 5).Radius(4).Background(col.Alpha(0.11)).
+		TextColor(col).Padding(2, 5).Radius(theme.Radius).Background(col.Alpha(0.11)).
 		Shrink(0).Tooltip(statusLabel(status))
 }
 
@@ -581,7 +578,7 @@ func (p *Page) diffHeader(c *ui.Context, k *theme.Colors) {
 				TextColor(k.DiffDel).Shrink(0)
 		}
 		if p.h.HasPath(path) {
-			open := ui.Row(c).Padding(4, 9).Radius(6).Cursor(ui.CursorPointer).
+			open := ui.Row(c).Padding(4, 9).Radius(theme.Radius).Cursor(ui.CursorPointer).
 				Role(ui.RoleButton).Label("Open File")
 			if open.Hovered() {
 				open.Background(k.Hover)
@@ -631,7 +628,7 @@ func (p *Page) diffState(c *ui.Context, k *theme.Colors) {
 
 func (p *Page) state(c *ui.Context, k *theme.Colors, glyph string, col ui.Color, title, detail string) {
 	ui.Column(c).Fill().Center().Padding(20).Gap(8).Children(func() {
-		ui.Box(c).Size(42, 42).Radius(12).Background(col.Alpha(0.10)).Center().Children(func() {
+		ui.Box(c).Size(42, 42).Radius(theme.Radius).Background(col.Alpha(0.10)).Center().Children(func() {
 			ui.Icon(c, icons.Icon(glyph)).Size(21, 21).TextColor(col)
 		})
 		ui.Text(c, title).FontSize(13).FontWeight(600).TextColor(k.Text).
@@ -814,7 +811,7 @@ func mustDir(h Host) string {
 
 // iconButton is a borderless icon button of the page header.
 func iconButton(c *ui.Context, k *theme.Colors, name, label string, size, iconSize float32) ui.Element {
-	b := ui.Box(c).Size(size, size).Center().Radius(size / 2.6).
+	b := ui.Box(c).Size(size, size).Center().Radius(theme.Radius).
 		Cursor(ui.CursorPointer).Role(ui.RoleButton).Label(label)
 	if b.Pressed() {
 		b.Background(k.Pressed)

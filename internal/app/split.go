@@ -130,14 +130,14 @@ func (a *app) splitPicker(c *ui.Context, k *colors) {
 	}
 	ui.DialogBase(c, &a.splitPick, func(backdrop, panel ui.Element) {
 		backdrop.Background(k.Backdrop).Justify(ui.Start).Padding(78, 0, 0, 0)
-		panel.Width(540).MaxHeight(450).Radius(16).Background(k.Panel).
+		panel.Width(540).MaxHeight(450).Radius(radius).Background(k.Panel).
 			Border(1, k.PanelBorder).
 			Shadow(0, 24, 60, -8, ui.RGBA(0, 0, 0, 0.28)).
 			Shadow(0, 2, 6, 0, ui.RGBA(0, 0, 0, 0.06)).Clip()
 		ui.Column(c).Children(func() {
 			ui.Row(c).Padding(14, 16).Gap(11).AlignItems(ui.Center).
 				BorderWidth(0, 0, 1, 0).BorderColor(k.PanelBorder).Children(func() {
-				ui.Box(c).Size(32, 32).Radius(9).Background(k.Hover).Center().Children(func() {
+				ui.Box(c).Size(32, 32).Radius(radius).Background(k.Hover).Center().Children(func() {
 					ui.Icon(c, icons.Icon(glyph)).Size(16, 16).TextColor(k.TextMuted)
 				})
 				ui.Column(c).Gap(1).Children(func() {
@@ -181,7 +181,7 @@ func (a *app) splitPicker(c *ui.Context, k *colors) {
 				for i, n := range notes {
 					i, n := i, n
 					row := ui.Row(c.Key("split:"+n.Rel)).Height(34).Padding(0, 10).Gap(9).
-						Radius(8).AlignItems(ui.Center).Cursor(ui.CursorPointer).
+						Radius(radius).AlignItems(ui.Center).Cursor(ui.CursorPointer).
 						Role(ui.RoleButton).Label(n.Title)
 					if i == a.splitSel {
 						row.Background(k.PanelSel)

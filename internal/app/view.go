@@ -15,7 +15,6 @@ import (
 const (
 	gap     = 8  // between panes, and around them
 	titleH  = 44 // the title bar
-	cardR   = 12 // the panes' corners
 	headerH = 33 // the panes' headers
 )
 
@@ -149,7 +148,7 @@ func tip(label string, cmd *command) string {
 // iconButton is a borderless button of an icon, with a face on hover;
 // label names it for screen readers and its tooltip.
 func iconButton(c *ui.Context, k *colors, name, label string, size, iconSize float32) ui.Element {
-	b := ui.Box(c).Size(size, size).Center().Radius(size / 2.6).
+	b := ui.Box(c).Size(size, size).Center().Radius(radius).
 		Cursor(ui.CursorPointer).Role(ui.RoleButton).Label(label)
 	if b.Pressed() {
 		b.Background(k.Pressed)
@@ -274,7 +273,7 @@ func (a *app) canvasNode(c *ui.Context, k *colors, t *tab, n *node, vw, vh float
 // paneCard draws one file: a card with a header over its editor.
 func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 	focused := t.Focus == p
-	card := ui.Column(c.Key(p.ID)).Radius(cardR).Clip().MinWidth(0).MinHeight(0)
+	card := ui.Column(c.Key(p.ID)).Radius(radius).Clip().MinWidth(0).MinHeight(0)
 	bg, border, shadow := k.Card, k.CardBorder, k.Shadow
 	borderW := float32(1)
 	if focused {
@@ -379,9 +378,14 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 			a.dropIndicator(c, k, overZone)
 		}
 		if a.overview {
-			hit := ui.Box(c.Key("overview-hit")).Absolute().Top(headerH).Bottom(0).
-				Left(0).Right(0).Background(ui.Transparent).Cursor(ui.CursorPointer).
-				Role(ui.RoleButton).Label("Select pane " + paneName(p))
+			// In the zoomed overview the whole pane is the handle: drag
+			// it anywhere to rearrange, click to select, double-click to
+			// return to it.
+			hit := ui.Box(c.Key("overview-hit")).Absolute().Fill().
+				Background(ui.Transparent).Cursor(ui.CursorGrab).
+				Role(ui.RoleButton).Label("Move pane " + paneName(p)).
+				Drag(p)
+			p.dragging = hit.Dragging()
 			if hit.Clicked() {
 				t.Focus = p
 				a.changed()
@@ -492,7 +496,7 @@ func (a *app) dropIndicator(c *ui.Context, k *colors, zone paneDrop) {
 	}
 	hint.Children(func() {
 		ui.Text(c, label).FontSize(10.5).FontWeight(650).TextColor(k.Panel).
-			Padding(3, 8).Radius(6).Background(k.Text)
+			Padding(3, 8).Radius(radius).Background(k.Text)
 	})
 }
 
@@ -640,14 +644,14 @@ func (a *app) laterPane(p *pane) {
 // emptyState shows when no note is open.
 func (a *app) emptyState(c *ui.Context, k *colors) {
 	ui.Column(c).Grow(1).FillWidth().Center().Gap(14).Children(func() {
-		ui.Box(c).Size(64, 54).Radius(15).Background(k.CardFocused).
+		ui.Box(c).Size(64, 54).Radius(radius).Background(k.CardFocused).
 			Border(1, k.CardBorderFocused).Center().Children(func() {
 			ui.Icon(c, brandMark(c)).Size(38, 38)
 		})
 		ui.Text(c, "No file open").FontSize(19).FontWeight(600).TextColor(k.Text)
 		ui.Text(c, "Write something, or pick a file in Explorer.").
 			FontSize(13).TextColor(k.TextMuted)
-		btn := ui.Row(c).Padding(7, 16).Radius(8).Cursor(ui.CursorPointer).
+		btn := ui.Row(c).Padding(7, 16).Radius(radius).Cursor(ui.CursorPointer).
 			Role(ui.RoleButton).Label("New File").Background(k.Text)
 		if btn.Hovered() {
 			btn.Background(k.Text.Alpha(0.86))
@@ -667,7 +671,7 @@ func (a *app) errorBanner(c *ui.Context, k *colors) {
 	ui.Overlay(c, func() {
 		ui.Row(c).Absolute().Bottom(18).Left(0).Right(0).Justify(ui.Center).
 			PassThrough().Children(func() {
-			ui.Row(c).Gap(10).Padding(8, 10, 8, 14).Radius(12).Background(k.Panel).
+			ui.Row(c).Gap(10).Padding(8, 10, 8, 14).Radius(radius).Background(k.Panel).
 				Border(1, k.PanelBorder).Shadow(0, 8, 24, 0, k.ShadowFocused).
 				AlignItems(ui.Center).Children(func() {
 				ui.Box(c).Size(8, 8).Radius(4).Background(k.Danger)

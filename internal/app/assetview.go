@@ -158,7 +158,7 @@ func (a *app) pdfFooter(c *ui.Context, k *colors, p *pane) {
 
 func (a *app) assetError(c *ui.Context, k *colors, p *pane, err error) {
 	ui.Column(c).Grow(1).Center().Gap(10).Padding(24).Children(func() {
-		ui.Box(c).Size(48, 48).Radius(13).Background(k.CardFocused).
+		ui.Box(c).Size(48, 48).Radius(radius).Background(k.CardFocused).
 			Border(1, k.CardBorderFocused).Center().Children(func() {
 			ui.Icon(c, icons.Icon("file-text")).Size(24, 24).TextColor(k.TextMuted)
 		})
@@ -185,7 +185,7 @@ func (a *app) openButton(c *ui.Context, k *colors, p *pane) {
 	if runtime.GOOS == "js" {
 		return
 	}
-	b := ui.Row(c).Padding(4, 9).Radius(6).Cursor(ui.CursorPointer).
+	b := ui.Row(c).Padding(4, 9).Radius(radius).Cursor(ui.CursorPointer).
 		Role(ui.RoleButton).Label("Open in Default App")
 	if b.Hovered() {
 		b.Background(k.Hover)

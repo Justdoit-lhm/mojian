@@ -327,7 +327,7 @@ func (a *app) sidebar(c *ui.Context, k *colors) {
 	if a.store == nil {
 		return
 	}
-	card := ui.Column(c).Width(treeW).Shrink(0).MinHeight(0).Radius(cardR).Clip().
+	card := ui.Column(c).Width(treeW).Shrink(0).MinHeight(0).Radius(radius).Clip().
 		Background(k.Card).Border(1, k.CardBorder).
 		Shadow(0, 1, 2, 0, k.Shadow).Shadow(0, 6, 22, -2, k.Shadow)
 	card.Children(func() {
@@ -377,7 +377,7 @@ func (a *app) sidebarHeader(c *ui.Context, k *colors) {
 }
 
 func (a *app) sidebarSearch(c *ui.Context, k *colors) {
-	field := ui.Row(c).Height(30).Margin(0, 9, 6, 9).Padding(5, 8).Gap(6).Radius(8).
+	field := ui.Row(c).Height(30).Margin(0, 9, 6, 9).Padding(5, 8).Gap(6).Radius(radius).
 		Background(k.Hover).AlignItems(ui.Center)
 	field.Children(func() {
 		ui.Icon(c, icons.Icon("search")).Size(14, 14).TextColor(k.TextFaint)
@@ -431,7 +431,7 @@ func (a *app) treeFolder(c *ui.Context, k *colors, n *fileNode, depth int) {
 		a.treeDraftRow(c, k, depth, true)
 	} else {
 		row := ui.Row(c.Key("dir:" + n.Rel)).Height(rowH).
-			PaddingStart(5 + float32(depth)*13).PaddingEnd(6).Gap(5).Radius(7).
+			PaddingStart(5 + float32(depth)*13).PaddingEnd(6).Gap(5).Radius(radius).
 			AlignItems(ui.Center).Cursor(ui.CursorPointer).Role(ui.RoleTreeItem).
 			Focusable().FocusRing(false).Label(n.Name).ClipX().
 			PopoverMenu(func(m *ui.Menu) { a.nodeMenu(m, n.Rel, true) })
@@ -482,7 +482,7 @@ func (a *app) treeFile(c *ui.Context, k *colors, n *fileNode, depth int) {
 		return
 	}
 	row := ui.Row(c.Key("file:" + n.Rel)).Height(rowH).
-		PaddingStart(5 + float32(depth)*13).PaddingEnd(6).Gap(5).Radius(7).
+		PaddingStart(5 + float32(depth)*13).PaddingEnd(6).Gap(5).Radius(radius).
 		AlignItems(ui.Center).Cursor(ui.CursorPointer).Role(ui.RoleTreeItem).
 		Focusable().FocusRing(false).Label(title).
 		Tooltip(title + " — " + n.Rel).ClipX().
@@ -546,7 +546,7 @@ func (a *app) treeDraftRow(c *ui.Context, k *colors, depth int, dir bool) {
 		return
 	}
 	row := ui.Row(c.Key(fmt.Sprintf("draft:%d", d.gen))).Height(rowH).
-		PaddingStart(5 + float32(depth)*13).PaddingEnd(6).Gap(5).Radius(7).
+		PaddingStart(5 + float32(depth)*13).PaddingEnd(6).Gap(5).Radius(radius).
 		AlignItems(ui.Center).Background(k.PanelSel)
 	row.Children(func() {
 		ui.Box(c).Size(12, 12).Shrink(0)
@@ -587,7 +587,7 @@ func (a *app) emptyTree(c *ui.Context, k *colors) {
 	ui.Column(c).Padding(18, 8).Gap(8).Center().Children(func() {
 		ui.Icon(c, icons.Icon("file-plus")).Size(20, 20).TextColor(k.TextFaint)
 		ui.Text(c, "No files here").FontSize(12.5).FontWeight(600).TextColor(k.TextMuted)
-		btn := ui.Row(c).Padding(5, 10).Radius(7).Cursor(ui.CursorPointer).
+		btn := ui.Row(c).Padding(5, 10).Radius(radius).Cursor(ui.CursorPointer).
 			Role(ui.RoleButton).Label("New File").Background(k.Hover)
 		if btn.Hovered() {
 			btn.Background(k.Pressed)
@@ -610,7 +610,7 @@ func (a *app) searchResults(c *ui.Context, k *colors) {
 	}
 	for _, n := range notes {
 		n := n
-		row := ui.Row(c.Key("result:"+n.Rel)).Padding(6, 7).Gap(8).Radius(7).
+		row := ui.Row(c.Key("result:"+n.Rel)).Padding(6, 7).Gap(8).Radius(radius).
 			AlignItems(ui.Center).Cursor(ui.CursorPointer).Role(ui.RoleTreeItem).
 			Focusable().FocusRing(false).Label(n.Title).
 			PopoverMenu(func(m *ui.Menu) { a.nodeMenu(m, n.Rel, false) })

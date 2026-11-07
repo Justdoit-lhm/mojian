@@ -123,7 +123,7 @@ func (a *app) projectPickerModal(c *ui.Context, k *colors) {
 	}
 	ui.DialogBase(c, &a.projectPicker, func(backdrop, panel ui.Element) {
 		backdrop.Background(k.Backdrop)
-		panel.Fill().Margin(18).Radius(18).Background(k.Sheet).Border(1, k.PanelBorder).
+		panel.Fill().Margin(18).Radius(radius).Background(k.Sheet).Border(1, k.PanelBorder).
 			Shadow(0, 24, 70, -10, k.ShadowFocused).Clip()
 		ui.Column(c).Fill().Children(func() {
 			a.pickerHeader(c, k)
@@ -141,7 +141,7 @@ func (a *app) projectPickerModal(c *ui.Context, k *colors) {
 
 func (a *app) pickerHeader(c *ui.Context, k *colors) {
 	ui.Row(c).Height(60).Padding(0, 18, 0, 12).Gap(11).AlignItems(ui.Center).Children(func() {
-		ui.Box(c).Size(34, 34).Radius(9).Background(k.Hover).Center().Children(func() {
+		ui.Box(c).Size(34, 34).Radius(radius).Background(k.Hover).Center().Children(func() {
 			ui.Icon(c, icons.FolderIcon()).Size(18, 18).TextColor(k.TextMuted)
 		})
 		ui.Column(c).Gap(1).Children(func() {
@@ -192,7 +192,7 @@ func (a *app) pickerPlace(c *ui.Context, k *colors, label, path string) {
 		return
 	}
 	current := filepath.Clean(path) == filepath.Clean(a.pickerPath)
-	row := ui.Row(c.Key("place:"+path)).Height(30).Padding(0, 8).Gap(8).Radius(7).
+	row := ui.Row(c.Key("place:"+path)).Height(30).Padding(0, 8).Gap(8).Radius(radius).
 		AlignItems(ui.Center).Cursor(ui.CursorPointer).Role(ui.RoleButton).Label(label)
 	if current {
 		row.Background(k.PanelSel)
@@ -209,7 +209,7 @@ func (a *app) pickerPlace(c *ui.Context, k *colors, label, path string) {
 }
 
 func (a *app) pickerRecent(c *ui.Context, k *colors, path string) {
-	row := ui.Row(c.Key("recent:"+path)).Height(30).Padding(0, 8).Gap(8).Radius(7).
+	row := ui.Row(c.Key("recent:"+path)).Height(30).Padding(0, 8).Gap(8).Radius(radius).
 		AlignItems(ui.Center).Cursor(ui.CursorPointer).Role(ui.RoleButton).
 		Label(a.projectLabel(path)).Tooltip(shortPath(path))
 	if row.Hovered() {
@@ -233,7 +233,7 @@ func (a *app) pickerMain(c *ui.Context, k *colors) {
 				Tooltip("Parent Folder"); b.Clicked() {
 				a.later(func() { a.pickerUp() })
 			}
-			field := ui.Row(c).Grow(1).Height(34).Padding(0, 10).Gap(7).Radius(8).
+			field := ui.Row(c).Grow(1).Height(34).Padding(0, 10).Gap(7).Radius(radius).
 				Background(k.Hover).AlignItems(ui.Center)
 			field.Children(func() {
 				ui.Icon(c, icons.FolderIcon()).Size(14, 14).TextColor(k.TextFaint)
@@ -259,7 +259,7 @@ func (a *app) pickerMain(c *ui.Context, k *colors) {
 				i, e := i, e
 				selected := i == a.pickerSel
 				row := ui.Row(c.Key("pick:"+e.Path)).Height(32).Padding(0, 9).Gap(9).
-					Radius(7).AlignItems(ui.Center).Cursor(ui.CursorPointer).
+					Radius(radius).AlignItems(ui.Center).Cursor(ui.CursorPointer).
 					Role(ui.RoleButton).Focusable().FocusRing(false).Label(e.Name)
 				if selected {
 					row.Background(k.PanelSel)
@@ -307,7 +307,7 @@ func (a *app) pickerFooter(c *ui.Context, k *colors) {
 }
 
 func (a *app) pickerButton(c *ui.Context, k *colors, label string, primary bool, fn func()) {
-	b := ui.Row(c).Padding(6, 14).Radius(7).Cursor(ui.CursorPointer).
+	b := ui.Row(c).Padding(6, 14).Radius(radius).Cursor(ui.CursorPointer).
 		Role(ui.RoleButton).Label(label)
 	if primary {
 		b.Background(k.Text)

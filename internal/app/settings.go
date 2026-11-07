@@ -81,7 +81,7 @@ func (a *app) settingsTitleBar(c *ui.Context, k *colors) {
 func (a *app) settingsRail(c *ui.Context, k *colors) {
 	ui.Column(c).Width(214).Shrink(0).FillHeight().Padding(10, 12).
 		Gap(2).BorderWidth(0, 0, 0, 1).BorderColor(k.PanelBorder).Children(func() {
-		ui.Row(c).Height(30).Margin(0, 2, 8, 2).Padding(0, 8).Gap(6).Radius(7).
+		ui.Row(c).Height(30).Margin(0, 2, 8, 2).Padding(0, 8).Gap(6).Radius(radius).
 			Background(k.Hover).AlignItems(ui.Center).Children(func() {
 			ui.Icon(c, icons.Icon("search")).Size(13, 13).TextColor(k.TextFaint)
 			ui.TextInputBase(c, &a.settingsQuery).Grow(1).FontSize(12).
@@ -95,7 +95,7 @@ func (a *app) settingsRail(c *ui.Context, k *colors) {
 			}
 			found = true
 			i, cat := i, cat
-			row := ui.Row(c).Height(34).Padding(0, 9).Gap(9).Radius(7).
+			row := ui.Row(c).Height(34).Padding(0, 9).Gap(9).Radius(radius).
 				Cursor(ui.CursorPointer).Role(ui.RoleButton).Label(cat.title)
 			if i == a.settingsCat {
 				row.Background(k.PanelSel)
@@ -162,7 +162,7 @@ func (a *app) settingsSection(c *ui.Context, k *colors, title string, fn func())
 		ui.Text(c, title).FontSize(10).FontWeight(650).
 			TextColor(k.TextFaint).Padding(2, 2)
 		panel := ui.Column(c).FillWidth().Background(k.Card).Border(1, k.CardBorder).
-			Radius(12).Clip()
+			Radius(radius).Clip()
 		panel.Children(fn)
 	})
 }
@@ -332,11 +332,11 @@ func (a *app) settingsGeneralPage(c *ui.Context, k *colors) {
 func (a *app) settingsAppearancePage(c *ui.Context, k *colors) {
 	a.settingsSection(c, k, "THEME", func() {
 		a.settingRow(c, k, "Appearance", "Follow the system, or keep one look.", func() {
-			ui.Row(c).Padding(3).Radius(9).Background(k.Track).Border(1, k.TrackBorder).
+			ui.Row(c).Padding(3).Radius(radius).Background(k.Track).Border(1, k.TrackBorder).
 				Gap(2).Role(ui.RoleRadioGroup).Label("Theme").Children(func() {
 				for i, label := range []string{"System", "Light", "Dark"} {
 					i, label := i, label
-					b := ui.Row(c).Padding(5, 12).Radius(7).Cursor(ui.CursorPointer).
+					b := ui.Row(c).Padding(5, 12).Radius(radius).Cursor(ui.CursorPointer).
 						Role(ui.RoleRadio).Label(label).Selected(a.appearance == i)
 					if a.appearance == i {
 						b.Background(k.PanelSel)
@@ -363,7 +363,7 @@ func (a *app) settingsAppearancePage(c *ui.Context, k *colors) {
 			&a.editorFontSize, 12.5, 9, 28, ".1f")
 		a.settingDivider(c, k)
 		a.settingRow(c, k, "Font family", "Choose the face used by editors and previews.", func() {
-			b := ui.Row(c).Padding(5, 10).Radius(7).Gap(6).Cursor(ui.CursorPointer).
+			b := ui.Row(c).Padding(5, 10).Radius(radius).Gap(6).Cursor(ui.CursorPointer).
 				Role(ui.RoleButton).Label("Editor font")
 			if b.Hovered() {
 				b.Background(k.Hover)
@@ -479,7 +479,7 @@ func (a *app) settingsEditorPage(c *ui.Context, k *colors) {
 		a.settingRow(c, k, "Tab size", "Columns for a tab and one level of indentation.", func() {
 			for _, n := range []int{2, 4, 8} {
 				n := n
-				b := ui.Row(c).Padding(4, 9).Radius(6).Cursor(ui.CursorPointer).
+				b := ui.Row(c).Padding(4, 9).Radius(radius).Cursor(ui.CursorPointer).
 					Role(ui.RoleRadio).Label(fmt.Sprintf("%d columns", n)).Selected(a.tabSize() == n)
 				if a.tabSize() == n {
 					b.Background(k.PanelSel)
@@ -532,7 +532,7 @@ func (a *app) settingsFontsPage(c *ui.Context, k *colors) {
 			BorderWidth(0, 0, 1, 0).BorderColor(k.PanelBorder).Children(func() {
 			for i, label := range []string{"Editor", "Terminal"} {
 				i, label := i, label
-				b := ui.Row(c).Padding(3, 8).Radius(5).Cursor(ui.CursorPointer).
+				b := ui.Row(c).Padding(3, 8).Radius(radius).Cursor(ui.CursorPointer).
 					Role(ui.RoleRadio).Label("Apply to " + label).Selected(a.fontTarget == i)
 				if a.fontTarget == i {
 					b.Background(k.PanelSel)
@@ -563,7 +563,7 @@ func (a *app) settingsFontsPage(c *ui.Context, k *colors) {
 				def = "System monospace · default"
 			}
 			row := ui.Row(c).Key("inline-default").Height(33).Padding(0, 10).Gap(8).
-				Radius(6).Cursor(ui.CursorPointer).Role(ui.RoleButton).Label(def)
+				Radius(radius).Cursor(ui.CursorPointer).Role(ui.RoleButton).Label(def)
 			current := a.editorFontFamily
 			if a.fontTarget == 1 {
 				current = a.terminalFontFamily
@@ -592,7 +592,7 @@ func (a *app) settingsFontsPage(c *ui.Context, k *colors) {
 				}
 				shown++
 				row := ui.Row(c).Key("inline:"+f.Name).Height(33).Padding(0, 10).
-					Gap(8).Radius(6).Cursor(ui.CursorPointer).Role(ui.RoleButton).Label(f.Name)
+					Gap(8).Radius(radius).Cursor(ui.CursorPointer).Role(ui.RoleButton).Label(f.Name)
 				if f.Name == current {
 					row.Background(k.PanelSel)
 				} else if row.Hovered() {
@@ -612,7 +612,7 @@ func (a *app) settingsFontsPage(c *ui.Context, k *colors) {
 						SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
 					if f.Monospaced {
 						ui.Text(c, "Mono").FontSize(9).FontWeight(650).
-							TextColor(k.TextFaint).Padding(1, 4).Radius(4).
+							TextColor(k.TextFaint).Padding(1, 4).Radius(radius).
 							Background(k.Hover).Shrink(0)
 					}
 				})
@@ -664,7 +664,7 @@ func (a *app) settingsTerminalPage(c *ui.Context, k *colors) {
 		a.settingRow(c, k, "Cursor shape", "How the terminal draws its caret.", func() {
 			for i, label := range []string{"Block", "Bar", "Underline"} {
 				i, label := i, label
-				b := ui.Row(c).Padding(4, 9).Radius(6).Cursor(ui.CursorPointer).
+				b := ui.Row(c).Padding(4, 9).Radius(radius).Cursor(ui.CursorPointer).
 					Role(ui.RoleRadio).Label(label).Selected(a.terminalCursor == i)
 				if a.terminalCursor == i {
 					b.Background(k.PanelSel)
@@ -705,7 +705,7 @@ func (a *app) settingsFilesPage(c *ui.Context, k *colors) {
 		a.aboutRow(c, k, "Folder", a.projectPath())
 		a.settingDivider(c, k)
 		a.settingRow(c, k, "Reveal", "Show the project in Finder.", func() {
-			b := ui.Row(c).Padding(4, 9).Radius(6).Cursor(ui.CursorPointer).
+			b := ui.Row(c).Padding(4, 9).Radius(radius).Cursor(ui.CursorPointer).
 				Role(ui.RoleButton).Label("Reveal Project")
 			if b.Hovered() {
 				b.Background(k.Hover)
@@ -811,7 +811,7 @@ func (a *app) fontRow(c *ui.Context, k *colors, title, detail string, which int,
 		}
 	}
 	a.settingRow(c, k, title, detail, func() {
-		b := ui.Row(c).Padding(5, 10).Radius(7).Gap(7).Cursor(ui.CursorPointer).
+		b := ui.Row(c).Padding(5, 10).Radius(radius).Gap(7).Cursor(ui.CursorPointer).
 			Role(ui.RoleButton).Label(title + ": " + label)
 		if b.Hovered() {
 			b.Background(k.Hover)
@@ -876,7 +876,7 @@ func (a *app) fontPicker(c *ui.Context, k *colors) {
 	}
 	ui.DialogBase(c, &a.fontPick, func(backdrop, panel ui.Element) {
 		backdrop.Background(k.Backdrop)
-		panel.Width(500).MaxHeight(480).Radius(16).Background(k.Panel).
+		panel.Width(500).MaxHeight(480).Radius(radius).Background(k.Panel).
 			Border(1, k.PanelBorder).
 			Shadow(0, 24, 60, -8, ui.RGBA(0, 0, 0, 0.28)).Clip()
 		ui.Column(c).Children(func() {
@@ -898,7 +898,7 @@ func (a *app) fontPicker(c *ui.Context, k *colors) {
 					def = "System monospace · default"
 				}
 				row := ui.Row(c).Key("default").Height(34).Padding(0, 10).Gap(8).
-					Radius(7).Cursor(ui.CursorPointer).Role(ui.RoleButton).Label(def)
+					Radius(radius).Cursor(ui.CursorPointer).Role(ui.RoleButton).Label(def)
 				if current == "" {
 					row.Background(k.PanelSel)
 				} else if row.Hovered() {
@@ -925,7 +925,7 @@ func (a *app) fontPicker(c *ui.Context, k *colors) {
 					}
 					shown++
 					row := ui.Row(c).Key(f.Name).Height(34).Padding(0, 10).Gap(8).
-						Radius(7).Cursor(ui.CursorPointer).Role(ui.RoleButton).
+						Radius(radius).Cursor(ui.CursorPointer).Role(ui.RoleButton).
 						Label(f.Name)
 					if f.Name == current {
 						row.Background(k.PanelSel)
@@ -948,7 +948,7 @@ func (a *app) fontPicker(c *ui.Context, k *colors) {
 							Shrink(1).MinWidth(0)
 						if f.Monospaced {
 							ui.Text(c, "Mono").FontSize(9).FontWeight(650).
-								TextColor(k.TextFaint).Padding(1, 4).Radius(4).
+								TextColor(k.TextFaint).Padding(1, 4).Radius(radius).
 								Background(k.Hover).Shrink(0)
 						}
 					})

@@ -164,13 +164,13 @@ func (a *app) sshPicker(c *ui.Context, k *colors) {
 	_ = was
 	ui.DialogBase(c, &a.sshPick, func(backdrop, panel ui.Element) {
 		backdrop.Background(k.Backdrop).Justify(ui.Start).Padding(78, 0, 0, 0)
-		panel.Width(560).MaxHeight(460).Radius(16).Background(k.Panel).
+		panel.Width(560).MaxHeight(460).Radius(radius).Background(k.Panel).
 			Border(1, k.PanelBorder).
 			Shadow(0, 24, 60, -8, ui.RGBA(0, 0, 0, 0.28)).Clip()
 		ui.Column(c).Children(func() {
 			ui.Row(c).Padding(13, 16).Gap(10).AlignItems(ui.Center).
 				BorderWidth(0, 0, 1, 0).BorderColor(k.PanelBorder).Children(func() {
-				ui.Box(c).Size(30, 30).Radius(8).Background(k.Hover).Center().Children(func() {
+				ui.Box(c).Size(30, 30).Radius(radius).Background(k.Hover).Center().Children(func() {
 					ui.Icon(c, icons.Icon("server")).Size(15, 15).TextColor(k.TextMuted)
 				})
 				ui.Column(c).Gap(1).Children(func() {
@@ -213,7 +213,7 @@ func (a *app) sshPicker(c *ui.Context, k *colors) {
 				for i, h := range filtered {
 					i, h := i, h
 					row := ui.Row(c).Key(h.Alias).Height(40).Padding(0, 10).Gap(9).
-						Radius(7).Cursor(ui.CursorPointer).Role(ui.RoleButton).
+						Radius(radius).Cursor(ui.CursorPointer).Role(ui.RoleButton).
 						Label(h.Alias + " " + h.detail())
 					if i == a.sshSel {
 						row.Background(k.PanelSel)

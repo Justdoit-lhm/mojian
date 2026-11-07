@@ -189,12 +189,12 @@ func TestOverviewClickAndArrows(t *testing.T) {
 	if !a.overview {
 		t.Fatal("overview did not open")
 	}
-	tt.Key(ui.Alt, ui.KeyLeft)
+	tt.Key(0, ui.KeyLeft)
 	tt.Frame()
 	if a.tab().Focus != first {
-		t.Fatal("Option+Left did not move to the pane on the left")
+		t.Fatal("Left did not move to the pane on the left in the overview")
 	}
-	label := "Select pane Reading notes"
+	label := "Move pane Reading notes"
 	if _, ok := tt.Find(label); !ok {
 		t.Fatalf("no click target for the right pane: %q", tt.Texts())
 	}
@@ -362,11 +362,11 @@ func TestOverviewDragRearranges(t *testing.T) {
 	tt.Frame()
 	tt.Key(ui.Alt, ui.KeyTab)
 	tt.Frame()
-	grip, ok := tt.Find("Move Pane")
+	grip, ok := tt.Find("Move pane " + paneName(first))
 	if !ok {
-		t.Fatal("no grip in overview")
+		t.Fatal("no draggable pane in overview")
 	}
-	label := "Select pane " + paneName(second)
+	label := "Move pane " + paneName(second)
 	target, ok := tt.Find(label)
 	if !ok {
 		t.Fatalf("no target %q", label)

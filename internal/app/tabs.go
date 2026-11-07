@@ -33,7 +33,7 @@ func (a *app) tabStrip(c *ui.Context, k *colors) {
 	// slivers: every tab keeps its name, and the active one is revealed
 	// when it changes.
 	track := ui.ScrollHorizontal(c).Basis(total).Shrink(1).MinWidth(0).Height(tabH+4).
-		Radius((tabH+4)/2).Background(k.Track).Border(0.5, k.TrackBorder).
+		Radius(radius).Background(k.Track).Border(0.5, k.TrackBorder).
 		ClipX().DragWindow().Role(ui.RoleTabList).Label("Tabs").Scrollbars(false).
 		TrackScroll(&a.tabScroll)
 	tabs := append([]*tab(nil), a.tabs...)
@@ -104,7 +104,7 @@ func tabLabel(name, detail string, nameColor, detailColor ui.Color) []ui.Span {
 func (a *app) tabItem(c *ui.Context, k *colors, i int, t *tab, width float32, whole bool) {
 	active := i == a.active
 	e := ui.Row(c.Key(t.ID)).Height(tabH).Basis(width).Shrink(0).
-		Padding(0, 9, 0, 5).Gap(8).AlignItems(ui.Center).Radius(tabH / 2).
+		Padding(0, 9, 0, 5).Gap(8).AlignItems(ui.Center).Radius(radius).
 		Role(ui.RoleTab).Selected(active).FocusRing(false)
 	name, detail := t.label()
 	e.Label(name + " " + detail)

@@ -131,6 +131,10 @@ func (a *app) overviewKeys(c *ui.Context) {
 	c.OnShortcut(ui.Alt|ui.Shift, ui.KeyTab, func() { a.cycleOverview(-1) })
 	c.OnShortcut(0, ui.KeyTab, func() { a.cycleOverview(1) })
 	c.OnShortcut(ui.Shift, ui.KeyTab, func() { a.cycleOverview(-1) })
+	c.OnShortcut(0, ui.KeyLeft, func() { a.focusOverviewDirection(paneLeft) })
+	c.OnShortcut(0, ui.KeyRight, func() { a.focusOverviewDirection(paneRight) })
+	c.OnShortcut(0, ui.KeyUp, func() { a.focusOverviewDirection(paneUp) })
+	c.OnShortcut(0, ui.KeyDown, func() { a.focusOverviewDirection(paneDown) })
 	c.OnShortcut(0, ui.KeyEscape, func() { a.closeOverview() })
 	c.OnShortcut(0, ui.KeyEnter, func() {
 		if t := a.tab(); t != nil && t.Focus != nil {
@@ -225,7 +229,7 @@ func (a *app) overviewChrome(c *ui.Context, k *colors) {
 		ui.Row(c).Absolute().Bottom(18).Left(0).Right(0).Justify(ui.Center).
 			PassThrough().Children(func() {
 			pill := ui.Row(c.Key("overview-pill")).Padding(7, 12).Gap(9).
-				AlignItems(ui.Center).Radius(12).Background(k.Panel).
+				AlignItems(ui.Center).Radius(radius).Background(k.Panel).
 				Border(1, k.PanelBorder).
 				Shadow(0, 10, 30, -6, k.ShadowFocused).
 				Focusable().FocusRing(false).
@@ -261,7 +265,7 @@ func plural(n int, one, many string) string {
 func keyHint(c *ui.Context, k *colors, key, label string) {
 	ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, key).FontSize(10.5).FontWeight(600).TextColor(k.TextMuted).
-			Padding(1, 5).Radius(4).Background(k.Hover)
+			Padding(1, 5).Radius(radius).Background(k.Hover)
 		ui.Text(c, label).FontSize(11).TextColor(k.TextFaint)
 	})
 }

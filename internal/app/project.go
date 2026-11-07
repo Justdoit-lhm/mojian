@@ -148,7 +148,7 @@ func (a *app) projectChip(c *ui.Context, k *colors) {
 	if a.store == nil {
 		return
 	}
-	chip := ui.Row(c).Gap(7).Padding(3, 8, 3, 6).Radius(9).AlignItems(ui.Center).
+	chip := ui.Row(c).Gap(7).Padding(3, 8, 3, 6).Radius(radius).AlignItems(ui.Center).
 		Cursor(ui.CursorPointer).Role(ui.RoleButton).Label("Switch project: " + a.projectName()).
 		Tooltip(a.projectPath() + "  ⌘O").MaxWidth(230).Shrink(0).ClipX()
 	if chip.Hovered() || a.projectOpen {
@@ -167,12 +167,12 @@ func (a *app) projectChip(c *ui.Context, k *colors) {
 		return
 	}
 	ui.PopoverBase(c, chip, &a.projectOpen, func(panel ui.Element) {
-		panel.Width(304).Padding(9).Radius(14).Background(k.Panel).Border(1, k.PanelBorder).
+		panel.Width(304).Padding(9).Radius(radius).Background(k.Panel).Border(1, k.PanelBorder).
 			Shadow(0, 12, 32, 0, k.ShadowFocused).Gap(1)
 		if a.remotePath != "" {
 			a.remoteProjectRows(c, k)
 			ui.Divider(c)
-			row := ui.Row(c).Height(34).Padding(0, 8).Gap(8).Radius(8).
+			row := ui.Row(c).Height(34).Padding(0, 8).Gap(8).Radius(radius).
 				AlignItems(ui.Center).Cursor(ui.CursorPointer).Role(ui.RoleButton).
 				Label("Open Remote Folder…")
 			if row.Hovered() {
@@ -198,7 +198,7 @@ func (a *app) projectChip(c *ui.Context, k *colors) {
 		}
 		if runtime.GOOS != "js" {
 			ui.Divider(c)
-			row := ui.Row(c).Height(34).Padding(0, 8).Gap(8).Radius(8).
+			row := ui.Row(c).Height(34).Padding(0, 8).Gap(8).Radius(radius).
 				AlignItems(ui.Center).Cursor(ui.CursorPointer).Role(ui.RoleButton).
 				Label("Open Folder…")
 			if row.Hovered() {
@@ -219,7 +219,7 @@ func (a *app) projectChip(c *ui.Context, k *colors) {
 
 func (a *app) projectRow(c *ui.Context, k *colors, p string) {
 	current := a.store != nil && !a.store.memory && filepath.Clean(a.store.dir) == filepath.Clean(p)
-	row := ui.Row(c.Key("project:"+p)).Height(42).Padding(0, 8).Gap(9).Radius(8).
+	row := ui.Row(c.Key("project:"+p)).Height(42).Padding(0, 8).Gap(9).Radius(radius).
 		AlignItems(ui.Center).Cursor(ui.CursorPointer).Role(ui.RoleButton).
 		Label(a.projectLabel(p))
 	if current {

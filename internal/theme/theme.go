@@ -9,6 +9,10 @@ import (
 	"github.com/egoist/mygo/ui/editor"
 )
 
+// Radius is the one corner radius used by the window's surfaces: cards,
+// panes, fields, buttons, popovers and dialogs.
+const Radius = 10
+
 // The window's own colors, in light and dark windows. They are the
 // reference's: warm paper in the light, ink and moss in the dark.
 type Colors struct {

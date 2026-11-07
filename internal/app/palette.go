@@ -181,7 +181,7 @@ func (a *app) palette(c *ui.Context, k *colors) {
 	reveal := false
 	ui.DialogBase(c, &a.paletteOpen, func(backdrop, panel ui.Element) {
 		backdrop.Background(k.Backdrop).Justify(ui.Start).Padding(78, 0, 0, 0)
-		panel.Width(560).MaxHeight(440).Radius(16).Background(k.Panel).Border(1, k.PanelBorder).
+		panel.Width(560).MaxHeight(440).Radius(radius).Background(k.Panel).Border(1, k.PanelBorder).
 			Shadow(0, 24, 60, -8, ui.RGBA(0, 0, 0, 0.28)).
 			Shadow(0, 2, 6, 0, ui.RGBA(0, 0, 0, 0.06)).Clip()
 		ui.Row(c).Padding(12, 16).Gap(10).AlignItems(ui.Center).
@@ -210,7 +210,7 @@ func (a *app) palette(c *ui.Context, k *colors) {
 			}
 			for i, it := range items {
 				it := it
-				row := ui.Row(c.Key(i)).Height(34).Padding(0, 10).Gap(10).Radius(8).
+				row := ui.Row(c.Key(i)).Height(34).Padding(0, 10).Gap(10).Radius(radius).
 					AlignItems(ui.Center).Cursor(ui.CursorPointer)
 				if i == a.paletteSel {
 					row.Background(k.PanelSel)
@@ -235,7 +235,7 @@ func (a *app) palette(c *ui.Context, k *colors) {
 					ui.Spacer(c)
 					if it.keys != "" {
 						ui.Text(c, it.keys).FontSize(12).TextColor(k.TextFaint).
-							Padding(2, 7).Radius(6).Background(k.Hover).Shrink(0)
+							Padding(2, 7).Radius(radius).Background(k.Hover).Shrink(0)
 					}
 				})
 			}
