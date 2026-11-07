@@ -23,6 +23,9 @@ type Request struct {
 	Cols   int            `json:"cols,omitempty"`
 	Rows   int            `json:"rows,omitempty"`
 	Create *CreateOptions `json:"create,omitempty"`
+	Path   string         `json:"path,omitempty"`
+	To     string         `json:"to,omitempty"`
+	Data   []byte         `json:"data,omitempty"`
 }
 
 // Response answers a Request with the same ID.
@@ -55,6 +58,14 @@ type SessionInfo struct {
 }
 
 // Hello is the answer to "hello".
+// FileEntry describes a path in a remote project.
+type FileEntry struct {
+	Rel  string    `json:"rel"`
+	Dir  bool      `json:"dir,omitempty"`
+	Size int64     `json:"size,omitempty"`
+	Mod  time.Time `json:"mod,omitempty"`
+}
+
 type Hello struct {
 	Version int       `json:"version"`
 	PID     int       `json:"pid"`

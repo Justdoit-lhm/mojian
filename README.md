@@ -36,20 +36,21 @@ workspaces hold panes, and every pane edits a file with syntax highlighting.
   GIFs included. A PDF shows its first page through macOS Quick Look (or
   `pdftoppm` when installed), with Open for the system reader.
 - **Settings in their own window.** `⌘,`, the gear, or the palette opens a
-  separate window: categories on the left, settings on the right. The editor
-  and terminal fonts are chosen from the families installed on the Mac, with
-  live previews; type, line height, tab size, wrapping, Markdown, Git refresh
-  and startup are there too. Every change applies and is saved at once.
+  separate window, after Kero: searchable categories on the left, settings on
+  the right. General, Appearance, Editor, Fonts, Terminal, Shell, Notifications,
+  Keyboard, Hosts, Git and Advanced cover installed fonts, type, line height,
+  tab size, wrapping, Markdown, server hosts, terminal input and startup.
+  Every change applies and is saved at once.
   ![The Settings window](docs/settings.png)
 
-- **SSH servers with persistent sessions.** `⇧⌘L` lists the Host aliases in
-  `~/.ssh/config` and opens the system `ssh` in a terminal pane, so keys,
-  ProxyJump and the agent keep working. Mojian's own session server keeps
-  the SSH process and its screen alive: quitting the app detaches, opening it
-  again reattaches, and agents keep running. Nothing is installed on the
-  server; the session server is a local process of Mojian.
-
-  ![Connect to Server](docs/ssh.png)
+- **Servers and projects.** The server chip sits left of the project name.
+  Pick Local or an SSH host, then choose a directory on it. `~/.ssh/config`
+  supplies aliases, keys, ProxyJump and the agent. On first use Mojian uploads
+  a small per-user server to the host over SSH; it needs no root and opens no
+  port. The same project can be edited, its Git diff read, and its terminals
+  run on the server. Sessions keep running when you quit; reopening the app
+  reconnects the host and restores the project, layout and sessions.
+  The host model follows [Kero](https://kero.sh).
 - **A terminal inside the window.** `⇧⌘T` opens a terminal pane on the right,
   in the selected folder. It tiles with the same split, zoom and close
   controls as a file pane, and a pane's grip moves it like any other tile;
@@ -127,14 +128,17 @@ The pieces that stand on their own are packages of their own.
 
 | | |
 |---|---|
-| `main.go` | starts the app, or `-server` for the session server |
+| `main.go` | starts the app, or `-server` for the local session server |
+| `cmd/mojian-server/` | the per-user server uploaded to SSH hosts |
+| `internal/remotebin/` | the embedded Linux server and libghostty-vt builds |
+
 | `internal/app/` | the window: shell, tabs, panes, Explorer, pickers, settings and the file operations |
 | `internal/git/` | the working-tree page: status, diffs, parsing and its view |
 | `internal/theme/` | light and dark palettes, the window gradient and fonts |
 | `internal/icons/` | Lucide action icons and Material Icon Theme file icons |
 | `internal/assets/` | the embedded icons and JetBrains Mono |
 | `internal/motion/` | the page, pane, tab and tree transitions |
-| `internal/session/` | the local session server: PTYs, SSH processes, screen snapshots and reattach; quit detaches, close a pane ends it |
+| `internal/session/` | PTYs, terminal snapshots, remote file operations and attach; used locally and by the uploaded server |
 | `test/` | black-box integration tests and the helpers they share |
 
 Go requires `_test.go` files that read unexported state to sit beside their
@@ -158,7 +162,9 @@ Inside `internal/app/`:
 | `view.go` | the title bar, pane cards and splitters |
 | `tabs.go` | the tab strip and tab menu |
 | `palette.go` | the command palette |
-| `settings.go` | the settings page |
+| `settings.go` | the Kero-inspired settings window |
+| `remote.go` | SSH host connections, remote project mirrors and the server/project switcher |
+| `ssh.go` | the SSH host picker and `~/.ssh/config` |
 | `assetview.go` | image, PDF and Markdown preview rendering |
 
 ## Credits
@@ -169,4 +175,5 @@ Font: [JetBrains Mono](https://www.jetbrains.com/lp/mono/), OFL
 (`internal/assets/fonts/OFL.txt`).
 Pseudo-terminals: [creack/pty](https://github.com/creack/pty), MIT.
 The window's shape and interaction follow [GoRex](https://github.com/egoist/gorex),
-also built with MyGo.
+also built with MyGo. Remote hosts and the settings shape follow
+[Kero](https://kero.sh).

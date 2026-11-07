@@ -41,6 +41,7 @@ func (a *app) view(c *ui.Context) {
 	}
 	a.projectPickerModal(c, k)
 	a.splitPicker(c, k)
+	a.remotePickerModal(c, k)
 	a.sshPicker(c, k)
 	a.palette(c, k)
 	a.shortcuts(c)
@@ -81,6 +82,7 @@ func (a *app) titleBar(c *ui.Context, k *colors) {
 		// window, and leaves the corner itself to the resize edge.
 		ui.Box(c).Width(dragW).Height(titleH).DragWindow().
 			Cursor(ui.CursorGrab).Description("Drag Window")
+		a.serverChip(c, k)
 		a.projectChip(c, k)
 		a.tabStrip(c, k)
 		if iconButton(c, k, "plus", "New Tab", 26, 16).
@@ -108,10 +110,6 @@ func (a *app) titleBar(c *ui.Context, k *colors) {
 					Tooltip(tip("Toggle Terminal", cmdTerminal)).Clicked() {
 					a.later(func() { a.toggleTerminal() })
 				}
-			}
-			if iconButton(c, k, "server", "Connect to Server", 30, 17).
-				Tooltip(tip("Connect to Server", cmdSSH)).Clicked() {
-				a.later(func() { a.openSSHPicker() })
 			}
 			if iconButton(c, k, "settings", "Settings", 30, 17).
 				Tooltip(tip("Settings", cmdSettings)).Clicked() {

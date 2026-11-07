@@ -33,15 +33,26 @@ type app struct {
 	layoutPath   string
 	settingsPath string
 
-	project       string
-	projects      []string
-	projectOpen   bool
-	projectPicker bool
-	pickerPath    string
-	pickerInput   string
-	pickerEntries []pickerEntry
-	pickerSel     int
-	pickerErr     string
+	project        string
+	projects       []string
+	projectOpen    bool
+	projectPicker  bool
+	serverAlias    string
+	remotePath     string
+	remoteCache    string
+	remote         *remoteConn
+	remoteProjects []remoteProject
+	serverOpen     bool
+	remotePicker   bool
+	remoteHost     string
+	remoteQuery    string
+	remoteDirs     []session.FileEntry
+	remoteErr      string
+	pickerPath     string
+	pickerInput    string
+	pickerEntries  []pickerEntry
+	pickerSel      int
+	pickerErr      string
 
 	tabs   []*tab
 	active int
@@ -112,6 +123,11 @@ type app struct {
 	noScrollPastEnd     bool
 	terminalFontSize    float64 // 0 means the default 12.5
 	terminalFontFamily  string
+	shellPath           string
+	terminalCursor      int
+	notifyBell          bool
+	notifyExit          bool
+	settingsQuery       string
 	terminalLineHeight  float64 // 0 means 1
 	terminalOptionAsAlt bool
 	terminalCopySelect  bool
@@ -127,6 +143,7 @@ type app struct {
 	lastChange  time.Time
 	layoutTimer *time.Timer
 	loaded      bool
+	quitting    bool
 	pending     []func()
 
 	edDark  bool
@@ -138,6 +155,7 @@ func Run() {
 	a := &app{
 		editorFontSize: 12.5, editorLineHeight: 1.55, editorTabSize: 4,
 		terminalFontSize: 12.5, terminalLineHeight: 1, terminalScrollback: 10,
+		notifyBell: true, notifyExit: true,
 	}
 	mygo.App.SetMenu(a.menu())
 	mygo.App.WhenReady(a.open)
@@ -152,12 +170,14 @@ func Run() {
 		}
 	})
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
+		a.quitting = true
 		a.saveNow()
 		a.closeTerminals()
 		if a.sessionClient != nil {
 			_ = a.sessionClient.Close()
 			a.sessionClient = nil
 		}
+		a.closeRemote()
 		if a.settingsWin != nil {
 			a.settingsWin.Close()
 		}
@@ -176,6 +196,20 @@ func (a *app) open() {
 			a.settingsPath = filepath.Join(dir, "settings.json")
 		}
 		a.loadSettings()
+		if a.serverAlias != "" && a.remotePath != "" {
+			if err := a.openRemoteProject(a.serverAlias, a.remotePath); err == nil {
+				a.treeOpen = true
+				a.win = a.createWindow("main")
+				a.updateTitle()
+				return
+			} else {
+				log.Print(err)
+				a.err = err.Error()
+				a.closeRemote()
+				a.serverAlias = ""
+				a.remotePath = ""
+			}
+		}
 		firstProject := a.project == ""
 		s, err := a.initialStore()
 		if err != nil {
@@ -207,6 +241,12 @@ func (a *app) open() {
 		a.revealTab = true
 		a.saveLayout()
 	}
+	a.quitting = false
+	if a.loaded && a.serverAlias != "" && a.remotePath != "" {
+		if _, err := a.ensureRemote(a.serverAlias); err != nil {
+			a.fail(err)
+		}
+	}
 	a.win = a.createWindow("main")
 	a.updateTitle()
 }
@@ -237,6 +277,7 @@ func (a *app) createWindow(stateKey string) *mygo.Window {
 
 // windowClosed clears the window state, keeping the tabs for a reopen.
 func (a *app) windowClosed() {
+	a.quitting = true
 	if a.settingsWin != nil {
 		a.settingsWin.Close()
 	}
@@ -246,6 +287,7 @@ func (a *app) windowClosed() {
 		_ = a.sessionClient.Close()
 		a.sessionClient = nil
 	}
+	a.closeRemote()
 	if a.layoutTimer != nil {
 		a.layoutTimer.Stop()
 		a.layoutTimer = nil
@@ -260,29 +302,36 @@ func (a *app) windowClosed() {
 
 // settingsFile is what the app keeps between launches.
 type settingsFile struct {
-	Appearance          int      `json:"appearance"`
-	EditorFontFamily    string   `json:"editorFontFamily,omitempty"`
-	EditorFontSize      float64  `json:"editorFontSize,omitempty"`
-	EditorLineHeight    float64  `json:"editorLineHeight,omitempty"`
-	EditorTabSize       int      `json:"editorTabSize,omitempty"`
-	EditorSoftWrap      bool     `json:"editorSoftWrap,omitempty"`
-	HideLineNumbers     bool     `json:"hideLineNumbers,omitempty"`
-	MarkdownPreview     bool     `json:"markdownPreview,omitempty"`
-	NoActiveLine        bool     `json:"noActiveLine,omitempty"`
-	NoIndentGuides      bool     `json:"noIndentGuides,omitempty"`
-	NoAutoClose         bool     `json:"noAutoClose,omitempty"`
-	NoScrollPastEnd     bool     `json:"noScrollPastEnd,omitempty"`
-	TerminalFontFamily  string   `json:"terminalFontFamily,omitempty"`
-	TerminalFontSize    float64  `json:"terminalFontSize,omitempty"`
-	TerminalLineHeight  float64  `json:"terminalLineHeight,omitempty"`
-	TerminalOptionAsAlt bool     `json:"terminalOptionAsAlt,omitempty"`
-	TerminalCopySelect  bool     `json:"terminalCopySelect,omitempty"`
-	NoCursorBlink       bool     `json:"noCursorBlink,omitempty"`
-	TerminalScrollback  int      `json:"terminalScrollback,omitempty"`
-	NoRestoreLayout     bool     `json:"noRestoreLayout,omitempty"`
-	NoGitAutoRefresh    bool     `json:"noGitAutoRefresh,omitempty"`
-	Project             string   `json:"project,omitempty"`
-	Projects            []string `json:"projects,omitempty"`
+	Appearance          int             `json:"appearance"`
+	EditorFontFamily    string          `json:"editorFontFamily,omitempty"`
+	EditorFontSize      float64         `json:"editorFontSize,omitempty"`
+	EditorLineHeight    float64         `json:"editorLineHeight,omitempty"`
+	EditorTabSize       int             `json:"editorTabSize,omitempty"`
+	EditorSoftWrap      bool            `json:"editorSoftWrap,omitempty"`
+	HideLineNumbers     bool            `json:"hideLineNumbers,omitempty"`
+	MarkdownPreview     bool            `json:"markdownPreview,omitempty"`
+	NoActiveLine        bool            `json:"noActiveLine,omitempty"`
+	NoIndentGuides      bool            `json:"noIndentGuides,omitempty"`
+	NoAutoClose         bool            `json:"noAutoClose,omitempty"`
+	NoScrollPastEnd     bool            `json:"noScrollPastEnd,omitempty"`
+	TerminalFontFamily  string          `json:"terminalFontFamily,omitempty"`
+	TerminalFontSize    float64         `json:"terminalFontSize,omitempty"`
+	ShellPath           string          `json:"shellPath,omitempty"`
+	TerminalCursor      int             `json:"terminalCursor,omitempty"`
+	NotifyBell          bool            `json:"notifyBell,omitempty"`
+	NotifyExit          bool            `json:"notifyExit,omitempty"`
+	TerminalLineHeight  float64         `json:"terminalLineHeight,omitempty"`
+	TerminalOptionAsAlt bool            `json:"terminalOptionAsAlt,omitempty"`
+	TerminalCopySelect  bool            `json:"terminalCopySelect,omitempty"`
+	NoCursorBlink       bool            `json:"noCursorBlink,omitempty"`
+	TerminalScrollback  int             `json:"terminalScrollback,omitempty"`
+	NoRestoreLayout     bool            `json:"noRestoreLayout,omitempty"`
+	NoGitAutoRefresh    bool            `json:"noGitAutoRefresh,omitempty"`
+	Project             string          `json:"project,omitempty"`
+	Projects            []string        `json:"projects,omitempty"`
+	Server              string          `json:"server,omitempty"`
+	RemotePath          string          `json:"remotePath,omitempty"`
+	RemoteProjects      []remoteProject `json:"remoteProjects,omitempty"`
 }
 
 // loadSettings reads the appearance and the project the app was left in.
@@ -329,6 +378,10 @@ func (a *app) loadSettings() {
 	a.noAutoClose = s.NoAutoClose
 	a.noScrollPastEnd = s.NoScrollPastEnd
 	a.terminalFontFamily = s.TerminalFontFamily
+	a.shellPath = s.ShellPath
+	a.terminalCursor = s.TerminalCursor
+	a.notifyBell = s.NotifyBell
+	a.notifyExit = s.NotifyExit
 	a.terminalOptionAsAlt = s.TerminalOptionAsAlt
 	a.terminalCopySelect = s.TerminalCopySelect
 	a.noCursorBlink = s.NoCursorBlink
@@ -336,6 +389,9 @@ func (a *app) loadSettings() {
 	a.noGitAutoRefresh = s.NoGitAutoRefresh
 	a.project = s.Project
 	a.projects = s.Projects
+	a.serverAlias = s.Server
+	a.remotePath = s.RemotePath
+	a.remoteProjects = s.RemoteProjects
 }
 
 func (a *app) saveSettings() {
@@ -343,7 +399,7 @@ func (a *app) saveSettings() {
 		return
 	}
 	project := a.project
-	if a.store != nil && !a.store.memory {
+	if a.remotePath == "" && a.store != nil && !a.store.memory {
 		project = a.store.dir
 	}
 	data, _ := json.MarshalIndent(settingsFile{
@@ -361,6 +417,10 @@ func (a *app) saveSettings() {
 		NoScrollPastEnd:     a.noScrollPastEnd,
 		TerminalFontFamily:  a.terminalFontFamily,
 		TerminalFontSize:    a.termFontSize(),
+		ShellPath:           a.shellPath,
+		TerminalCursor:      a.terminalCursor,
+		NotifyBell:          a.notifyBell,
+		NotifyExit:          a.notifyExit,
 		TerminalLineHeight:  a.termLineHeight(),
 		TerminalOptionAsAlt: a.terminalOptionAsAlt,
 		TerminalCopySelect:  a.terminalCopySelect,
@@ -370,6 +430,9 @@ func (a *app) saveSettings() {
 		NoGitAutoRefresh:    a.noGitAutoRefresh,
 		Project:             project,
 		Projects:            a.projects,
+		Server:              a.serverAlias,
+		RemotePath:          a.remotePath,
+		RemoteProjects:      a.remoteProjects,
 	}, "", "  ")
 	_ = os.MkdirAll(filepath.Dir(a.settingsPath), 0o755)
 	_ = os.WriteFile(a.settingsPath, data, 0o644)

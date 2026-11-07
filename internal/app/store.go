@@ -145,6 +145,10 @@ type store struct {
 	seq    int
 	tree   *fileNode
 	assets map[string]*assetFile
+
+	// onSave, when set by a remote project, uploads a note after its
+	// local cache write.
+	onSave func(*note) error
 }
 
 // openStore opens the folder at $MOJIAN_VAULT, else ~/Documents/Mojian,
@@ -492,6 +496,11 @@ func (s *store) save(n *note) error {
 	}
 	if err := s.write(n.Path, body); err != nil {
 		return err
+	}
+	if s.onSave != nil {
+		if err := s.onSave(n); err != nil {
+			return err
+		}
 	}
 	n.Saved = body
 	n.Title = noteTitle(body, n.Path)

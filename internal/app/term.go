@@ -4,9 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"strings"
 
 	"mojian/internal/session"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/terminal"
 )
 
@@ -18,6 +20,7 @@ type termTab struct {
 
 	SID    string
 	Spec   termSpec
+	Client *session.Client
 	stream *session.Stream
 
 	starting bool
@@ -187,7 +190,7 @@ func (a *app) startTerminalSpec(spec termSpec) (*termTab, error) {
 	if a.shellStarter != nil {
 		return a.shellStarter()
 	}
-	client, err := a.sessions()
+	client, err := a.terminalClient(spec)
 	if err != nil {
 		return nil, err
 	}
@@ -196,6 +199,10 @@ func (a *app) startTerminalSpec(spec termSpec) (*termTab, error) {
 	if spec.Host != "" {
 		cmd = sshArgs(spec.Host)
 		dir = ""
+	} else if a.remote != nil {
+		dir = a.remotePath
+	} else if strings.TrimSpace(a.shellPath) != "" {
+		cmd = []string{a.shellPath, "-l"}
 	}
 	info, err := client.Create(session.CreateOptions{
 		Command: cmd, Dir: dir, Cols: 80, Rows: 24,
@@ -203,17 +210,23 @@ func (a *app) startTerminalSpec(spec termSpec) (*termTab, error) {
 	if err != nil {
 		return nil, fmt.Errorf("session: %w", err)
 	}
-	return a.attachTerminal(info.ID, spec)
+	return a.attachTerminal(client, info.ID, spec)
+}
+
+// terminalClient chooses the local session server, or the current remote
+// one for a project on a server. A direct SSH pane still starts from the
+// local server, so the SSH process lives with this machine.
+func (a *app) terminalClient(spec termSpec) (*session.Client, error) {
+	if spec.Host == "" && a.remote != nil && a.remote.client != nil {
+		return a.remote.client, nil
+	}
+	return a.sessions()
 }
 
 // attachTerminal makes a terminal view attached to a session.
-func (a *app) attachTerminal(sid string, spec termSpec) (*termTab, error) {
-	client, err := a.sessions()
-	if err != nil {
-		return nil, err
-	}
+func (a *app) attachTerminal(client *session.Client, sid string, spec termSpec) (*termTab, error) {
 	stream := client.Stream(sid, 80, 24)
-	tt := &termTab{SID: sid, Spec: spec, stream: stream}
+	tt := &termTab{SID: sid, Spec: spec, Client: client, stream: stream}
 	term, err := terminal.New(a.terminalOptions(stream, tt))
 	if err != nil {
 		_ = stream.Close()
@@ -244,13 +257,29 @@ func (a *app) terminalOptions(conn *session.Stream, tt *termTab) terminal.Option
 		},
 		OptionAsAlt:  a.terminalOptionAsAlt,
 		CopyOnSelect: copySelect,
+		Cursor:       terminal.CursorStyle(a.terminalCursor),
 		NoBlink:      a.noCursorBlink,
 		Scrollback:   a.termScrollback() * 1 << 20,
 		Transparent:  true,
 		Padding:      terminal.Padding{X: 10, Y: 8},
+		OnBell: func() {
+			update(func() {
+				if a.notifyBell && (a.win == nil || !a.win.IsFocused()) {
+					mygo.NewNotification(mygo.NotificationOptions{
+						Title: "Terminal", Body: tt.Spec.title(),
+					}).Show()
+				}
+				a.invalidate()
+			})
+		},
 		OnExit: func(int) {
 			update(func() {
 				tt.Exited = true
+				if a.notifyExit && !a.quitting && (a.win == nil || !a.win.IsFocused()) {
+					mygo.NewNotification(mygo.NotificationOptions{
+						Title: "Terminal finished", Body: tt.Spec.title(),
+					}).Show()
+				}
 				a.invalidate()
 			})
 		},
@@ -303,9 +332,14 @@ func (a *app) startRestoredTerminal(p *pane) {
 			}
 		}
 	}
+	client, err = a.terminalClient(t.Spec)
+	if err != nil {
+		t.startErr = err.Error()
+		return
+	}
 	var tt *termTab
 	if sid != "" {
-		tt, err = a.attachTerminal(sid, t.Spec)
+		tt, err = a.attachTerminal(client, sid, t.Spec)
 	} else {
 		tt, err = a.startTerminalSpec(t.Spec)
 	}
@@ -321,10 +355,17 @@ func (a *app) startRestoredTerminal(p *pane) {
 
 // endTerminal ends a session when its pane is closed by the user.
 func (a *app) endTerminal(t *termTab) {
-	if a.sessionClient == nil || t == nil || t.SID == "" {
+	if t == nil || t.SID == "" {
 		return
 	}
-	_ = a.sessionClient.Kill(t.SID)
+	client := t.Client
+	if client == nil {
+		client = a.sessionClient
+	}
+	if client == nil {
+		return
+	}
+	_ = client.Kill(t.SID)
 }
 
 // closeTerminals detaches every terminal before the window or project

@@ -13,6 +13,9 @@ import (
 
 // projectName is the last part of the open project's path.
 func (a *app) projectName() string {
+	if a.remotePath != "" {
+		return filepath.Base(a.remotePath)
+	}
 	if a.store == nil || a.store.memory {
 		return "Mojian"
 	}
@@ -21,6 +24,9 @@ func (a *app) projectName() string {
 
 // projectPath is the open project's path as a person reads it.
 func (a *app) projectPath() string {
+	if a.remotePath != "" {
+		return a.serverAlias + ":" + a.remotePath
+	}
 	if a.store == nil {
 		return ""
 	}
@@ -71,6 +77,12 @@ func (a *app) recentProjects() []string {
 func (a *app) openProject(dir string) {
 	if dir == "" {
 		return
+	}
+	if a.remotePath != "" {
+		a.closeRemote()
+		a.serverAlias = ""
+		a.remotePath = ""
+		a.remoteCache = ""
 	}
 	abs, err := filepath.Abs(dir)
 	if err != nil {
@@ -155,6 +167,25 @@ func (a *app) projectChip(c *ui.Context, k *colors) {
 	ui.PopoverBase(c, chip, &a.projectOpen, func(panel ui.Element) {
 		panel.Width(304).Padding(9).Radius(14).Background(k.Panel).Border(1, k.PanelBorder).
 			Shadow(0, 12, 32, 0, k.ShadowFocused).Gap(1)
+		if a.remotePath != "" {
+			a.remoteProjectRows(c, k)
+			ui.Divider(c)
+			row := ui.Row(c).Height(34).Padding(0, 8).Gap(8).Radius(8).
+				AlignItems(ui.Center).Cursor(ui.CursorPointer).Role(ui.RoleButton).
+				Label("Open Remote Folder…")
+			if row.Hovered() {
+				row.Background(k.Hover)
+			}
+			if row.Clicked() {
+				a.projectOpen = false
+				a.later(func() { a.openRemotePicker(a.serverAlias) })
+			}
+			row.Children(func() {
+				ui.Icon(c, icons.Icon("folder-plus")).Size(15, 15).TextColor(k.TextMuted)
+				ui.Text(c, "Open Remote Folder…").FontSize(12.5).TextColor(k.Text)
+			})
+			return
+		}
 		ui.Row(c).Padding(4, 8, 5, 8).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, "Projects").FontSize(11).FontWeight(600).TextColor(k.TextFaint)
 			ui.Spacer(c)

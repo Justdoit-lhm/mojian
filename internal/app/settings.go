@@ -2,10 +2,12 @@ package app
 
 import (
 	"fmt"
+	"path/filepath"
 	"runtime"
 	"strings"
 
 	"mojian/internal/icons"
+	"mojian/internal/session"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -13,12 +15,16 @@ import (
 
 const (
 	settingsGeneral = iota
+	settingsAppearance
 	settingsEditor
 	settingsFonts
 	settingsTerminal
-	settingsFiles
+	settingsShell
+	settingsNotifications
+	settingsKeyboard
+	settingsHosts
 	settingsGit
-	settingsAbout
+	settingsAdvanced
 )
 
 type settingsCat struct {
@@ -26,13 +32,17 @@ type settingsCat struct {
 }
 
 var settingsCats = []settingsCat{
-	{"General", "Appearance and startup", "settings"},
+	{"General", "Startup and session behavior", "settings"},
+	{"Appearance", "Theme and window look", "file-text"},
 	{"Editor", "Type, writing and Markdown", "pencil"},
 	{"Fonts", "Installed families and previews", "file-text"},
 	{"Terminal", "Type, input and scrollback", "square-terminal"},
-	{"Files", "Projects and recent folders", "folder"},
+	{"Shell", "The program new local terminals run", "square-terminal"},
+	{"Notifications", "When a terminal wants attention", "bell"},
+	{"Keyboard", "Shortcuts this app uses", "command"},
+	{"Hosts", "Servers, SSH hosts and projects", "server"},
 	{"Git", "The working-tree page", "git-branch"},
-	{"About", "Version and this project", "file-text"},
+	{"Advanced", "Data, server and version", "settings"},
 }
 
 // settingsWindowView is the whole content of the separate Settings
@@ -70,9 +80,19 @@ func (a *app) settingsTitleBar(c *ui.Context, k *colors) {
 func (a *app) settingsRail(c *ui.Context, k *colors) {
 	ui.Column(c).Width(214).Shrink(0).FillHeight().Padding(10, 12).
 		Gap(2).BorderWidth(0, 0, 0, 1).BorderColor(k.PanelBorder).Children(func() {
-		ui.Text(c, "PREFERENCES").FontSize(10).FontWeight(650).
-			TextColor(k.TextFaint).Padding(6, 8, 6, 8)
+		ui.Row(c).Height(30).Margin(0, 2, 8, 2).Padding(0, 8).Gap(6).Radius(7).
+			Background(k.Hover).AlignItems(ui.Center).Children(func() {
+			ui.Icon(c, icons.Icon("search")).Size(13, 13).TextColor(k.TextFaint)
+			ui.TextInputBase(c, &a.settingsQuery).Grow(1).FontSize(12).
+				Placeholder("Search settings…")
+		})
+		q := strings.ToLower(strings.TrimSpace(a.settingsQuery))
+		found := false
 		for i, cat := range settingsCats {
+			if q != "" && !strings.Contains(strings.ToLower(cat.title+" "+cat.detail), q) {
+				continue
+			}
+			found = true
 			i, cat := i, cat
 			row := ui.Row(c).Height(34).Padding(0, 9).Gap(9).Radius(7).
 				Cursor(ui.CursorPointer).Role(ui.RoleButton).Label(cat.title)
@@ -95,6 +115,10 @@ func (a *app) settingsRail(c *ui.Context, k *colors) {
 					SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
 			})
 		}
+		if !found {
+			ui.Text(c, "No settings match.").FontSize(11.5).TextColor(k.TextFaint).
+				Padding(8, 10)
+		}
 	})
 }
 
@@ -109,23 +133,31 @@ func (a *app) settingsBody(c *ui.Context, k *colors) {
 		})
 		ui.Divider(c)
 		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
-			ui.Column(c).MaxWidth(680).AlignSelf(ui.Center).
+			ui.Column(c).MaxWidth(680).FillWidth().AlignSelf(ui.Center).
 				Padding(24, 30, 44, 30).Gap(24).Children(func() {
 				switch a.settingsCat {
 				case settingsGeneral:
 					a.settingsGeneralPage(c, k)
+				case settingsAppearance:
+					a.settingsAppearancePage(c, k)
 				case settingsEditor:
 					a.settingsEditorPage(c, k)
 				case settingsFonts:
 					a.settingsFontsPage(c, k)
 				case settingsTerminal:
 					a.settingsTerminalPage(c, k)
-				case settingsFiles:
-					a.settingsFilesPage(c, k)
+				case settingsShell:
+					a.settingsShellPage(c, k)
+				case settingsNotifications:
+					a.settingsNotificationsPage(c, k)
+				case settingsKeyboard:
+					a.settingsKeyboardPage(c, k)
+				case settingsHosts:
+					a.settingsHostsPage(c, k)
 				case settingsGit:
 					a.settingsGitPage(c, k)
 				default:
-					a.settingsAboutPage(c, k)
+					a.settingsAdvancedPage(c, k)
 				}
 			})
 		})
@@ -133,10 +165,10 @@ func (a *app) settingsBody(c *ui.Context, k *colors) {
 }
 
 func (a *app) settingsSection(c *ui.Context, k *colors, title string, fn func()) {
-	ui.Column(c).Gap(8).Children(func() {
+	ui.Column(c).Gap(8).FillWidth().Children(func() {
 		ui.Text(c, title).FontSize(10).FontWeight(650).
 			TextColor(k.TextFaint).Padding(2, 2)
-		panel := ui.Column(c).Background(k.Card).Border(1, k.CardBorder).
+		panel := ui.Column(c).FillWidth().Background(k.Card).Border(1, k.CardBorder).
 			Radius(12).Clip()
 		panel.Children(fn)
 	})
@@ -169,9 +201,122 @@ func (a *app) switchRow(c *ui.Context, k *colors, title, detail string, on *bool
 	})
 }
 
+func (a *app) settingsHostsPage(c *ui.Context, k *colors) {
+	a.settingsSection(c, k, "SERVERS", func() {
+		a.hostSettingsRow(c, k, "", "Local", "This Mac", a.serverAlias == "")
+		for _, h := range sshConfigHosts() {
+			a.hostSettingsRow(c, k, h.Alias, h.Alias, h.detail(), a.serverAlias == h.Alias)
+		}
+	})
+	if len(a.remoteProjects) > 0 {
+		a.settingsSection(c, k, "RECENT REMOTE PROJECTS", func() {
+			for i, p := range a.remoteProjects {
+				i, p := i, p
+				row := ui.Row(c).Height(40).Padding(0, 14).Gap(9).
+					Cursor(ui.CursorPointer).Role(ui.RoleButton).Label(p.Path)
+				if row.Hovered() {
+					row.Background(k.Hover)
+				}
+				if row.Clicked() {
+					a.later(func() {
+						if a.settingsWin != nil {
+							a.settingsWin.Close()
+						}
+						if err := a.openRemoteProject(p.Host, p.Path); err != nil {
+							a.fail(err)
+						}
+					})
+				}
+				row.Children(func() {
+					ui.Icon(c, icons.FolderIcon()).Size(15, 15).TextColor(k.TextMuted)
+					ui.Column(c).Grow(1).MinWidth(0).Children(func() {
+						ui.Text(c, filepath.Base(p.Path)).FontSize(12.5).TextColor(k.Text).
+							SingleLine().Ellipsis("…")
+						ui.Text(c, p.Host+":"+p.Path).FontSize(10.5).TextColor(k.TextFaint).
+							SingleLine().Ellipsis("…")
+					})
+				})
+				if i != len(a.remoteProjects)-1 {
+					ui.Divider(c).Margin(0, 14)
+				}
+			}
+		})
+	}
+	a.settingsSection(c, k, "ABOUT HOSTS", func() {
+		ui.Text(c, "Mojian uploads a small per-user server to a host over SSH on first connect. Nothing is installed system-wide and no port is opened.").
+			FontSize(11.5).TextColor(k.TextFaint).Padding(16)
+	})
+}
+
+func (a *app) hostSettingsRow(c *ui.Context, k *colors, host, label, detail string, selected bool) {
+	row := ui.Row(c).Height(52).Padding(0, 14).Gap(10).
+		Cursor(ui.CursorPointer).Role(ui.RoleButton).Label("Server " + label)
+	if selected {
+		row.Background(k.PanelSel)
+	} else if row.Hovered() {
+		row.Background(k.Hover)
+	}
+	if row.Clicked() {
+		if host == "" {
+			a.later(func() {
+				a.saveNow()
+				a.closeRemote()
+				a.serverAlias = ""
+				a.remotePath = ""
+				a.remoteCache = ""
+				a.saveSettings()
+				if a.settingsWin != nil {
+					a.settingsWin.Close()
+				}
+				if a.project != "" {
+					a.openProject(a.project)
+				}
+			})
+		} else {
+			a.later(func() {
+				if a.settingsWin != nil {
+					a.settingsWin.Close()
+				}
+				a.openRemotePicker(host)
+			})
+		}
+	}
+	row.Children(func() {
+		ui.Icon(c, icons.Icon("server")).Size(16, 16).TextColor(k.TextMuted)
+		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
+			ui.Text(c, label).FontSize(12.5).FontWeight(550).TextColor(k.Text)
+			ui.Text(c, detail).FontSize(11).TextColor(k.TextFaint).
+				SingleLine().Ellipsis("…")
+		})
+		if selected {
+			ui.Icon(c, icons.Icon("check")).Size(14, 14).TextColor(k.TextMuted)
+		}
+	})
+}
+
 func (a *app) settingsGeneralPage(c *ui.Context, k *colors) {
-	a.settingsSection(c, k, "APPEARANCE", func() {
-		a.settingRow(c, k, "Theme", "Follow the system, or keep one look.", func() {
+	a.settingsSection(c, k, "STARTUP", func() {
+		restore := !a.noRestoreLayout
+		a.settingRow(c, k, "Restore tabs on launch",
+			"Bring back the last project's tabs and panes.", func() {
+				sw := ui.Switch(c, &restore).Label("Restore tabs on launch")
+				if sw.Changed() {
+					a.noRestoreLayout = !restore
+					a.saveSettings()
+					a.invalidate()
+				}
+			})
+	})
+	a.settingsSection(c, k, "PROJECTS", func() {
+		a.aboutRow(c, k, "Current project", a.projectPath())
+		a.settingDivider(c, k)
+		a.aboutRow(c, k, "Server", a.remoteName())
+	})
+}
+
+func (a *app) settingsAppearancePage(c *ui.Context, k *colors) {
+	a.settingsSection(c, k, "THEME", func() {
+		a.settingRow(c, k, "Appearance", "Follow the system, or keep one look.", func() {
 			ui.Row(c).Padding(3).Radius(9).Background(k.Track).Border(1, k.TrackBorder).
 				Gap(2).Role(ui.RoleRadioGroup).Label("Theme").Children(func() {
 				for i, label := range []string{"System", "Light", "Dark"} {
@@ -198,18 +343,95 @@ func (a *app) settingsGeneralPage(c *ui.Context, k *colors) {
 			})
 		})
 	})
-	a.settingsSection(c, k, "STARTUP", func() {
-		restore := !a.noRestoreLayout
-		a.settingRow(c, k, "Restore tabs on launch",
-			"Bring back the last project's tabs and panes.", func() {
-				sw := ui.Switch(c, &restore).Label("Restore tabs on launch")
-				if sw.Changed() {
-					a.noRestoreLayout = !restore
-					a.saveSettings()
-					a.invalidate()
-				}
+	a.settingsSection(c, k, "TEXT", func() {
+		a.fontSizeRow(c, k, "Editor text size", "The base size of source and prose.",
+			&a.editorFontSize, 12.5, 9, 28, ".1f")
+		a.settingDivider(c, k)
+		a.settingRow(c, k, "Font family", "Choose the face used by editors and previews.", func() {
+			b := ui.Row(c).Padding(5, 10).Radius(7).Gap(6).Cursor(ui.CursorPointer).
+				Role(ui.RoleButton).Label("Editor font")
+			if b.Hovered() {
+				b.Background(k.Hover)
+			}
+			if b.Clicked() {
+				a.fontPick, a.fontPickFor, a.fontSearch = true, 0, ""
+			}
+			label := a.editorFontFamily
+			if label == "" {
+				label = "JetBrains Mono · default"
+			}
+			b.Children(func() {
+				ui.Text(c, label).FontSize(11.5).TextColor(k.Text).MaxWidth(190)
+				ui.Icon(c, icons.Icon("chevron-down")).Size(12, 12).TextColor(k.TextFaint)
 			})
+		})
 	})
+}
+
+func (a *app) settingsShellPage(c *ui.Context, k *colors) {
+	a.settingsSection(c, k, "LOGIN SHELL", func() {
+		a.settingRow(c, k, "Shell", "Program new local terminals run; empty uses $SHELL.", func() {
+			in := ui.TextInputBase(c, &a.shellPath).Width(220).FontSize(12.5).
+				Placeholder("$SHELL")
+			if in.Changed() {
+				a.saveSettings()
+				a.invalidate()
+			}
+		})
+		a.settingDivider(c, k)
+		ui.Text(c, "Remote projects use the shell on the server, not this path.").
+			FontSize(11.5).TextColor(k.TextFaint).Padding(14, 16)
+	})
+}
+
+func (a *app) settingsNotificationsPage(c *ui.Context, k *colors) {
+	a.settingsSection(c, k, "TERMINAL", func() {
+		a.switchRow(c, k, "Notify on a bell",
+			"Show a notification when a background terminal rings its bell.", &a.notifyBell)
+		a.settingDivider(c, k)
+		a.switchRow(c, k, "Notify when a terminal exits",
+			"Show a notification when a background terminal finishes.", &a.notifyExit)
+	})
+}
+
+func (a *app) settingsKeyboardPage(c *ui.Context, k *colors) {
+	a.settingsSection(c, k, "SHORTCUTS", func() {
+		cmds := []*command{
+			cmdOpenProject, cmdNewNote, cmdNewFolder, cmdNewTab, cmdSave,
+			cmdPalette, cmdNotes, cmdTree, cmdTerminal, cmdGit, cmdSSH,
+			cmdSplitRight, cmdSplitDown, cmdZoom, cmdEqualize,
+			cmdClosePane, cmdCloseTab, cmdRenameTab, cmdNextTab, cmdPrevTab,
+		}
+		for i, cmd := range cmds {
+			if cmd.keys == "" {
+				continue
+			}
+			ui.Row(c).Height(34).Padding(0, 14).Gap(12).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, cmd.title).FontSize(12.5).TextColor(k.Text).Grow(1)
+				ui.Text(c, cmd.keys).FontSize(11.5).TextColor(k.TextFaint).Font(noteFont.Family)
+			})
+			if i != len(cmds)-1 {
+				ui.Divider(c).Margin(0, 14)
+			}
+		}
+	})
+	ui.Text(c, "Shortcuts are fixed for now; every command is also in the palette.").
+		FontSize(11.5).TextColor(k.TextFaint)
+}
+
+func (a *app) settingsAdvancedPage(c *ui.Context, k *colors) {
+	a.settingsSection(c, k, "DATA", func() {
+		a.aboutRow(c, k, "Settings", a.settingsPath)
+		a.settingDivider(c, k)
+		a.aboutRow(c, k, "Project cache", a.remoteCache)
+		a.settingDivider(c, k)
+		a.aboutRow(c, k, "Local sessions", session.SocketPath())
+		if a.remote != nil {
+			a.settingDivider(c, k)
+			a.aboutRow(c, k, "Remote server", a.remote.host+" · "+a.remote.socket)
+		}
+	})
+	a.settingsAboutPage(c, k)
 }
 
 func (a *app) settingsEditorPage(c *ui.Context, k *colors) {
@@ -406,6 +628,27 @@ func (a *app) settingsTerminalPage(c *ui.Context, k *colors) {
 		a.settingDivider(c, k)
 		a.switchRow(c, k, "Blink the cursor",
 			"Let the terminal's cursor blink when the program allows it.", boolPtr(!a.noCursorBlink))
+		a.settingDivider(c, k)
+		a.settingRow(c, k, "Cursor shape", "How the terminal draws its caret.", func() {
+			for i, label := range []string{"Block", "Bar", "Underline"} {
+				i, label := i, label
+				b := ui.Row(c).Padding(4, 9).Radius(6).Cursor(ui.CursorPointer).
+					Role(ui.RoleRadio).Label(label).Selected(a.terminalCursor == i)
+				if a.terminalCursor == i {
+					b.Background(k.PanelSel)
+				} else if b.Hovered() {
+					b.Background(k.Hover)
+				}
+				if b.Clicked() {
+					a.terminalCursor = i
+					a.saveSettings()
+					a.invalidate()
+				}
+				b.Children(func() {
+					ui.Text(c, label).FontSize(11.5).TextColor(k.Text)
+				})
+			}
+		})
 	})
 	a.settingsSection(c, k, "SCROLLBACK", func() {
 		a.settingRow(c, k, "History size", "Megabytes kept above the screen.", func() {

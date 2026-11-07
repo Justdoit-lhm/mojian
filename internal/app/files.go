@@ -457,6 +457,7 @@ func (a *app) submitTreeDraft() {
 	if d.kind == draftRename {
 		a.resetRenamedStates(changed, before)
 	}
+	a.syncRemoteProject()
 	a.changed()
 	a.invalidate()
 }
@@ -587,6 +588,7 @@ func (a *app) duplicate(rel string) {
 		a.fail(err)
 	}
 	a.selectRel(newRel)
+	a.syncRemoteProject()
 }
 
 func (a *app) pasteInto(rel string) {
@@ -639,6 +641,7 @@ func (a *app) pasteInto(rel string) {
 	if first != "" {
 		a.selectRel(first)
 	}
+	a.syncRemoteProject()
 }
 
 func (a *app) copyPath(rel string, absolute bool) {
@@ -703,6 +706,7 @@ func (a *app) trash(rel string) {
 	a.treeSel = a.destinationFor(rel)
 	a.openPath(a.treeSel)
 	a.treeReveal = a.treeSel
+	a.syncRemoteProject()
 	a.changed()
 	a.invalidate()
 }

@@ -31,15 +31,25 @@ type Client struct {
 // Connect connects to the server, starting one in the background when
 // none runs.
 func Connect() (*Client, error) {
-	conn, err := net.Dial("unix", SocketPath())
-	if err != nil {
+	return connectAt(SocketPath(), true)
+}
+
+// ConnectAt connects to a server at an explicit Unix socket, without
+// starting one.
+func ConnectAt(path string) (*Client, error) {
+	return connectAt(path, false)
+}
+
+func connectAt(path string, spawn bool) (*Client, error) {
+	conn, err := net.Dial("unix", path)
+	if err != nil && spawn {
 		if spawnErr := Spawn(); spawnErr != nil {
 			return nil, fmt.Errorf("session: starting the server: %w", spawnErr)
 		}
 		deadline := time.Now().Add(5 * time.Second)
 		for {
 			time.Sleep(30 * time.Millisecond)
-			conn, err = net.Dial("unix", SocketPath())
+			conn, err = net.Dial("unix", path)
 			if err == nil {
 				break
 			}
@@ -112,7 +122,7 @@ func (c *Client) call(req Request, out any) error {
 			return json.Unmarshal(res.Data, out)
 		}
 		return nil
-	case <-time.After(15 * time.Second):
+	case <-time.After(60 * time.Second):
 		c.mu.Lock()
 		delete(c.pending, req.ID)
 		c.mu.Unlock()
@@ -273,6 +283,31 @@ func (s *Stream) Close() error {
 		return conn.Close()
 	}
 	return nil
+}
+
+func (c *Client) ListTree(root string) (out []FileEntry, err error) {
+	err = c.call(Request{Op: "listTree", Path: root}, &out)
+	return
+}
+func (c *Client) ReadFile(path string) (data []byte, err error) {
+	err = c.call(Request{Op: "readFile", Path: path}, &data)
+	return
+}
+func (c *Client) WriteFile(path string, data []byte) error {
+	return c.call(Request{Op: "writeFile", Path: path, Data: data}, nil)
+}
+func (c *Client) Mkdir(path string) error { return c.call(Request{Op: "mkdir", Path: path}, nil) }
+func (c *Client) Rename(from, to string) error {
+	return c.call(Request{Op: "rename", Path: from, To: to}, nil)
+}
+func (c *Client) Remove(path string) error { return c.call(Request{Op: "remove", Path: path}, nil) }
+func (c *Client) Archive(root string) (data []byte, err error) {
+	err = c.call(Request{Op: "archive", Path: root}, &data)
+	return
+}
+func (c *Client) ListDirs(path string) (out []FileEntry, err error) {
+	err = c.call(Request{Op: "listDirs", Path: path}, &out)
+	return
 }
 
 // Executable returns the path of the app binary and its modification time.

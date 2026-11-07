@@ -379,7 +379,7 @@ func TestSettingsPageAndPersistence(t *testing.T) {
 	a.settingsPath = filepath.Join(t.TempDir(), "settings.json")
 	tt := ui.NewTester(a.settingsWindowView, 900, 640)
 	tt.Frame()
-	if !tt.HasText("PREFERENCES") || !tt.HasText("General") || !tt.HasText("Theme") {
+	if !tt.HasText("General") || !tt.HasText("Appearance") || !tt.HasText("Hosts") {
 		t.Fatalf("settings window texts: %q", tt.Texts())
 	}
 	a.editorFontSize = 15
@@ -464,6 +464,10 @@ func TestSettingsAppearanceAndEditor(t *testing.T) {
 	a := newProjectApp(t)
 	tt := ui.NewTester(a.view, 1100, 700)
 	settings := ui.NewTester(a.settingsWindowView, 900, 640)
+	settings.Frame()
+	if err := settings.Click("Appearance"); err != nil {
+		t.Fatal(err)
+	}
 	settings.Frame()
 	if err := settings.Click("Dark"); err != nil {
 		t.Fatal(err)

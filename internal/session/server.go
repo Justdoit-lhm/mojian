@@ -3,6 +3,7 @@
 package session
 
 import (
+	"archive/tar"
 	"bufio"
 	"bytes"
 	"crypto/rand"
@@ -218,6 +219,51 @@ func (s *Server) do(req Request) (any, error) {
 			out[i] = ss.info()
 		}
 		return out, nil
+	case "listTree":
+		return listTree(req.Path)
+	case "readFile":
+		data, err := os.ReadFile(req.Path)
+		if err != nil {
+			return nil, err
+		}
+		return data, nil
+	case "writeFile":
+		if err := writeFileAtomic(req.Path, req.Data); err != nil {
+			return nil, err
+		}
+		return nil, nil
+	case "mkdir":
+		return nil, os.MkdirAll(req.Path, 0o755)
+	case "rename":
+		if req.Path == "" || req.To == "" {
+			return nil, errors.New("rename needs paths")
+		}
+		return nil, os.Rename(req.Path, req.To)
+	case "remove":
+		return nil, os.RemoveAll(req.Path)
+	case "archive":
+		data, err := archiveTree(req.Path)
+		if err != nil {
+			return nil, err
+		}
+		return data, nil
+	case "listDirs":
+		entries, err := os.ReadDir(req.Path)
+		if err != nil {
+			return nil, err
+		}
+		var dirs []FileEntry
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			info, err := e.Info()
+			if err != nil {
+				continue
+			}
+			dirs = append(dirs, FileEntry{Rel: filepath.Join(req.Path, e.Name()), Dir: true, Mod: info.ModTime()})
+		}
+		return dirs, nil
 	case "create":
 		o := CreateOptions{}
 		if req.Create != nil {
@@ -596,3 +642,89 @@ type discard struct{ r *io.PipeReader }
 func (d discard) Read(p []byte) (int, error)  { return d.r.Read(p) }
 func (d discard) Write(p []byte) (int, error) { return len(p), nil }
 func (d discard) Close() error                { return d.r.Close() }
+
+func listTree(root string) ([]FileEntry, error) {
+	var out []FileEntry
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if path == root {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		out = append(out, FileEntry{Rel: filepath.ToSlash(rel), Dir: d.IsDir(), Size: info.Size(), Mod: info.ModTime()})
+		return nil
+	})
+	return out, err
+}
+
+func writeFileAtomic(path string, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	tmp := path + ".mojian-tmp"
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
+func archiveTree(root string) ([]byte, error) {
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if path == root {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() && !info.IsDir() {
+			return nil
+		}
+		h, err := tar.FileInfoHeader(info, "")
+		if err != nil {
+			return nil
+		}
+		h.Name = filepath.ToSlash(rel)
+		if info.IsDir() {
+			h.Name += "/"
+		}
+		if err := tw.WriteHeader(h); err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil
+		}
+		_, err = tw.Write(data)
+		return err
+	})
+	if err != nil {
+		_ = tw.Close()
+		return nil, err
+	}
+	if err := tw.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
