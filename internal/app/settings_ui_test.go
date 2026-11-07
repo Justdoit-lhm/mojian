@@ -3,6 +3,8 @@ package app
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -14,17 +16,17 @@ func TestSettingsSearchFindsRowsAndSwitchesPages(t *testing.T) {
 	a := newProjectApp(t)
 	tt := ui.NewTester(a.settingsWindowView, 900, 640)
 	tt.Frame()
-	a.settingsQuery = "cursor shape"
+	a.settingsQuery = "line numbers"
 	tt.Frame()
 	tt.Frame()
-	if a.settingsCat != settingsTerminal {
-		t.Fatalf("page after searching cursor shape: %d", a.settingsCat)
+	if a.settingsCat != settingsEditor {
+		t.Fatalf("page after searching line numbers: %d", a.settingsCat)
 	}
-	if !a.settingsHits["Cursor shape"] {
+	if !a.settingsHits["Line numbers"] {
 		t.Fatalf("the row was not found: %v", a.settingsHits)
 	}
-	if !tt.HasText("Cursor shape") {
-		t.Fatalf("terminal texts: %q", tt.Texts())
+	if !tt.HasText("Line numbers") {
+		t.Fatalf("editor texts: %q", tt.Texts())
 	}
 	a.settingsQuery = "no such setting"
 	tt.Frame()
@@ -98,13 +100,17 @@ func TestSettingsShortcutRecording(t *testing.T) {
 	tt.Frame()
 	tt.Key(ui.Cmd|ui.Shift, ui.KeyS)
 	tt.Frame()
-	if got := a.commandAccel(cmdSave); got != "CmdOrCtrl+Shift+S" {
+	wantAccel, wantKeys := "Ctrl+Shift+S", "Ctrl+Shift+S"
+	if runtime.GOOS == "darwin" {
+		wantAccel, wantKeys = "CmdOrCtrl+Shift+S", "⇧⌘S"
+	}
+	if got := a.commandAccel(cmdSave); got != wantAccel {
 		t.Fatalf("save shortcut: %q", got)
 	}
 	if a.settingsRecording != "" {
 		t.Fatal("recording did not stop")
 	}
-	if got := a.commandKeys(cmdSave); got != "⇧⌘S" {
+	if got := a.commandKeys(cmdSave); got != wantKeys {
 		t.Fatalf("save shortcut display: %q", got)
 	}
 	// The default is not an override.
@@ -117,7 +123,7 @@ func TestSettingsShortcutRecording(t *testing.T) {
 func TestSettingsShortcutPersistenceAndConflict(t *testing.T) {
 	registerFonts()
 	a := newProjectApp(t)
-	a.settingsPath = t.TempDir() + "/settings.json"
+	a.settingsPath = filepath.Join(t.TempDir(), "settings.json")
 	a.setShortcut(cmdSave.id, "CmdOrCtrl+Alt+S")
 	if got := a.commandAccel(cmdSave); got != "CmdOrCtrl+Alt+S" {
 		t.Fatalf("save accel: %q", got)
@@ -168,6 +174,9 @@ func TestSettingsHostsAddEditRemove(t *testing.T) {
 }
 
 func TestSettingsHostRemoveButtons(t *testing.T) {
+	if !terminalsSupported() {
+		t.Skip("hosts need terminals")
+	}
 	registerFonts()
 	a := newProjectApp(t)
 	a.hosts = []hostConfig{{Name: "Dev", Address: "me@devbox"}}
@@ -197,10 +206,10 @@ func TestSettingsSearchShortcut(t *testing.T) {
 	tt.Frame()
 	tt.Key(ui.Cmd, ui.KeyF)
 	tt.Frame()
-	tt.Type("cursor")
+	tt.Type("line numbers")
 	tt.Frame()
 	tt.Frame()
-	if a.settingsCat != settingsTerminal {
+	if a.settingsCat != settingsEditor {
 		t.Fatalf("page after Cmd+F and typing: %d", a.settingsCat)
 	}
 	tt.Key(0, ui.KeyEscape)
