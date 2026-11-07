@@ -36,6 +36,7 @@ func (a *app) view(c *ui.Context) {
 				}
 				a.workspace(c, k)
 			})
+			a.closingPanesView(c, k)
 		})
 	if a.err != "" {
 		a.errorBanner(c, k)
@@ -49,6 +50,26 @@ func (a *app) view(c *ui.Context) {
 	a.shortcuts(c)
 	a.persistLayout(c)
 	a.updateTitle()
+}
+
+// closingPanesView draws the copies of panes that have left the layout
+// while their split closes under them.
+func (a *app) closingPanesView(c *ui.Context, k *colors) {
+	if len(a.closingPanes) == 0 {
+		return
+	}
+	active := a.tab()
+	for _, cp := range append([]*closingPane(nil), a.closingPanes...) {
+		cp := cp
+		if cp.t != active {
+			// Switching tabs ends a close that was still running.
+			a.later(func() { a.finishClosingPane(cp.p) })
+			continue
+		}
+		ui.Box(c.Key("closing:" + cp.p.ID)).Absolute().
+			Left(cp.rect.X).Top(cp.rect.Y).Width(cp.rect.W).Height(cp.rect.H).Clip().
+			Children(func() { a.paneCardMode(c, k, cp.t, cp.p, true) })
+	}
 }
 
 // workspace shows the Git page, the active tab or the empty state in a
@@ -208,16 +229,30 @@ func (a *app) nodeView(c *ui.Context, k *colors, t *tab, n *node) ui.Element {
 
 // paneCard draws one file: a card with a header over its editor.
 func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
+	return a.paneCardMode(c, k, t, p, false)
+}
+
+// paneCardMode draws a pane in the layout, or a copy of one that is
+// closing over its old place. The copy takes no input and does not
+// animate its place: only its fade and slide-away run.
+func (a *app) paneCardMode(c *ui.Context, k *colors, t *tab, p *pane, overlay bool) ui.Element {
 	focused := t.Focus == p
 	card := ui.Column(c.Key(p.ID)).Radius(radius).Clip().MinWidth(0).MinHeight(0)
-	// A pane moved into another split comes from where it showed; its
-	// colors follow focus. Terminals skip the match so their grid is not
-	// laid out at every width on the way.
-	tr := motion.Pane
-	if p.Term == nil {
-		tr.Match = p.ID
+	if overlay {
+		card.Fill()
+	} else {
+		if b := card.Bounds(); b.W > 0 && b.H > 0 {
+			p.lastBounds = b
+		}
+		// A pane moved into another split comes from where it showed; its
+		// colors follow focus. Terminals skip the match so their grid is
+		// not laid out at every width on the way.
+		tr := motion.Pane
+		if p.Term == nil {
+			tr.Match = p.ID
+		}
+		card.Transition(tr)
 	}
-	card.Transition(tr)
 	if p.enter {
 		// The split is new with the pane, so no Enter can run: start at
 		// the split's edge, transparent, and animate both here.
@@ -228,11 +263,30 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 	}
 	ex := card.AnimateTo("enter-x", 0, motion.PaneSlide)
 	ey := card.AnimateTo("enter-y", 0, motion.PaneSlide)
+	if p.closing {
+		if !p.closeStarted {
+			card.Jump("close-alpha", 1)
+			card.Jump("close-x", 0)
+			card.Jump("close-y", 0)
+			p.closeStarted = true
+		}
+		ex += card.AnimateTo("close-x", p.enterX, motion.Close)
+		ey += card.AnimateTo("close-y", p.enterY, motion.Close)
+		o := card.AnimateTo("close-alpha", 0, motion.Close)
+		if o < 1 {
+			card.Opacity(o)
+		}
+		if card.Settled("close-alpha") && card.Settled("close-x") && card.Settled("close-y") {
+			a.later(func() { a.finishClosingPane(p) })
+		}
+	}
 	if ex != 0 || ey != 0 {
 		card.Translate(ex, ey)
 	}
-	if o := card.AnimateTo("enter-alpha", 1, motion.FadeIn); o < 1 {
-		card.Opacity(o)
+	if !p.closing {
+		if o := card.AnimateTo("enter-alpha", 1, motion.FadeIn); o < 1 {
+			card.Opacity(o)
+		}
 	}
 	bg, border, shadow := k.Card, k.CardBorder, k.Shadow
 	borderW := float32(1)
@@ -246,14 +300,16 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 	width, height := card.Bounds().W, card.Bounds().H
 	overZone := dropNone
 	overTarget := false
-	if over, ok := ui.DragOver[*pane](card); ok && over != nil && over != p && t.contains(over) {
-		overTarget = true
-		if x, y, inside := card.PointerPosition(); inside && width > 0 && height > 0 {
-			overZone = dropZoneAt(x, y, width, height)
+	if !overlay {
+		if over, ok := ui.DragOver[*pane](card); ok && over != nil && over != p && t.contains(over) {
+			overTarget = true
+			if x, y, inside := card.PointerPosition(); inside && width > 0 && height > 0 {
+				overZone = dropZoneAt(x, y, width, height)
+			}
 		}
 	}
 	card.Children(func() {
-		a.paneHeader(c, k, t, p, focused, hovered, width)
+		a.paneHeader(c, k, t, p, focused, hovered, width, overlay)
 		body := ui.Box(c).Grow(1).MinHeight(0).Padding(0, 0, 6, 0)
 		body.Children(func() {
 			if p.Note == nil && p.Asset == nil && p.Term == nil {
@@ -276,11 +332,11 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 					return
 				}
 				tv := terminal.View(c, p.Term.Term).Fill()
-				if a.focusReq == p {
+				if !overlay && a.focusReq == p {
 					tv.Focus()
 					a.focusReq = nil
 				}
-				if tv.Focused() && t.Focus != p {
+				if !overlay && tv.Focused() && t.Focus != p {
 					t.Focus = p
 					a.changed()
 				}
@@ -324,11 +380,11 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 				return false
 			}
 			tv := editor.View(c, st).Fill()
-			if a.focusReq == p {
+			if !overlay && a.focusReq == p {
 				tv.Focus()
 				a.focusReq = nil
 			}
-			if tv.Focused() && t.Focus != p {
+			if !overlay && tv.Focused() && t.Focus != p {
 				t.Focus = p
 				a.changed()
 			}
@@ -337,18 +393,20 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 			a.dropIndicator(c, k, overZone)
 		}
 	})
-	if from, ok := ui.Drop[*pane](card); ok && from != nil && from != p && t.contains(from) {
-		if x, y, inside := card.PointerPosition(); inside && width > 0 && height > 0 {
-			zone := dropZoneAt(x, y, width, height)
-			if zone != dropNone && zone != dropCenter {
-				a.later(func() { a.movePaneTo(t, from, p, zone) })
+	if !overlay {
+		if from, ok := ui.Drop[*pane](card); ok && from != nil && from != p && t.contains(from) {
+			if x, y, inside := card.PointerPosition(); inside && width > 0 && height > 0 {
+				zone := dropZoneAt(x, y, width, height)
+				if zone != dropNone && zone != dropCenter {
+					a.later(func() { a.movePaneTo(t, from, p, zone) })
+				}
 			}
 		}
 	}
 	if p.dragging || overTarget {
 		card.Border(2, k.Text)
 	}
-	if card.Pressed() && t.Focus != p {
+	if !overlay && card.Pressed() && t.Focus != p {
 		t.Focus = p
 		if !p.Preview && p.Note != nil {
 			a.focusReq = p
@@ -537,7 +595,7 @@ func paneName(p *pane) string {
 
 // paneHeader draws a note's icon, title, its unsaved dot, and its
 // buttons.
-func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hovered bool, width float32) {
+func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hovered bool, width float32, overlay bool) {
 	compact := width > 0 && width < 230
 	name := "New Pane"
 	ic := icons.Icon("file-plus")
@@ -556,11 +614,11 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hov
 	}
 	h := ui.Row(c).Height(headerH).Padding(0, 6, 0, hpad).Gap(hgap).
 		AlignItems(ui.Center).MinWidth(0)
-	if h.DoubleClicked() {
+	if !overlay && h.DoubleClicked() {
 		t.Focus = p
 		a.toggleZoom()
 	}
-	if h.Clicked() {
+	if !overlay && h.Clicked() {
 		t.Focus = p
 		if !p.Preview {
 			a.focusReq = p
@@ -574,7 +632,10 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hov
 			iconSize, handleW, gripSize = 14, 12, 10
 		}
 		grip := ui.Row(c).Width(handleW).Height(headerH).Center().
-			Cursor(ui.CursorGrab).Role(ui.RoleButton).Label("Move Pane " + name).Drag(p)
+			Cursor(ui.CursorGrab).Role(ui.RoleButton).Label("Move Pane " + name)
+		if !overlay {
+			grip.Drag(p)
+		}
 		if grip.Hovered() {
 			grip.Background(k.Hover)
 		}
@@ -604,7 +665,7 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hov
 			if p.Preview {
 				glyph, label = "pencil", "Edit"
 			}
-			if iconButton(c, k, glyph, label, btn, isize).Tooltip(label).Clicked() {
+			if !overlay && iconButton(c, k, glyph, label, btn, isize).Tooltip(label).Clicked() {
 				p.Preview = !p.Preview
 				if p.Preview {
 					a.focusReq = nil
@@ -615,7 +676,13 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hov
 			}
 		}
 		show := focused || hovered
-		ui.Row(c).Gap(1).AlignItems(ui.Center).Children(func() {
+		actions := ui.Row(c).Gap(1).AlignItems(ui.Center)
+		if overlay {
+			// Keep the buttons visible while the copy fades, but let no
+			// click reach them.
+			actions.Disabled(true)
+		}
+		actions.Children(func() {
 			if !show {
 				return
 			}
@@ -653,6 +720,14 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hov
 // its siblings are not changed while they build.
 func (a *app) laterPane(p *pane) {
 	a.later(func() { a.closePane(p) })
+}
+
+// closingPane is a pane that has left the layout and is fading over the
+// place it showed while the split closes under it.
+type closingPane struct {
+	p    *pane
+	t    *tab
+	rect ui.Rect
 }
 
 // emptyState is the welcome page of a tab with no file open: quick

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Closing a pane or a terminal now mirrors opening: the pane leaves the
+  layout at once so the survivor expands, while a copy of the card fades
+  and slides back toward the edge it entered from over the old place.
+  Focus moves to the next pane immediately, the closing copy takes no
+  input, and the terminal's session ends when the animation rests.
+
 ## 0.1.4
 
 - Remote servers keep their socket in `XDG_RUNTIME_DIR/mojian-<uid>` (or

@@ -32,7 +32,7 @@ func TestSplitAndClose(t *testing.T) {
 	if got := len(t0.panes()); got != 3 {
 		t.Fatalf("panes after second split: %d", got)
 	}
-	a.closePane(t0.Focus)
+	a.closePaneNow(t0, t0.Focus)
 	if got := len(t0.panes()); got != 2 {
 		t.Fatalf("panes after closing: %d", got)
 	}
@@ -44,7 +44,7 @@ func TestSplitAndClose(t *testing.T) {
 	}
 
 	for len(t0.panes()) > 0 {
-		a.closePane(t0.panes()[0])
+		a.closePaneNow(t0, t0.panes()[0])
 	}
 	if a.tab() != nil {
 		t.Fatal("closing every pane should close the tab")

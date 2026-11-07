@@ -26,7 +26,10 @@ type pane struct {
 	md            *markdown.Options
 	assetView     *assetView
 	dragging      bool
-	enter         bool // fades and slides in as a new pane, from a split or a terminal
+	closing       bool // fading out before the split closes
+	closeStarted  bool
+	lastBounds    ui.Rect // where the card showed, for its close overlay
+	enter         bool    // fades and slides in as a new pane, from a split or a terminal
 	enterX        float32
 	enterY        float32
 	emptyQuery    string // the file search in an empty pane
@@ -480,10 +483,10 @@ type layoutTerminal struct {
 
 func layoutOf(t *tab) layoutTab {
 	lt := layoutTab{Name: t.Name, Root: layoutNodeOf(t.Root)}
-	if t.Focus != nil {
+	if t.Focus != nil && !t.Focus.closing {
 		lt.Focus = t.Focus.ID
 	}
-	if t.Zoom != nil {
+	if t.Zoom != nil && !t.Zoom.closing {
 		lt.Zoom = t.Zoom.ID
 	}
 	return lt
@@ -508,7 +511,7 @@ func layoutNodeOf(n *node) *layoutNode {
 }
 
 func layoutPaneOf(p *pane) *layoutPane {
-	if p == nil {
+	if p == nil || p.closing {
 		return nil
 	}
 	lp := &layoutPane{ID: p.ID, Preview: p.Preview}

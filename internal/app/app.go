@@ -57,8 +57,9 @@ type app struct {
 	pickerSel      int
 	pickerErr      string
 
-	tabs   []*tab
-	active int
+	tabs         []*tab
+	active       int
+	closingPanes []*closingPane
 
 	focusReq *pane
 
@@ -1056,6 +1057,7 @@ func (a *app) openAsset(f *assetFile) {
 
 // closeTab closes a workspace.
 func (a *app) closeTab(t *tab) {
+	a.dropClosingPanes(t)
 	i := -1
 	for j, x := range a.tabs {
 		if x == t {
@@ -1110,32 +1112,106 @@ func (a *app) closeTab(t *tab) {
 
 // closePane closes the pane focused in its tab.
 func (a *app) closePane(p *pane) {
-	if p == nil {
+	if p == nil || p.closing {
 		return
 	}
+	t := a.tabOf(p)
+	if t == nil {
+		return
+	}
+	rect := p.lastBounds
+	if a.quitting || len(t.panes()) <= 1 || rect.W <= 1 || rect.H <= 1 {
+		a.closePaneNow(t, p)
+		return
+	}
+	// Take the pane out of the layout now, so the survivor expands at
+	// once, and keep a copy of the card over its old place while it fades
+	// and slides back the way it entered. The engine cannot keep an Exit
+	// copy because the split node goes with the pane.
+	p.closing = true
+	p.closeStarted = false
+	a.closingPanes = append(a.closingPanes, &closingPane{p: p, t: t, rect: rect})
+	if !t.closePane(p) {
+		a.closeTab(t)
+		return
+	}
+	a.focusReq = t.Focus
+	a.changed()
+	a.invalidate()
+}
+
+// tabOf returns the tab holding p.
+func (a *app) tabOf(p *pane) *tab {
 	for _, t := range a.tabs {
-		if !t.contains(p) {
+		if t.contains(p) {
+			return t
+		}
+	}
+	return nil
+}
+
+// finishClosingPane ends the pane's terminal and drops its overlay once
+// the close animation has rested.
+func (a *app) finishClosingPane(p *pane) {
+	if p == nil || !p.closing {
+		return
+	}
+	for i, cp := range a.closingPanes {
+		if cp.p != p {
 			continue
 		}
-		if p.Term != nil {
-			a.endTerminal(p.Term)
-			if p.Term.Term != nil {
-				_ = p.Term.Term.Close()
-			}
-			if p.Term.stream != nil {
-				_ = p.Term.stream.Close()
-			}
+		a.closingPanes = append(a.closingPanes[:i], a.closingPanes[i+1:]...)
+		break
+	}
+	if p.Term != nil {
+		a.endTerminal(p.Term)
+		if p.Term.Term != nil {
+			_ = p.Term.Term.Close()
 		}
-		releaseAsset(p)
-		if !t.closePane(p) {
-			a.closeTab(t)
-			return
+		if p.Term.stream != nil {
+			_ = p.Term.stream.Close()
 		}
-		a.focusReq = t.Focus
-		a.changed()
-		a.invalidate()
+	}
+	releaseAsset(p)
+	p.closing = false
+	a.changed()
+	a.invalidate()
+}
+
+// dropClosingPanes finishes the overlays of a tab that is going away.
+func (a *app) dropClosingPanes(t *tab) {
+	for _, cp := range append([]*closingPane(nil), a.closingPanes...) {
+		if t != nil && cp.t != t {
+			continue
+		}
+		a.finishClosingPane(cp.p)
+	}
+}
+
+// closePaneNow removes the pane at once, ending its terminal and closing
+// the tab when it was the last pane.
+func (a *app) closePaneNow(t *tab, p *pane) {
+	if p.closing {
+		a.finishClosingPane(p)
 		return
 	}
+	if p.Term != nil {
+		a.endTerminal(p.Term)
+		if p.Term.Term != nil {
+			_ = p.Term.Term.Close()
+		}
+		if p.Term.stream != nil {
+			_ = p.Term.stream.Close()
+		}
+	}
+	releaseAsset(p)
+	if !t.closePane(p) {
+		a.closeTab(t)
+		return
+	}
+	a.focusReq = t.Focus
+	a.changed()
+	a.invalidate()
 }
 
 func (a *app) toggleZoom() {

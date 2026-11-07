@@ -91,6 +91,12 @@ var (
 	// a Motion because its split is new too: the view animates its Opacity
 	// with AnimateTo instead.
 	FadeIn = ui.Animation{Duration: 160 * time.Millisecond, Ease: EaseOut}
+
+	// Close fades a pane out before its split closes, moving it back
+	// toward the edge it entered from. The view removes it when the
+	// animation rests, since the split node goes with the pane and the
+	// engine cannot keep an Exit copy.
+	Close = ui.Animation{Duration: 160 * time.Millisecond, Ease: EaseOut}
 )
 
 // Tree is the transition of a folder's children: they unfold while the

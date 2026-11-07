@@ -383,6 +383,7 @@ func (a *app) endTerminal(t *termTab) {
 // closeTerminals detaches every terminal before the window or project
 // goes: the server keeps the shells running.
 func (a *app) closeTerminals() {
+	a.dropClosingPanes(nil)
 	for _, t := range a.tabs {
 		for _, p := range t.panes() {
 			if p.Term != nil {
