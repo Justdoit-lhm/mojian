@@ -91,6 +91,10 @@ jobs:
         with:
           name: linux
           path: dist
+      - name: Flatten the artifacts
+        run: |
+          find dist -mindepth 2 -type f -exec mv -t dist {} +
+          find dist -mindepth 1 -type d -exec rm -rf {} +
       - name: Check the assets
         run: |
           version="$(jq -r .version mygo.json)"
