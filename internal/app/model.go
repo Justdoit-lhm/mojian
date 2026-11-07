@@ -78,11 +78,11 @@ func nextID(prefix string) string {
 }
 
 func newPane(n *note) *pane {
-	return &pane{ID: nextID("p"), Note: n, W: 1, H: 1}
+	return &pane{ID: nextID("p"), Note: n, W: paneColumnWidth, H: 1}
 }
 
 func newTermPane(t *termTab) *pane {
-	return &pane{ID: nextID("p"), Term: t, W: 1, H: 1}
+	return &pane{ID: nextID("p"), Term: t, W: paneColumnWidth, H: 1}
 }
 
 func newTermPaneSpec(spec termSpec, sid string) *termTab {
@@ -90,7 +90,7 @@ func newTermPaneSpec(spec termSpec, sid string) *termTab {
 }
 
 func newAssetPane(f *assetFile) *pane {
-	return &pane{ID: nextID("p"), Asset: f, assetView: &assetView{}, W: 1, H: 1}
+	return &pane{ID: nextID("p"), Asset: f, assetView: &assetView{}, W: paneColumnWidth, H: 1}
 }
 
 func (p *pane) width() float32 {
@@ -351,10 +351,9 @@ func (t *tab) splitSide(p, with *pane, side splitSide) bool {
 		}
 		with.W, with.H = paneColumnWidth, 1
 	case splitDown, splitUp:
-		// A vertical extension is a full screen of its own: both panes
-		// span the viewport, and the canvas grows to show the new one.
-		p.W = 1
-		with.W, with.H = 1, 1
+		// A vertical extension keeps the half-screen column width and
+		// grows to a full viewport height.
+		with.W, with.H = p.width(), 1
 	}
 	t.Focus = with
 	t.Zoom = nil
@@ -945,6 +944,11 @@ func (a *app) restoreLayout() bool {
 			t.Focus = p
 		} else {
 			t.Focus = firstPane(t.Root)
+		}
+		// A lone pane from an older layout is a file opened at the old
+		// full-screen default; make it the new half-screen default.
+		if len(t.panes()) == 1 && t.Focus != nil && t.Focus.W > paneColumnWidth {
+			t.Focus.W = paneColumnWidth
 		}
 		if p := byID[lt.Zoom]; p != nil && t.contains(p) {
 			t.Zoom = p

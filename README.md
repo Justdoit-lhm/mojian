@@ -3,8 +3,9 @@
 <p align="center"><img src="logos/png/mojian-logo-horizontal-1600.png" alt="Mojian" width="420"></p>
 
 A quiet text editor for plain files, built with [MyGo](https://mygo.egoist.dev)'s
-native UI: no webview, no cgo, one small Go binary. Tabs hold workspaces,
-workspaces hold panes, and every pane edits a file with syntax highlighting.
+native UI: no webview, no cgo, one small Go binary, drawn by MyGo through
+Metal on macOS. Tabs hold workspaces, workspaces hold panes, and every pane
+edits a file with syntax highlighting.
 
 ![Mojian](docs/screenshot.png)
 
@@ -28,18 +29,21 @@ workspaces hold panes, and every pane edits a file with syntax highlighting.
   The `+` beside the tabs opens an empty workspace, not a copy of the current
   one. Split left, right, up or down and choose the file for the new pane; a
   split never opens the same file twice. A tab holds as many panes as you
-  split, without a four-pane limit. A right split gives the new pane a
-  half-viewport column; a down or up split gives it a full screen of its
-  own. The canvas grows around the panes, and the viewport follows the
-  focused pane: there is no scrollbar and the mouse wheel does not pan it.
-  Option+left/right/up/down moves the selection; Option+Shift plus an
-  arrow moves the selected pane itself. Drag a pane's top-left grip onto
-  another pane to swap them, or onto its edge to put the pane above,
-  below, left or right of it. Drag a divider to resize, double-click it
-  for a balanced split, zoom a pane, or close it.
+  split, without a four-pane limit. Every new file opens at half-screen
+  size: half the viewport wide and a full viewport high. A right or left
+  split adds another half-screen column; a down or up split stacks one at
+  full height. The canvas grows around the panes, and the viewport follows
+  the focused pane: there is no scrollbar and the mouse wheel does not pan
+  it. Option+left/right/up/down moves the selection; Option+Shift plus an
+  arrow moves the selected pane itself. In the normal view, dragging a
+  pane's grip onto another pane swaps them inside the current page. Drag
+  a divider to resize, double-click it for a balanced split, zoom a pane,
+  or close it.
   Option+Tab opens a fast spatial pane overview: the panes shrink in
-  place, and Tab, the arrow keys or a click choose one. Return focuses it,
-  and Escape closes the overview.
+  place, and Tab, the arrow keys or a click select one. In the overview,
+  drag a pane's grip onto another pane, or onto its edge to put it above,
+  below, left or right. Return focuses the selected pane, and Escape
+  closes the overview.
   ![The pane overview](docs/overview.png)
 - **Markdown, source or rendered.** A Markdown pane has a Preview button at
   the top right; `⇧⌘V` is not needed, and the setting opens new `.md` files

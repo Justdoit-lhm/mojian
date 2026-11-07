@@ -289,10 +289,13 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 	card.Transition(motion.Pane)
 	hovered := card.Hovered()
 	width, height := card.Bounds().W, card.Bounds().H
-	overZone := dropNone
+	overZone, overTarget := dropNone, false
 	if over, ok := ui.DragOver[*pane](card); ok && over != nil && over != p && t.contains(over) {
-		if x, y, inside := card.PointerPosition(); inside {
-			overZone = dropZoneAt(x, y, width, height)
+		overTarget = true
+		if a.overview {
+			if x, y, inside := card.PointerPosition(); inside {
+				overZone = dropZoneAt(x, y, width, height)
+			}
 		}
 	}
 	card.Children(func() {
@@ -376,10 +379,14 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 			a.dropIndicator(c, k, overZone)
 		}
 		if a.overview {
-			hit := ui.Box(c.Key("overview-hit")).Absolute().Fill().
-				Background(ui.Transparent).Cursor(ui.CursorPointer).
-				Role(ui.RoleButton).Label("Focus pane " + paneName(p))
+			hit := ui.Box(c.Key("overview-hit")).Absolute().Top(headerH).Bottom(0).
+				Left(0).Right(0).Background(ui.Transparent).Cursor(ui.CursorPointer).
+				Role(ui.RoleButton).Label("Select pane " + paneName(p))
 			if hit.Clicked() {
+				t.Focus = p
+				a.changed()
+			}
+			if hit.DoubleClicked() {
 				a.later(func() { a.selectOverviewPane(t, p) })
 			}
 		}
@@ -388,16 +395,18 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 		card.Border(2, k.Text)
 	}
 	if from, ok := ui.Drop[*pane](card); ok && from != nil && from != p && t.contains(from) {
-		zone := overZone
-		if x, y, inside := card.PointerPosition(); inside {
-			zone = dropZoneAt(x, y, width, height)
-		}
-		if zone == dropNone {
-			zone = dropCenter
+		zone := dropCenter
+		if a.overview {
+			if x, y, inside := card.PointerPosition(); inside {
+				zone = dropZoneAt(x, y, width, height)
+			}
+			if zone == dropNone {
+				zone = dropCenter
+			}
 		}
 		a.later(func() { a.movePane(t, from, p, zone) })
 	}
-	if overZone != dropNone {
+	if overTarget {
 		card.Border(2, k.Text)
 	}
 	if card.Pressed() && t.Focus != p {
@@ -416,7 +425,12 @@ func (a *app) movePane(t *tab, from, to *pane, zone paneDrop) {
 	if t == nil || t != a.tab() || !t.movePane(from, to, zone) {
 		return
 	}
-	a.focusReq = from
+	if a.overview {
+		a.focusReq = nil
+		a.overviewFocus = true
+	} else {
+		a.focusReq = from
+	}
 	a.changed()
 	a.invalidate()
 }
@@ -520,11 +534,15 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hov
 		AlignItems(ui.Center).MinWidth(0)
 	if h.DoubleClicked() {
 		t.Focus = p
-		a.toggleZoom()
+		if a.overview {
+			a.later(func() { a.selectOverviewPane(t, p) })
+		} else {
+			a.toggleZoom()
+		}
 	}
 	if h.Clicked() {
 		t.Focus = p
-		if !p.Preview {
+		if !a.overview && !p.Preview {
 			a.focusReq = p
 		}
 		a.changed()
@@ -563,7 +581,7 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hov
 				}
 			})
 		}
-		if p.Note != nil && isMarkdownPath(p.Note.Path) {
+		if p.Note != nil && isMarkdownPath(p.Note.Path) && !a.overview {
 			glyph, label := "file-text", "Preview"
 			if p.Preview {
 				glyph, label = "pencil", "Edit"
@@ -578,7 +596,7 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hov
 				a.changed()
 			}
 		}
-		show := focused || hovered
+		show := (focused || hovered) && !a.overview
 		ui.Row(c).Gap(1).AlignItems(ui.Center).Children(func() {
 			if !show {
 				return

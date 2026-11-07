@@ -154,8 +154,6 @@ func TestOverviewKeys(t *testing.T) {
 	before := a.tab().Focus
 	tt.Key(ui.Alt, ui.KeyTab)
 	tt.Frame()
-	tt.Advance(250 * time.Millisecond)
-	tt.Frame()
 	if !a.overview || !tt.HasText("Panes") {
 		t.Fatalf("overview did not open: %q", tt.Texts())
 	}
@@ -196,7 +194,7 @@ func TestOverviewClickAndArrows(t *testing.T) {
 	if a.tab().Focus != first {
 		t.Fatal("Option+Left did not move to the pane on the left")
 	}
-	label := "Focus pane Reading notes"
+	label := "Select pane Reading notes"
 	if _, ok := tt.Find(label); !ok {
 		t.Fatalf("no click target for the right pane: %q", tt.Texts())
 	}
@@ -204,11 +202,16 @@ func TestOverviewClickAndArrows(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.overview {
-		t.Fatal("clicking a pane did not close the overview")
+	if !a.overview {
+		t.Fatal("selecting a pane should keep the overview open for rearranging")
 	}
 	if got := a.tab().Focus.Note.Title; got != "Reading notes" {
-		t.Fatalf("focused %q, want Reading notes", got)
+		t.Fatalf("selected %q, want Reading notes", got)
+	}
+	tt.Key(0, ui.KeyEnter)
+	tt.Frame()
+	if a.overview {
+		t.Fatal("Return did not leave the overview")
 	}
 }
 
@@ -336,5 +339,53 @@ func TestOptionDirectionUsesCanvasGeometry(t *testing.T) {
 	tt.Frame()
 	if a.tab().Focus != below {
 		t.Fatalf("Option+Down focused %v, want the pane below", a.tab().Focus.ID)
+	}
+}
+
+func TestOpenedFileDefaultsToHalfScreen(t *testing.T) {
+	a := newProjectApp(t)
+	pane := a.tab().Focus
+	if pane.W != paneColumnWidth || pane.H != 1 {
+		t.Fatalf("new file size: %v x %v, want half a screen", pane.W, pane.H)
+	}
+	if got := a.terminalDir(); got != a.store.dir {
+		t.Fatalf("terminal directory: %q", got)
+	}
+}
+
+func TestOverviewDragRearranges(t *testing.T) {
+	a := newProjectApp(t)
+	first := a.tab().Focus
+	a.splitWith(a.store.byRelPath("scripts/tasks.py"), false)
+	second := a.tab().Focus
+	tt := ui.NewTester(a.view, 1100, 700)
+	tt.Frame()
+	tt.Key(ui.Alt, ui.KeyTab)
+	tt.Frame()
+	grip, ok := tt.Find("Move Pane")
+	if !ok {
+		t.Fatal("no grip in overview")
+	}
+	label := "Select pane " + paneName(second)
+	target, ok := tt.Find(label)
+	if !ok {
+		t.Fatalf("no target %q", label)
+	}
+	tt.Press(grip.X+grip.W/2, grip.Y+grip.H/2)
+	tt.Frame()
+	tt.Move(grip.X+20, grip.Y+20)
+	tt.Frame()
+	tt.Move(target.X+target.W/2, target.Y+target.H/2)
+	tt.Frame()
+	tt.Release(target.X+target.W/2, target.Y+target.H/2)
+	tt.Frame()
+	if !a.overview {
+		t.Fatal("rearranging closed the overview")
+	}
+	if a.tab().Focus != first {
+		t.Fatal("the dragged pane is not focused")
+	}
+	if got := a.tab().panes(); got[0] != second || got[1] != first {
+		t.Fatal("the overview drag did not rearrange the panes")
 	}
 }

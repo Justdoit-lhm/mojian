@@ -261,8 +261,8 @@ func TestSplitUsesCanvasSizes(t *testing.T) {
 	}
 	focus := a.tab().Focus
 	a.splitWith(a.store.byRelPath("scripts/tasks.py"), true)
-	if a.tab().Focus == focus || a.tab().Focus.H != 1 || a.tab().Focus.W != 1 {
-		t.Fatalf("down split size: %v x %v, want a full screen",
+	if a.tab().Focus == focus || a.tab().Focus.H != 1 || a.tab().Focus.W != paneColumnWidth {
+		t.Fatalf("down split size: %v x %v, want a half-screen pane",
 			a.tab().Focus.W, a.tab().Focus.H)
 	}
 }
