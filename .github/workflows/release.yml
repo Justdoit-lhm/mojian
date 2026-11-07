@@ -47,8 +47,10 @@ jobs:
           name: macos
           path: |
             build/darwin-arm64/*.dmg
+            build/darwin-amd64/*.dmg
             build/darwin-*/*-darwin-*.tar.gz
             build/darwin-*/update-*.json
+          if-no-files-found: error
 
   linux:
     name: Linux
@@ -91,6 +93,7 @@ jobs:
             build/linux-arm64/*.tar.gz
             build/linux-arm64/*.deb
             build/linux-arm64/update-*.json
+          if-no-files-found: error
 
   windows:
     name: Windows
@@ -141,6 +144,7 @@ jobs:
             build/windows-amd64/mojian-setup-*.exe
             build/windows-amd64/*-windows-amd64.tar.gz
             build/windows-amd64/update-windows-amd64.json
+          if-no-files-found: error
 
   release:
     name: Publish
