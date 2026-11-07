@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.5
 
 - Settings is redesigned in the app's own visual language: a searchable
   rail finds every preference by its name, its words or its page, switches
