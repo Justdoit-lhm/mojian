@@ -3,7 +3,6 @@ package app
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -165,12 +164,15 @@ func TestProjectPickerIsInApp(t *testing.T) {
 	if !tt.HasText("Open Folder") || !tt.HasText("PLACES") {
 		t.Fatalf("picker texts: %q", tt.Texts())
 	}
-	if a.pickerPath == "" || !strings.HasPrefix(a.pickerPath, string(filepath.Separator)) {
+	if a.pickerPath == "" || !filepath.IsAbs(a.pickerPath) {
 		t.Fatalf("picker path: %q", a.pickerPath)
 	}
 }
 
 func TestTerminalPaneAndSharedLimit(t *testing.T) {
+	if !terminalsSupported() {
+		t.Skip("terminals need macOS or Linux")
+	}
 	registerFonts()
 	a := newProjectApp(t)
 	a.shellStarter = func() (*termTab, error) { return &termTab{}, nil }

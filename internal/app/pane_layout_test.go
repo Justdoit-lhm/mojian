@@ -8,6 +8,9 @@ import (
 )
 
 func TestTerminalWithoutFileOpensAtProjectRoot(t *testing.T) {
+	if !terminalsSupported() {
+		t.Skip("terminals need macOS or Linux")
+	}
 	a := newProjectApp(t)
 	a.shellStarter = func() (*termTab, error) { return &termTab{}, nil }
 	a.tabs = nil

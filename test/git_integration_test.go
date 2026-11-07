@@ -63,7 +63,7 @@ func TestNestedProjectPaths(t *testing.T) {
 	if data.Err != "" || len(data.Changes) != 1 {
 		t.Fatalf("status: %+v", data)
 	}
-	if data.Changes[0].Display != "a.md" || data.Changes[0].Path != filepath.Join("sub", "a.md") {
+	if data.Changes[0].Display != "a.md" || filepath.ToSlash(data.Changes[0].Path) != "sub/a.md" {
 		t.Fatalf("paths: %+v", data.Changes[0])
 	}
 }

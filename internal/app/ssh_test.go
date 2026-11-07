@@ -9,6 +9,9 @@ import (
 )
 
 func TestSSHConfigHosts(t *testing.T) {
+	if !terminalsSupported() {
+		t.Skip("SSH needs macOS or Linux")
+	}
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	if err := os.MkdirAll(filepath.Join(home, ".ssh"), 0o700); err != nil {
@@ -50,6 +53,9 @@ func argsContain(args []string, want string) bool {
 }
 
 func TestSSHPickerListsHosts(t *testing.T) {
+	if !terminalsSupported() {
+		t.Skip("SSH needs macOS or Linux")
+	}
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	_ = os.MkdirAll(filepath.Join(home, ".ssh"), 0o700)

@@ -1,6 +1,9 @@
 package app
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestNativeKeys(t *testing.T) {
 	for _, tt := range []struct {
@@ -19,6 +22,15 @@ func TestNativeKeys(t *testing.T) {
 	} {
 		if got := nativeKeysFor(tt.goos, tt.in); got != tt.want {
 			t.Errorf("%s %q: %q, want %q", tt.goos, tt.in, got, tt.want)
+		}
+	}
+}
+
+func TestEveryShortcutHasAWindowsSpelling(t *testing.T) {
+	for _, c := range paletteCommands {
+		got := nativeKeysFor("windows", c.keys)
+		if strings.ContainsAny(got, "⌘⇧⌥⌃") {
+			t.Errorf("%s: %q was not translated", c.title, got)
 		}
 	}
 }

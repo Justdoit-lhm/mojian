@@ -370,7 +370,10 @@ func TestSettingsPageAndPersistence(t *testing.T) {
 	a.settingsPath = filepath.Join(t.TempDir(), "settings.json")
 	tt := ui.NewTester(a.settingsWindowView, 900, 640)
 	tt.Frame()
-	if !tt.HasText("General") || !tt.HasText("Appearance") || !tt.HasText("Hosts") {
+	if !tt.HasText("General") || !tt.HasText("Appearance") {
+		t.Fatalf("settings window texts: %q", tt.Texts())
+	}
+	if terminalsSupported() && !tt.HasText("Hosts") {
 		t.Fatalf("settings window texts: %q", tt.Texts())
 	}
 	a.editorFontSize = 15
@@ -487,15 +490,17 @@ func TestSettingsCategoriesAndFontFamily(t *testing.T) {
 	a := newProjectApp(t)
 	settings := ui.NewTester(a.settingsWindowView, 900, 640)
 	settings.Frame()
-	if err := settings.Click("Terminal"); err != nil {
-		t.Fatal(err)
-	}
-	settings.Frame()
-	if a.settingsCat != settingsTerminal {
-		t.Fatalf("category after Terminal: %d", a.settingsCat)
-	}
-	if !settings.HasText("Option as Alt") {
-		t.Fatalf("terminal settings texts: %q", settings.Texts())
+	if terminalsSupported() {
+		if err := settings.Click("Terminal"); err != nil {
+			t.Fatal(err)
+		}
+		settings.Frame()
+		if a.settingsCat != settingsTerminal {
+			t.Fatalf("category after Terminal: %d", a.settingsCat)
+		}
+		if !settings.HasText("Option as Alt") {
+			t.Fatalf("terminal settings texts: %q", settings.Texts())
+		}
 	}
 	if err := settings.Click("Editor"); err != nil {
 		t.Fatal(err)
@@ -530,12 +535,15 @@ func TestFileTreeButtonSitsAtTheFarLeft(t *testing.T) {
 	if !ok {
 		t.Fatal("no File Tree button")
 	}
-	server, ok := tt.Find("Switch server: Local")
+	chip, ok := tt.Find("Switch server: Local")
 	if !ok {
-		t.Fatal("no server chip")
+		chip, ok = tt.Find("Switch project: " + a.projectName())
 	}
-	if tree.X > server.X {
-		t.Fatalf("File Tree x=%.1f is not left of the server chip x=%.1f", tree.X, server.X)
+	if !ok {
+		t.Fatal("no header chip")
+	}
+	if tree.X > chip.X {
+		t.Fatalf("File Tree x=%.1f is not left of the header chip x=%.1f", tree.X, chip.X)
 	}
 }
 
