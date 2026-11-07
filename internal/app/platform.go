@@ -94,14 +94,6 @@ func shortcutKey(r rune) string {
 	return string(r)
 }
 
-// shortcutHint is the keys a command shows beside its title.
-func shortcutHint(c *command) string {
-	if c == nil {
-		return ""
-	}
-	return nativeKeys(c.keys)
-}
-
 func fileManagerNameFor(goos string) string {
 	switch goos {
 	case "darwin":

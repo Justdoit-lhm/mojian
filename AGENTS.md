@@ -10,7 +10,7 @@ Read `.agents/skills/mygo-maintenance/SKILL.md` before touching UI code; it is t
 
 ## Architecture & Data Flow
 
-**Immediate-mode UI, one state struct.** `internal/app/app.go:28` holds every piece of app state as plain fields on `*app`. There are no reducers, observables or stores. `(*app).view` (`internal/app/view.go:21`) rebuilds the whole element tree each frame from that state; MyGo calls it again after input, `Window.Update` or `Invalidate`. A second root, `(*app).settingsWindowView` (`internal/app/settings.go:50`), draws the Settings window.
+**Immediate-mode UI, one state struct.** `internal/app/app.go:28` holds every piece of app state as plain fields on `*app`. There are no reducers, observables or stores. `(*app).view` (`internal/app/view.go:21`) rebuilds the whole element tree each frame from that state; MyGo calls it again after input, `Window.Update` or `Invalidate`. A second root, `(*app).settingsWindowView` (`internal/app/settings.go:185`), draws the Settings window.
 
 Frame conventions that keep this correct:
 

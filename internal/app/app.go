@@ -115,12 +115,34 @@ type app struct {
 
 	settingsWin *mygo.Window
 	settingsCat int
-	fontPick    bool
-	fontPickFor int
-	fontTarget  int
-	fontSearch  string
-	fontsOnce   sync.Once
-	fonts       []ui.FontFamily
+	// Settings' search and layout: what the query finds, the rows it
+	// highlights on the page shown, and the page's scroll.
+	settingsFound     map[int][]string
+	settingsHits      map[string]bool
+	settingsReveal    string
+	settingsRevealed  string
+	settingsScroll    ui.ScrollState
+	settingsScrollTop bool
+	settingsRows      int
+	settingsSearch    ui.Handle
+	settingsNotice    string
+	// settingsRecording is the command whose shortcut is being typed.
+	settingsRecording  string
+	settingsRecordRef  ui.Handle
+	settingsRecordSeen bool
+	settingsKeyFilter  string
+	settingsResetAsk   bool
+	hostEditAddr       string
+	hostEditName       string
+	hostEditAddress    string
+	hostRemoveAddr     string
+	shortcutKeys       map[string]string
+	fontPick           bool
+	fontPickFor        int
+	fontTarget         int
+	fontSearch         string
+	fontsOnce          sync.Once
+	fonts              []ui.FontFamily
 
 	editorFontSize      float64 // 0 means the default 12.5
 	editorFontFamily    string
@@ -222,6 +244,9 @@ func (a *app) open() {
 			a.settingsPath = filepath.Join(dir, "settings.json")
 		}
 		a.loadSettings()
+		if len(a.shortcutKeys) > 0 {
+			mygo.App.SetMenu(a.menu())
+		}
 		if a.serverAlias != "" && a.remotePath != "" {
 			if err := a.openRemoteProject(a.serverAlias, a.remotePath); err == nil {
 				a.treeOpen = true
@@ -343,37 +368,38 @@ func (a *app) windowClosed() {
 
 // settingsFile is what the app keeps between launches.
 type settingsFile struct {
-	Appearance          int             `json:"appearance"`
-	EditorFontFamily    string          `json:"editorFontFamily,omitempty"`
-	EditorFontSize      float64         `json:"editorFontSize,omitempty"`
-	EditorLineHeight    float64         `json:"editorLineHeight,omitempty"`
-	EditorTabSize       int             `json:"editorTabSize,omitempty"`
-	EditorSoftWrap      bool            `json:"editorSoftWrap,omitempty"`
-	HideLineNumbers     bool            `json:"hideLineNumbers,omitempty"`
-	MarkdownPreview     bool            `json:"markdownPreview,omitempty"`
-	NoActiveLine        bool            `json:"noActiveLine,omitempty"`
-	NoIndentGuides      bool            `json:"noIndentGuides,omitempty"`
-	NoAutoClose         bool            `json:"noAutoClose,omitempty"`
-	NoScrollPastEnd     bool            `json:"noScrollPastEnd,omitempty"`
-	TerminalFontFamily  string          `json:"terminalFontFamily,omitempty"`
-	TerminalFontSize    float64         `json:"terminalFontSize,omitempty"`
-	ShellPath           string          `json:"shellPath,omitempty"`
-	TerminalCursor      int             `json:"terminalCursor,omitempty"`
-	NotifyBell          bool            `json:"notifyBell,omitempty"`
-	NotifyExit          bool            `json:"notifyExit,omitempty"`
-	TerminalLineHeight  float64         `json:"terminalLineHeight,omitempty"`
-	TerminalOptionAsAlt bool            `json:"terminalOptionAsAlt,omitempty"`
-	TerminalCopySelect  bool            `json:"terminalCopySelect,omitempty"`
-	NoCursorBlink       bool            `json:"noCursorBlink,omitempty"`
-	TerminalScrollback  int             `json:"terminalScrollback,omitempty"`
-	NoRestoreLayout     bool            `json:"noRestoreLayout,omitempty"`
-	NoGitAutoRefresh    bool            `json:"noGitAutoRefresh,omitempty"`
-	Project             string          `json:"project,omitempty"`
-	Projects            []string        `json:"projects,omitempty"`
-	Server              string          `json:"server,omitempty"`
-	RemotePath          string          `json:"remotePath,omitempty"`
-	RemoteProjects      []remoteProject `json:"remoteProjects,omitempty"`
-	Hosts               []hostConfig    `json:"hosts,omitempty"`
+	Appearance          int               `json:"appearance"`
+	EditorFontFamily    string            `json:"editorFontFamily,omitempty"`
+	EditorFontSize      float64           `json:"editorFontSize,omitempty"`
+	EditorLineHeight    float64           `json:"editorLineHeight,omitempty"`
+	EditorTabSize       int               `json:"editorTabSize,omitempty"`
+	EditorSoftWrap      bool              `json:"editorSoftWrap,omitempty"`
+	HideLineNumbers     bool              `json:"hideLineNumbers,omitempty"`
+	MarkdownPreview     bool              `json:"markdownPreview,omitempty"`
+	NoActiveLine        bool              `json:"noActiveLine,omitempty"`
+	NoIndentGuides      bool              `json:"noIndentGuides,omitempty"`
+	NoAutoClose         bool              `json:"noAutoClose,omitempty"`
+	NoScrollPastEnd     bool              `json:"noScrollPastEnd,omitempty"`
+	TerminalFontFamily  string            `json:"terminalFontFamily,omitempty"`
+	TerminalFontSize    float64           `json:"terminalFontSize,omitempty"`
+	ShellPath           string            `json:"shellPath,omitempty"`
+	TerminalCursor      int               `json:"terminalCursor,omitempty"`
+	NotifyBell          bool              `json:"notifyBell,omitempty"`
+	NotifyExit          bool              `json:"notifyExit,omitempty"`
+	TerminalLineHeight  float64           `json:"terminalLineHeight,omitempty"`
+	TerminalOptionAsAlt bool              `json:"terminalOptionAsAlt,omitempty"`
+	TerminalCopySelect  bool              `json:"terminalCopySelect,omitempty"`
+	NoCursorBlink       bool              `json:"noCursorBlink,omitempty"`
+	TerminalScrollback  int               `json:"terminalScrollback,omitempty"`
+	NoRestoreLayout     bool              `json:"noRestoreLayout,omitempty"`
+	NoGitAutoRefresh    bool              `json:"noGitAutoRefresh,omitempty"`
+	Shortcuts           map[string]string `json:"shortcuts,omitempty"`
+	Project             string            `json:"project,omitempty"`
+	Projects            []string          `json:"projects,omitempty"`
+	Server              string            `json:"server,omitempty"`
+	RemotePath          string            `json:"remotePath,omitempty"`
+	RemoteProjects      []remoteProject   `json:"remoteProjects,omitempty"`
+	Hosts               []hostConfig      `json:"hosts,omitempty"`
 }
 
 // loadSettings reads the appearance and the project the app was left in.
@@ -429,6 +455,7 @@ func (a *app) loadSettings() {
 	a.noCursorBlink = s.NoCursorBlink
 	a.noRestoreLayout = s.NoRestoreLayout
 	a.noGitAutoRefresh = s.NoGitAutoRefresh
+	a.shortcutKeys = s.Shortcuts
 	a.project = s.Project
 	a.projects = s.Projects
 	a.serverAlias = s.Server
@@ -471,6 +498,7 @@ func (a *app) saveSettings() {
 		TerminalScrollback:  a.termScrollback(),
 		NoRestoreLayout:     a.noRestoreLayout,
 		NoGitAutoRefresh:    a.noGitAutoRefresh,
+		Shortcuts:           a.shortcutKeys,
 		Project:             project,
 		Projects:            a.projects,
 		Server:              a.serverAlias,
@@ -580,7 +608,14 @@ func (a *app) openSettingsWindow() {
 		Content:              ui.View(a.settingsWindowView),
 	})
 	a.settingsWin = win
-	win.OnClosed(func() { a.settingsWin = nil })
+	win.OnClosed(func() {
+		a.settingsWin = nil
+		a.stopRecording()
+		a.settingsQuery = ""
+		a.settingsFound, a.settingsHits, a.settingsReveal = nil, nil, ""
+		a.settingsKeyFilter = ""
+		a.hostEditAddr, a.hostRemoveAddr, a.settingsNotice = "", "", ""
+	})
 	win.Focus()
 }
 
@@ -1330,7 +1365,7 @@ func (a *app) menu() *mygo.Menu {
 	item := func(c *command) *mygo.MenuItem {
 		return &mygo.MenuItem{
 			Label:       c.title,
-			Accelerator: c.accel,
+			Accelerator: a.menuAccel(c),
 			Click: func(*mygo.MenuItem, *mygo.Window) {
 				a.run(c)
 			},

@@ -151,8 +151,9 @@ untracked work are all included.
 `Shift+Cmd+P` / `Ctrl+Shift+P` searches commands, files and tabs with fuzzy
 matching. `Cmd+,` / `Ctrl+,` opens Settings: General, Appearance, Editor,
 Fonts, Terminal, Shell, Notifications, Keyboard, Hosts, Git, Advanced and
-Updates. The window follows the system appearance by default; View ›
-Appearance overrides it.
+Updates. Its search finds any preference by name or keyword, and
+`Cmd+F` focuses it. The window follows the system appearance by default;
+View › Appearance overrides it.
 
 ### Updates
 
@@ -196,8 +197,9 @@ The in-app labels follow the platform. This table shows both spellings.
 | Command palette | `⇧⌘P` | `Ctrl+Shift+P` |
 | Settings | `⌘,` | `Ctrl+,` |
 
-Terminal and SSH shortcuts are available on macOS and Linux only.
-Double-click a tab to rename it; double-click a pane header to zoom it.
+These are the defaults; Settings › Keyboard rebinds them, resets a command
+or unbinds it. Terminal and SSH shortcuts are available on macOS and Linux
+only. Double-click a tab to rename it; double-click a pane header to zoom it.
 Right-click a tab for its menu.
 
 ## Build from source

@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- Settings is redesigned in the app's own visual language: a searchable
+  rail finds every preference by its name, its words or its page, switches
+  to that page, and highlights and scrolls to the match. The existing
+  title bar, cards, rows, switches and type sizes are kept.
+- Every preference is now editable and persisted. Line numbers, highlight
+  active line, indent guides, auto-close brackets, scroll past the last
+  line, cursor blink and the Git refresh switch used to edit a temporary,
+  so their toggles did not stick; they now write the setting back.
+- Keyboard shortcuts can be rebound in Settings › Keyboard: click a key,
+  type the new one, reset it to the default, or unbind it with Backspace.
+  A key taken from another command unbinds that command, the menus follow,
+  and conflicts are reported. Overrides live in `settings.json`.
+- Hosts can be edited and removed, not only added. Advanced reveals or
+  opens `settings.json` and can reset preferences, keeping projects and
+  servers.
+- A picture, PDF or Markdown preview pane keeps its split, zoom and close
+  buttons visible after another pane takes the focus; a preview has no
+  editor focus to bring them back.
 - Closing a pane or a terminal now mirrors opening: the pane leaves the
   layout at once so the survivor expands, while a copy of the card fades
   and slides back toward the edge it entered from over the old place.

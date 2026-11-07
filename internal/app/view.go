@@ -675,7 +675,10 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hov
 				a.changed()
 			}
 		}
-		show := focused || hovered
+		// A preview has no editor to take the focus or show a caret, so
+		// its controls stay visible even when another pane has the focus.
+		preview := p.Asset != nil || p.Note != nil && p.Preview
+		show := focused || hovered || preview
 		actions := ui.Row(c).Gap(1).AlignItems(ui.Center)
 		if overlay {
 			// Keep the buttons visible while the copy fades, but let no
@@ -817,7 +820,7 @@ func (a *app) welcomeAction(c *ui.Context, k *colors, glyph, title string, cmd *
 	row.Children(func() {
 		ui.Icon(c, icons.Icon(glyph)).Size(15, 15).TextColor(k.TextMuted)
 		ui.Text(c, title).FontSize(12.5).TextColor(k.Text).Grow(1)
-		if hint := shortcutHint(cmd); hint != "" {
+		if hint := a.commandKeys(cmd); hint != "" {
 			ui.Text(c, hint).FontSize(11).TextColor(k.TextFaint)
 		}
 	})
