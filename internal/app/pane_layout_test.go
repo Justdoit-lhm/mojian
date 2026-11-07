@@ -2,6 +2,7 @@ package app
 
 import (
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -153,6 +154,8 @@ func TestOverviewKeys(t *testing.T) {
 	before := a.tab().Focus
 	tt.Key(ui.Alt, ui.KeyTab)
 	tt.Frame()
+	tt.Advance(250 * time.Millisecond)
+	tt.Frame()
 	if !a.overview || !tt.HasText("Panes") {
 		t.Fatalf("overview did not open: %q", tt.Texts())
 	}
@@ -182,6 +185,8 @@ func TestOverviewClickAndArrows(t *testing.T) {
 	tt := ui.NewTester(a.view, 1100, 700)
 	tt.Frame()
 	tt.Key(ui.Alt, ui.KeyTab)
+	tt.Frame()
+	tt.Advance(250 * time.Millisecond)
 	tt.Frame()
 	if !a.overview {
 		t.Fatal("overview did not open")
@@ -314,5 +319,22 @@ func TestOptionArrowFocusAndMove(t *testing.T) {
 	tt.Frame()
 	if got := a.tab().panes(); len(got) != 2 || got[0] == first || got[1] != first {
 		t.Fatalf("Option+Shift+Right did not move the selected pane right: %v", got)
+	}
+}
+
+func TestOptionDirectionUsesCanvasGeometry(t *testing.T) {
+	a := newProjectApp(t)
+	first := a.tab().Focus
+	a.splitWith(a.store.byRelPath("Reading notes.md"), false)
+	a.splitWith(a.store.byRelPath("scripts/tasks.py"), true)
+	below := a.tab().Focus
+	tt := ui.NewTester(a.view, 1100, 700)
+	tt.Frame()
+	a.tab().Focus = first
+	tt.Frame()
+	tt.Key(ui.Alt, ui.KeyDown)
+	tt.Frame()
+	if a.tab().Focus != below {
+		t.Fatalf("Option+Down focused %v, want the pane below", a.tab().Focus.ID)
 	}
 }

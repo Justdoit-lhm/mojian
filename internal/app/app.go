@@ -64,6 +64,8 @@ type app struct {
 	// the workspace, and Tab, the arrows, a click or Return choose a pane.
 	overview      bool
 	overviewFocus bool
+	canvasW       float32 // the pane viewport, for directional focus
+	canvasH       float32
 
 	focusReq *pane
 

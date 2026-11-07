@@ -75,6 +75,7 @@ func (a *app) workspace(c *ui.Context, k *colors) {
 	if vh <= 0 {
 		vh = 600
 	}
+	a.canvasW, a.canvasH = vw, vh
 	switch {
 	case a.git.Open:
 		box.Children(func() { a.gitPage(c, k) })
@@ -167,7 +168,8 @@ func iconButton(c *ui.Context, k *colors, name, label string, size, iconSize flo
 }
 
 // tabContent lays out the panes of a tab, or the one zoomed. The
-// viewport follows the focused pane; there is no manual scrolling.
+// viewport follows the focused pane; Option+Tab animates the same live
+// canvas into a fit-all overview.
 func (a *app) tabContent(c *ui.Context, k *colors, t *tab, vw, vh float32) {
 	if t.Root == nil {
 		a.emptyState(c, k)
@@ -177,11 +179,9 @@ func (a *app) tabContent(c *ui.Context, k *colors, t *tab, vw, vh float32) {
 		a.paneCard(c, k, t, t.Zoom).Grow(1)
 		return
 	}
-	if a.overview {
-		a.overviewCanvas(c, k, t, vw, vh)
-		return
+	if !a.overview {
+		t.followFocus(vw, vh)
 	}
-	t.followFocus(vw, vh)
 	cw, ch := t.Root.extent(vw, vh)
 	if cw < vw {
 		cw = vw
@@ -189,51 +189,48 @@ func (a *app) tabContent(c *ui.Context, k *colors, t *tab, vw, vh float32) {
 	if ch < vh {
 		ch = vh
 	}
+	scale, x, y := float32(1), -t.panX, -t.panY
+	if a.overview {
+		scale = min((vw-2*gap)/cw, (vh-2*gap)/ch, 1)
+		scale = max(scale, 0.15)
+		x, y = (vw-cw*scale)/2, (vh-ch*scale)/2
+	}
+	anim := ui.Animation{Duration: 180 * time.Millisecond, Ease: ui.EaseOut}
 	viewport := ui.Box(c.Key("canvas-viewport:" + t.ID)).Grow(1).
 		MinWidth(0).MinHeight(0).Clip()
 	viewport.Children(func() {
-		ui.Box(c.Key("canvas:" + t.ID)).Absolute().
-			Left(-t.panX).Top(-t.panY).Width(cw).Height(ch).Children(func() {
-			a.canvasNode(c, k, t, t.Root, vw, vh, false)
+		canvas := ui.Box(c.Key("canvas:" + t.ID)).Absolute().Left(0).Top(0).
+			Width(cw).Height(ch)
+		canvas.Children(func() {
+			a.canvasNode(c, k, t, t.Root, vw, vh)
 		})
-	})
-}
-
-// overviewCanvas shrinks the whole canvas to fit the viewport and draws
-// lightweight pane previews. It is the live tiling's spacing without the
-// cost of painting every editor at a fractional scale.
-func (a *app) overviewCanvas(c *ui.Context, k *colors, t *tab, vw, vh float32) {
-	cw, ch := t.Root.extent(vw, vh)
-	scale := float32(1)
-	if cw > 0 && ch > 0 {
-		scale = min((vw-2*gap)/cw, (vh-2*gap)/ch, 1)
-	}
-	scale = max(scale, 0.15)
-	scw, sch := cw*scale, ch*scale
-	ox, oy := (vw-scw)/2, (vh-sch)/2
-	viewport := ui.Box(c.Key("overview-viewport:" + t.ID)).Grow(1).
-		MinWidth(0).MinHeight(0).Clip()
-	viewport.Children(func() {
-		ui.Box(c.Key("overview-canvas:" + t.ID)).Absolute().Left(ox).Top(oy).
-			Width(scw).Height(sch).Children(func() {
-			a.canvasNode(c, k, t, t.Root, vw*scale, vh*scale, true)
-		})
+		canvas.Left(-t.panX).Top(-t.panY)
+		if a.overview {
+			// The overview is the same live editor content, moved and
+			// scaled as one cached layer: text stays visible, and the
+			// animation does not repaint every editor each frame.
+			canvas.Cache()
+		}
+		// Keep an identity pose in the normal view so the first
+		// overview transition has somewhere to animate from.
+		pose := ui.Pose{Scale: 1}
+		if a.overview {
+			pose = ui.Pose{X: x + t.panX, Y: y + t.panY, Scale: scale}
+		}
+		canvas.TransformOrigin(0, 0).AnimatePose(pose, anim)
 	})
 }
 
 // canvasNode lays out a split on the canvas. Its children keep their
 // declared sizes; a shorter sibling leaves empty canvas rather than
 // being stretched.
-func (a *app) canvasNode(c *ui.Context, k *colors, t *tab, n *node, vw, vh float32, preview bool) ui.Element {
+func (a *app) canvasNode(c *ui.Context, k *colors, t *tab, n *node, vw, vh float32) ui.Element {
 	if n == nil {
 		return ui.Box(c)
 	}
 	if n.Pane != nil {
 		p := n.Pane
 		w, h := p.width()*vw, p.height()*vh
-		if preview {
-			return a.overviewPaneCard(c, k, t, p).Width(w).Height(h)
-		}
 		return a.paneCard(c, k, t, p).Width(w).Height(h)
 	}
 	aw, ah := n.A.extent(vw, vh)
@@ -252,14 +249,8 @@ func (a *app) canvasNode(c *ui.Context, k *colors, t *tab, n *node, vw, vh float
 		box = ui.Row(c.Key(key)).Width(width).Height(height).AlignItems(ui.Start)
 	}
 	box.Children(func() {
-		a.canvasNode(c, k, t, n.A, vw, vh, preview).Width(aw).Height(ah)
-		if preview {
-			if n.Vertical {
-				ui.Box(c.Key("divider")).Width(width).Height(gap)
-			} else {
-				ui.Box(c.Key("divider")).Width(gap).Height(height)
-			}
-		} else {
+		a.canvasNode(c, k, t, n.A, vw, vh).Width(aw).Height(ah)
+		{
 			div := ui.Box(c.Key("divider")).Role(ui.RoleSplitter).Label("Divider")
 			if n.Vertical {
 				div.Height(gap).Width(width).Cursor(ui.CursorResizeRow)
@@ -290,7 +281,7 @@ func (a *app) canvasNode(c *ui.Context, k *colors, t *tab, n *node, vw, vh float
 				})
 			}
 		}
-		a.canvasNode(c, k, t, n.B, vw, vh, preview).Width(bw).Height(bh)
+		a.canvasNode(c, k, t, n.B, vw, vh).Width(bw).Height(bh)
 	})
 	return box
 }
@@ -400,6 +391,16 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 		})
 		if overZone != dropNone {
 			a.dropIndicator(c, k, overZone)
+		}
+		if a.overview {
+			// The live editor would take a press inside its own body;
+			// this surface makes the whole pane a switcher target.
+			hit := ui.Box(c.Key("overview-hit")).Absolute().Fill().
+				Background(ui.Transparent).Cursor(ui.CursorPointer).
+				Role(ui.RoleButton).Label("Focus pane " + paneName(p))
+			if hit.Clicked() {
+				a.later(func() { a.selectOverviewPane(t, p) })
+			}
 		}
 	})
 	if p.dragging {

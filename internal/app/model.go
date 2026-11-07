@@ -496,6 +496,96 @@ func (t *tab) paneInDirection(dir paneDirection) *pane {
 	return nil
 }
 
+// paneAtDirection picks the pane that visually lies in a direction. The
+// split tree answers most cases, but full-screen rows and uneven canvas
+// sizes make geometry the better answer for the keyboard.
+func (t *tab) paneAtDirection(dir paneDirection, vw, vh float32) *pane {
+	if t.Root == nil || t.Focus == nil || vw <= 0 || vh <= 0 {
+		return nil
+	}
+	cx, cy, cw, ch, ok := t.Root.rectOf(t.Focus, vw, vh)
+	if !ok {
+		return nil
+	}
+	cxm, cym := cx+cw/2, cy+ch/2
+	best, bestScore := (*pane)(nil), float32(1e30)
+	consider := func(p *pane, primary, secondary float32) {
+		score := primary + secondary*0.25
+		if score < bestScore {
+			best, bestScore = p, score
+		}
+	}
+	for _, p := range t.panes() {
+		if p == t.Focus {
+			continue
+		}
+		x, y, w, h, ok := t.Root.rectOf(p, vw, vh)
+		if !ok {
+			continue
+		}
+		pxm, pym := x+w/2, y+h/2
+		switch dir {
+		case paneLeft:
+			if x+w <= cx+0.5 {
+				consider(p, cx-(x+w), absFloat(cym-pym))
+			}
+		case paneRight:
+			if x >= cx+cw-0.5 {
+				consider(p, x-(cx+cw), absFloat(cym-pym))
+			}
+		case paneUp:
+			if y+h <= cy+0.5 {
+				consider(p, cy-(y+h), absFloat(cxm-pxm))
+			}
+		case paneDown:
+			if y >= cy+ch-0.5 {
+				consider(p, y-(cy+ch), absFloat(cxm-pxm))
+			}
+		}
+	}
+	if best != nil {
+		return best
+	}
+	// Fall back to a pane whose center lies that way, as a diagonal move
+	// when the layouts do not share an edge.
+	for _, p := range t.panes() {
+		if p == t.Focus {
+			continue
+		}
+		x, y, w, h, ok := t.Root.rectOf(p, vw, vh)
+		if !ok {
+			continue
+		}
+		pxm, pym := x+w/2, y+h/2
+		switch dir {
+		case paneLeft:
+			if pxm < cxm {
+				consider(p, cxm-pxm, absFloat(cym-pym))
+			}
+		case paneRight:
+			if pxm > cxm {
+				consider(p, pxm-cxm, absFloat(cym-pym))
+			}
+		case paneUp:
+			if pym < cym {
+				consider(p, cym-pym, absFloat(cxm-pxm))
+			}
+		case paneDown:
+			if pym > cym {
+				consider(p, pym-cym, absFloat(cxm-pxm))
+			}
+		}
+	}
+	return best
+}
+
+func absFloat(v float32) float32 {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
+
 // focusDirection moves the focus to the nearest pane in a direction.
 func (t *tab) focusDirection(dir paneDirection) bool {
 	target := t.paneInDirection(dir)

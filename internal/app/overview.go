@@ -2,7 +2,6 @@ package app
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/egoist/mygo/ui"
 
@@ -92,10 +91,34 @@ func (a *app) cycleOverview(delta int) {
 }
 
 func (a *app) focusOverviewDirection(dir paneDirection) {
-	if t := a.tab(); t != nil && t.focusDirection(dir) {
-		a.focusReq = nil
-		a.changed()
+	t := a.tab()
+	if t == nil {
+		return
 	}
+	target := a.paneInDirection(dir)
+	if target == nil {
+		return
+	}
+	t.Focus = target
+	a.focusReq = nil
+	a.changed()
+}
+
+// paneInDirection prefers the pane that really lies that way on the
+// canvas, falling back to the split tree when the geometry is ambiguous.
+func (a *app) paneInDirection(dir paneDirection) *pane {
+	t := a.tab()
+	if t == nil {
+		return nil
+	}
+	vw, vh := a.canvasW, a.canvasH
+	if vw <= 0 || vh <= 0 {
+		vw, vh = 900, 600
+	}
+	if target := t.paneAtDirection(dir, vw, vh); target != nil {
+		return target
+	}
+	return t.paneInDirection(dir)
 }
 
 // overviewKeys register the overview's own keys. The focusable pill
@@ -140,9 +163,14 @@ func (a *app) moveFocusDirection(dir paneDirection) {
 		return
 	}
 	t := a.tab()
-	if t == nil || !t.focusDirection(dir) {
+	if t == nil {
 		return
 	}
+	target := a.paneInDirection(dir)
+	if target == nil {
+		return
+	}
+	t.Focus = target
 	a.focusReq = t.Focus
 	a.changed()
 	a.invalidate()
@@ -159,7 +187,7 @@ func (a *app) moveSelectedPane(dir paneDirection) {
 		a.focusOverviewDirection(dir)
 		return
 	}
-	target := t.paneInDirection(dir)
+	target := a.paneInDirection(dir)
 	if target == nil || target == t.Focus {
 		return
 	}
@@ -221,86 +249,6 @@ func (a *app) overviewChrome(c *ui.Context, k *colors) {
 			})
 		})
 	})
-}
-
-// overviewPaneCard is the cheap stand-in for a live editor or terminal
-// while the canvas is shrunk. It keeps the pane's place and identity
-// without painting the whole document.
-func (a *app) overviewPaneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
-	title := paneName(p)
-	detail, excerpt := paneOverviewText(p)
-	card := ui.Column(c.Key("preview-"+p.ID)).Radius(cardR).Clip().
-		Padding(10).Gap(5).Background(k.Card).Border(1, k.CardBorder).
-		Cursor(ui.CursorPointer).Role(ui.RoleButton).
-		Label("Focus pane " + title)
-	if t.Focus == p {
-		card.Background(k.CardFocused).Border(2, k.Text)
-	} else if card.Hovered() {
-		card.Background(k.CardFocused)
-	}
-	if card.Clicked() {
-		a.later(func() { a.selectOverviewPane(t, p) })
-	}
-	card.Children(func() {
-		ui.Row(c).Gap(7).AlignItems(ui.Center).Children(func() {
-			ic := icons.Icon("file-text")
-			switch {
-			case p.Term != nil:
-				ic = icons.Icon("square-terminal")
-			case p.Asset != nil:
-				ic = icons.FileIcon(p.Asset.Path)
-			case p.Note != nil:
-				ic = icons.FileIcon(p.Note.Path)
-			}
-			ui.Icon(c, ic).Size(16, 16).TextColor(k.Text)
-			ui.Text(c, title).FontSize(12.5).FontWeight(600).TextColor(k.Text).
-				SingleLine().Ellipsis("…").Grow(1).MinWidth(0)
-		})
-		if detail != "" {
-			ui.Text(c, detail).FontSize(10.5).TextColor(k.TextFaint).
-				SingleLine().Ellipsis("…")
-		}
-		if excerpt != "" {
-			ui.Text(c, excerpt).FontSize(10).Font(noteFont.Family).TextColor(k.TextMuted).
-				SingleLine().Ellipsis("…")
-		}
-	})
-	return card
-}
-
-func paneOverviewText(p *pane) (detail, excerpt string) {
-	if p == nil {
-		return "", ""
-	}
-	switch {
-	case p.Note != nil:
-		var lines []string
-		if p.Note.buf != nil {
-			// Read only the first few lines: a large note must not be
-			// copied whole just to draw a one-line teaser.
-			snap := p.Note.buf.Snapshot()
-			n := min(snap.LineCount(), 8)
-			for i := 0; i < n; i++ {
-				lines = append(lines, snap.Line(i))
-			}
-		} else {
-			lines = strings.SplitN(p.Note.Saved, "\n", 8)
-		}
-		for _, line := range lines {
-			line = strings.TrimSpace(strings.TrimLeft(line, "#>-* "))
-			if line != "" {
-				excerpt = line
-				break
-			}
-		}
-		return p.Note.Rel, excerpt
-	case p.Asset != nil:
-		return p.Asset.Rel, ""
-	case p.Term != nil:
-		return "Terminal · project root", ""
-	default:
-		return "", ""
-	}
 }
 
 func plural(n int, one, many string) string {
