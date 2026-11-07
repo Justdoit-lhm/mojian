@@ -118,8 +118,6 @@ func (a *app) openProject(dir string) {
 	a.tabs = nil
 	a.active = -1
 	a.focusReq = nil
-	a.overview = false
-	a.overviewFocus = false
 	a.treeSel = ""
 	a.treeQuery = ""
 	a.treeFocusSearch = false
@@ -129,9 +127,6 @@ func (a *app) openProject(dir string) {
 	a.treeDraft = nil
 	a.rename = nil
 	a.paletteOpen = false
-	a.splitPick = false
-	a.splitFrom = nil
-	a.splitTab = nil
 	a.projectOpen = false
 	a.err = ""
 	a.rememberProject(s.dir)

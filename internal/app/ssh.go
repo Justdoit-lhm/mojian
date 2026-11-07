@@ -125,7 +125,6 @@ func (a *app) openSSHPicker() {
 	a.sshPick = true
 	a.paletteOpen = false
 	a.projectPicker = false
-	a.splitPick = false
 	a.invalidate()
 }
 

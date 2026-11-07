@@ -128,6 +128,7 @@ func (a *app) tabItem(c *ui.Context, k *colors, i int, t *tab, width float32, wh
 				a.revealInTree(t.Focus.Note)
 			}
 			a.changed()
+			a.invalidate()
 		}
 	}
 	if e.DoubleClicked() {

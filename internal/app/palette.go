@@ -42,17 +42,13 @@ var (
 	cmdSplitLeft = &command{title: "Split Left", accel: "CmdOrCtrl+Alt+Left", keys: "⌥⌘←", glyph: "columns-2",
 		run: func(a *app) { a.splitFocusedSide(splitLeft) }}
 	cmdSplitRight = &command{title: "Split Right", accel: "CmdOrCtrl+Shift+D", keys: "⇧⌘D", glyph: "columns-2",
-		run: func(a *app) { a.splitFocused(false) }}
+		run: func(a *app) { a.splitFocusedSide(splitRight) }}
 	cmdSplitUp = &command{title: "Split Up", accel: "CmdOrCtrl+Alt+Up", keys: "⌥⌘↑", glyph: "rows-2",
 		run: func(a *app) { a.splitFocusedSide(splitUp) }}
 	cmdSplitDown = &command{title: "Split Down", accel: "CmdOrCtrl+Shift+E", keys: "⇧⌘E", glyph: "rows-2",
-		run: func(a *app) { a.splitFocused(true) }}
-	cmdOverview = &command{title: "Toggle Overview", keys: "⌥⇥", glyph: "layout-grid",
-		run: func(a *app) { a.toggleOverview() }}
+		run: func(a *app) { a.splitFocusedSide(splitDown) }}
 	cmdZoom = &command{title: "Zoom Pane", accel: "CmdOrCtrl+Shift+M", keys: "⇧⌘M", glyph: "maximize-2",
 		run: func(a *app) { a.toggleZoom() }}
-	cmdEqualize = &command{title: "Equalize Panes", accel: "CmdOrCtrl+Ctrl+=", keys: "⌃⌘=", glyph: "columns-2",
-		run: func(a *app) { a.equalize() }}
 	cmdClosePane = &command{title: "Close Pane", accel: "CmdOrCtrl+W", keys: "⌘W", glyph: "x",
 		run: func(a *app) { a.closePane(a.focusPane()) }}
 	cmdCloseTab = &command{title: "Close Tab", accel: "CmdOrCtrl+Shift+W", keys: "⇧⌘W", glyph: "x",
@@ -83,8 +79,7 @@ var (
 var paletteCommands = []*command{
 	cmdOpenProject, cmdNewNote, cmdNewFolder, cmdNewTab, cmdSave, cmdPalette, cmdNotes, cmdTree, cmdTerminal, cmdGit, cmdSettings, cmdSSH,
 	cmdRenameNode, cmdTrashNode,
-	cmdOverview,
-	cmdSplitLeft, cmdSplitRight, cmdSplitUp, cmdSplitDown, cmdZoom, cmdEqualize,
+	cmdSplitLeft, cmdSplitRight, cmdSplitUp, cmdSplitDown, cmdZoom,
 	cmdClosePane, cmdCloseTab, cmdRenameTab, cmdNextTab, cmdPrevTab,
 }
 
@@ -98,7 +93,6 @@ func (a *app) focusPane() *pane {
 
 func (a *app) openPalette() {
 	a.projectPicker = false
-	a.splitPick = false
 	a.paletteOpen = true
 	a.paletteQuery = ""
 	a.paletteSel = 0

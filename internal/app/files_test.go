@@ -191,20 +191,17 @@ func TestTerminalPaneAndSharedLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.splitPick {
-		t.Fatal("splitting a terminal opened the file chooser")
-	}
 	if got := len(a.tab().panes()); got != 3 {
 		t.Fatalf("panes after terminal split: %d", got)
 	}
 	if a.tab().Focus.Term == nil {
 		t.Fatal("the new terminal pane is not focused")
 	}
-	a.splitTerminal(a.tab().Focus, true)
+	a.splitTerminal(a.tab().Focus)
 	if got := len(a.tab().panes()); got != 4 {
 		t.Fatalf("panes after fourth: %d", got)
 	}
-	a.splitTerminal(a.tab().Focus, false)
+	a.splitTerminal(a.tab().Focus)
 	if got := len(a.tab().panes()); got != 5 {
 		t.Fatalf("panes after fifth: %d", got)
 	}

@@ -418,8 +418,7 @@ func (a *app) settingsKeyboardPage(c *ui.Context, k *colors) {
 		cmds := []*command{
 			cmdOpenProject, cmdNewNote, cmdNewFolder, cmdNewTab, cmdSave,
 			cmdPalette, cmdNotes, cmdTree, cmdTerminal, cmdGit, cmdSSH,
-			cmdOverview, cmdSplitLeft, cmdSplitRight, cmdSplitUp, cmdSplitDown,
-			cmdZoom, cmdEqualize,
+			cmdSplitLeft, cmdSplitRight, cmdSplitUp, cmdSplitDown, cmdZoom,
 			cmdClosePane, cmdCloseTab, cmdRenameTab, cmdNextTab, cmdPrevTab,
 		}
 		for i, cmd := range cmds {
@@ -437,18 +436,22 @@ func (a *app) settingsKeyboardPage(c *ui.Context, k *colors) {
 	})
 	a.settingsSection(c, k, "PANE NAVIGATION", func() {
 		for _, row := range []struct {
-			label, keys string
+			label, keys, detail string
 		}{
-			{"Move selection", "⌥←  ⌥→  ⌥↑  ⌥↓"},
-			{"Move selected pane", "⌥⇧←  ⌥⇧→  ⌥⇧↑  ⌥⇧↓"},
+			{"Move focus", "⌥←  ⌥→  ⌥↑  ⌥↓", "Focus the neighboring pane."},
+			{"Move the focused pane", "⌥⇧←  ⌥⇧→  ⌥⇧↑  ⌥⇧↓", "Put it on the neighbor's edge."},
 		} {
-			ui.Row(c).Height(34).Padding(0, 14).Gap(12).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, row.label).FontSize(12.5).TextColor(k.Text).Grow(1)
+			ui.Row(c).MinHeight(46).Padding(0, 14).Gap(12).AlignItems(ui.Center).Children(func() {
+				ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
+					ui.Text(c, row.label).FontSize(12.5).TextColor(k.Text)
+					ui.Text(c, row.detail).FontSize(11.5).TextColor(k.TextFaint).
+						SingleLine().Ellipsis("…")
+				})
 				ui.Text(c, row.keys).FontSize(11.5).TextColor(k.TextFaint).Font(noteFont.Family)
 			})
 			ui.Divider(c).Margin(0, 14)
 		}
-		ui.Text(c, "The canvas follows the focused pane; it has no scrollbar and the mouse wheel does not pan it.").
+		ui.Text(c, "A split puts the pane left, right, above or below the focused one.").
 			FontSize(11.5).TextColor(k.TextFaint).Padding(0, 14, 14)
 	})
 	ui.Text(c, "Shortcuts are fixed for now; every command is also in the palette.").

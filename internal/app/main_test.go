@@ -1,11 +1,11 @@
 package app
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
@@ -34,7 +34,7 @@ func TestSplitAndClose(t *testing.T) {
 	second := a.store.byRelPath("Reading notes.md")
 	third := a.store.byRelPath(filepath.Join("scripts", "tasks.py"))
 
-	a.splitWith(second, false)
+	a.splitWith(second)
 	if got := len(t0.panes()); got != 2 {
 		t.Fatalf("panes after split: %d", got)
 	}
@@ -44,11 +44,7 @@ func TestSplitAndClose(t *testing.T) {
 	if t0.panes()[1].Note != second || t0.panes()[0].Note != first {
 		t.Error("the split panes show the wrong files")
 	}
-	if t0.Root.Vertical {
-		t.Error("split right made a stacked split")
-	}
-
-	a.splitWith(third, true)
+	a.splitWith(third)
 	if got := len(t0.panes()); got != 3 {
 		t.Fatalf("panes after second split: %d", got)
 	}
@@ -79,7 +75,7 @@ func TestSplitsPastFourPanes(t *testing.T) {
 		if i == 0 {
 			continue
 		}
-		a.splitWith(n, i%2 == 1)
+		a.splitWith(n)
 	}
 	if got, want := len(t0.panes()), len(notes); got != want {
 		t.Fatalf("panes: %d, want %d", got, want)
@@ -113,7 +109,7 @@ func TestLayoutRoundTrip(t *testing.T) {
 	a.tabs = []*tab{t1}
 	a.active = 0
 	second := newPane(notes[1])
-	if !t1.split(t1.Focus, second, false) {
+	if !t1.splitSide(t1.Focus, second, splitRight) {
 		t.Fatal("split failed")
 	}
 	a.saveLayout()
@@ -128,11 +124,85 @@ func TestLayoutRoundTrip(t *testing.T) {
 	if got := len(b.tabs[0].panes()); got != 2 {
 		t.Fatalf("panes: %d", got)
 	}
-	if b.tabs[0].Root.Vertical {
-		t.Error("the layout lost the side by side split")
+	if got, want := b.tabs[0].panes()[0].Note.Rel, notes[0].Rel; got != want {
+		t.Errorf("the layout lost the first pane: %q, want %q", got, want)
 	}
-	if got := b.tabs[0].Root.A.Pane.W; got != paneColumnWidth {
-		t.Errorf("the layout lost the canvas width: %v", got)
+	if got, want := b.tabs[0].panes()[1].Note.Rel, notes[1].Rel; got != want {
+		t.Errorf("the layout lost the second pane: %q, want %q", got, want)
+	}
+}
+
+func TestRestoreFillsALonePane(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.md"), []byte("# a\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("MOJIAN_VAULT", dir)
+	s, err := openStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := s.sorted()[0]
+	a := &app{store: s, layoutPath: filepath.Join(dir, "layout.json")}
+	p := newPane(n)
+	a.tabs = []*tab{{ID: nextID("t"), Root: &node{Pane: p}, Focus: p}}
+	a.saveLayout()
+
+	b := &app{store: s, layoutPath: a.layoutPath}
+	if !b.restoreLayout() {
+		t.Fatal("restoreLayout returned false")
+	}
+	if got := len(b.tab().panes()); got != 1 {
+		t.Fatalf("restored panes: %d, want 1", got)
+	}
+	if b.tab().Focus != b.tab().panes()[0] {
+		t.Fatal("the restored tab lost its focus")
+	}
+}
+
+func TestRestoreReadsTheOldSplitTree(t *testing.T) {
+	dir := t.TempDir()
+	for _, f := range []string{"a.md", "b.md"} {
+		if err := os.WriteFile(filepath.Join(dir, f), []byte("# "+f+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("MOJIAN_VAULT", dir)
+	s, err := openStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := layoutFile{Tabs: []layoutTab{{
+		Root: &layoutNode{
+			Vertical: true,
+			A:        &layoutNode{Pane: &layoutPane{ID: "a", Note: "a.md"}},
+			B:        &layoutNode{Pane: &layoutPane{ID: "b", Note: "b.md"}},
+		},
+		Focus: "b",
+	}}, Active: 0}
+	data, err := json.Marshal(old)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "layout.json")
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	app := &app{store: s, layoutPath: path}
+	if !app.restoreLayout() {
+		t.Fatal("restoreLayout returned false")
+	}
+	if got := len(app.tabs[0].panes()); got != 2 {
+		t.Fatalf("panes: %d", got)
+	}
+	if got := app.tabs[0].panes()[0].Note.Rel; got != "a.md" {
+		t.Errorf("first pane: %q", got)
+	}
+	if got := app.tabs[0].panes()[1].Note.Rel; got != "b.md" {
+		t.Errorf("second pane: %q", got)
+	}
+	if app.tabs[0].Focus == nil || app.tabs[0].Focus.Note.Rel != "b.md" {
+		t.Errorf("focus: %+v", app.tabs[0].Focus)
 	}
 }
 
@@ -183,27 +253,27 @@ func TestView(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !a.splitPick || !tt.HasText("Choose a file for the new pane") {
-		t.Fatalf("Split Right did not ask for a file: %q", tt.Texts())
-	}
-	a.chooseSplit(a.store.byRelPath("Reading notes.md"))
-	tt.Frame()
 	if got := len(a.tab().panes()); got != 2 {
-		t.Fatalf("panes after choosing a file: %d", got)
+		t.Fatalf("panes after Split Right: %d", got)
+	}
+	if !tt.HasText("Open a file in this pane") {
+		t.Fatalf("Split Right did not open the file search: %q", tt.Texts())
+	}
+	a.openNote(a.store.byRelPath("Reading notes.md"))
+	tt.Frame()
+	if got := a.tab().Focus.Note; got == nil || got.Title != "Reading notes" {
+		t.Fatal("the file did not open in the new pane")
 	}
 	a.openPalette()
 	tt.Frame()
-	tt.Type("Split Down")
+	tt.Type("Split Left")
 	tt.Key(0, ui.KeyEnter)
 	tt.Frame()
-	if !a.splitPick {
-		t.Fatal("the Split Down palette command did not ask for a file")
-	}
-	a.chooseSplit(a.store.byRelPath(filepath.Join("scripts", "tasks.py")))
-	tt.Frame()
 	if got := len(a.tab().panes()); got != 3 {
-		t.Fatalf("panes after the second choice: %d", got)
+		t.Fatalf("panes after Split Left: %d", got)
 	}
+	a.openNote(a.store.byRelPath(filepath.Join("scripts", "tasks.py")))
+	tt.Frame()
 	if err := tt.Click("New File"); err != nil {
 		t.Fatal(err)
 	}
@@ -235,7 +305,7 @@ func TestNewTabIsEmpty(t *testing.T) {
 		t.Fatalf("tabs after New Tab: %d, want %d", got, before+1)
 	}
 	tb := a.tab()
-	if tb.Root != nil || len(tb.panes()) != 0 || a.currentNote() != nil {
+	if len(tb.panes()) != 0 || a.currentNote() != nil {
 		t.Fatalf("the new tab copied a scene: %+v", tb)
 	}
 	if !tt.HasText("No file open") {
@@ -243,50 +313,61 @@ func TestNewTabIsEmpty(t *testing.T) {
 	}
 }
 
-func TestSplitUsesCanvasSizes(t *testing.T) {
+func TestSplitAddsAColumn(t *testing.T) {
 	a := newProjectApp(t)
 	first := a.tab().Focus
-	a.splitWith(a.store.byRelPath("Reading notes.md"), false)
-	root := a.tab().Root
-	if root == nil || root.Vertical {
-		t.Fatal("a right split should be side by side")
+	a.splitWith(a.store.byRelPath("Reading notes.md"))
+	if got := a.tab().panes(); len(got) != 2 || got[0] != first || got[1] != a.tab().Focus {
+		t.Fatalf("panes after a right split: %v", got)
 	}
-	if first.W != paneColumnWidth || a.tab().Focus.W != paneColumnWidth {
-		t.Fatalf("right split widths: %v and %v, want half a viewport",
-			first.W, a.tab().Focus.W)
+	third := a.store.byRelPath("scripts/tasks.py")
+	a.splitWith(third)
+	if got := len(a.tab().panes()); got != 3 {
+		t.Fatalf("panes after a third file: %d", got)
 	}
-	if first.H != 1 || a.tab().Focus.H != 1 {
-		t.Fatalf("right split heights: %v and %v, want a full viewport",
-			first.H, a.tab().Focus.H)
-	}
-	focus := a.tab().Focus
-	a.splitWith(a.store.byRelPath("scripts/tasks.py"), true)
-	if a.tab().Focus == focus || a.tab().Focus.H != 1 || a.tab().Focus.W != paneColumnWidth {
-		t.Fatalf("down split size: %v x %v, want a half-screen pane",
-			a.tab().Focus.W, a.tab().Focus.H)
+	if a.tab().panes()[2].Note != third {
+		t.Fatal("a split appends the new pane to the right")
 	}
 }
 
-func TestDragPaneSwapsPlaces(t *testing.T) {
+func TestSplitLeftPutsTheNewPaneFirst(t *testing.T) {
 	a := newProjectApp(t)
-	a.splitWith(a.store.byRelPath("Reading notes.md"), false)
-	tt := ui.NewTester(a.view, 1100, 700)
-	tt.Frame()
-	tt.Advance(300 * time.Millisecond)
-	first, second := a.tab().panes()[0], a.tab().panes()[1]
-	handle, ok := tt.Find("Move Pane")
-	if !ok {
-		t.Fatal("the pane has no move handle")
+	first := a.tab().Focus
+	a.splitWithSide(a.store.byRelPath("Reading notes.md"), splitLeft)
+	got := a.tab().panes()
+	if len(got) != 2 || got[0] == first || got[1] != first {
+		t.Fatalf("a left split did not put the new pane first: %v", got)
 	}
-	tt.Press(handle.X+handle.W/2, handle.Y+handle.H/2)
-	tt.Move(handle.X+40, handle.Y+10)
-	tt.Move(880, 380)
-	tt.Release(880, 380)
-	tt.Frame()
-	if got := a.tab().panes(); got[0] != second || got[1] != first {
-		t.Fatalf("the drag did not swap the panes: %v, %v", got[0].Note.Title, got[1].Note.Title)
+	if a.tab().Focus != got[0] {
+		t.Fatal("a left split did not focus the new pane")
 	}
+}
+
+func TestArrowKeysMoveInFourDirections(t *testing.T) {
+	a := newProjectApp(t)
+	first := a.tab().Focus
+	a.splitWith(a.store.byRelPath("Reading notes.md"))
+	second := a.tab().Focus
+	a.splitWithSide(a.store.byRelPath("scripts/tasks.py"), splitDown)
+	third := a.tab().Focus
+
+	a.focusPaneDirection(paneUp)
+	if a.tab().Focus != second {
+		t.Fatal("up did not focus the pane above")
+	}
+	a.focusPaneDirection(paneDown)
+	if a.tab().Focus != third {
+		t.Fatal("down did not focus the pane below")
+	}
+	a.focusPaneDirection(paneLeft)
 	if a.tab().Focus != first {
-		t.Fatal("the moved pane is not focused")
+		t.Fatal("left did not focus the column on the left")
+	}
+	a.focusPaneDirection(paneRight)
+	if a.tab().Focus != second {
+		t.Fatal("right did not focus the column on the right")
+	}
+	if a.focusPaneDirection(paneLeft); a.tab().Focus != first {
+		t.Fatal("left at the first column did not move")
 	}
 }

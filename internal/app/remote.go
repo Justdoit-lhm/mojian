@@ -404,8 +404,6 @@ func (a *app) openRemoteProject(host, remotePath string) error {
 	a.tabs = nil
 	a.active = -1
 	a.focusReq = nil
-	a.overview = false
-	a.overviewFocus = false
 	a.treeSel = ""
 	a.treeQuery = ""
 	a.treeFocusSearch = false
@@ -415,9 +413,6 @@ func (a *app) openRemoteProject(host, remotePath string) error {
 	a.treeDraft = nil
 	a.rename = nil
 	a.paletteOpen = false
-	a.splitPick = false
-	a.splitFrom = nil
-	a.splitTab = nil
 	a.projectOpen = false
 	a.remotePicker = false
 	a.err = ""

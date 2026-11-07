@@ -88,6 +88,50 @@ func TestStreamUsesTheClientsSocket(t *testing.T) {
 	}
 }
 
+func TestKillReturnsBeforeTheInterruptGrace(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("MOJIAN_DIR", dir)
+	done := make(chan error, 1)
+	go func() { done <- Serve() }()
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		if _, err := os.Stat(SocketPath()); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("server did not start")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	c, err := Connect()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	info, err := c.Create(CreateOptions{
+		Command: []string{"/bin/sh", "-c", `trap "" INT; sleep 1`},
+		Cols:    40, Rows: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	if err := c.Kill(info.ID); err != nil {
+		t.Fatal(err)
+	}
+	if elapsed := time.Since(start); elapsed > 500*time.Millisecond {
+		t.Fatalf("kill waited %v for the shell's interrupt grace", elapsed)
+	}
+	if err := c.Shutdown(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("server did not stop")
+	}
+}
+
 func TestExitedSessionsArePruned(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("MOJIAN_DIR", dir)

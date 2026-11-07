@@ -306,7 +306,9 @@ func (s *Server) do(req Request) (any, error) {
 		if err != nil {
 			return nil, nil
 		}
-		ss.kill()
+		// Do not hold the control connection for the shell's interrupt
+		// grace period; the session is detached at once and killed in
+		// the background.
 		s.mu.Lock()
 		delete(s.sessions, req.SID)
 		s.order = removeString(s.order, req.SID)
@@ -314,6 +316,7 @@ func (s *Server) do(req Request) (any, error) {
 			s.idleFrom = time.Now()
 		}
 		s.mu.Unlock()
+		go ss.kill()
 		return nil, nil
 	case "resize":
 		ss, err := s.session(req.SID)

@@ -2,6 +2,8 @@ package app
 
 import (
 	"runtime"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/egoist/mygo/plugins/terminal"
@@ -39,11 +41,8 @@ func (a *app) view(c *ui.Context) {
 	if a.err != "" {
 		a.errorBanner(c, k)
 	}
-	a.overviewChrome(c, k)
-	a.overviewKeys(c)
 	a.paneKeys(c)
 	a.projectPickerModal(c, k)
-	a.splitPicker(c, k)
 	a.remotePickerModal(c, k)
 	a.sshPicker(c, k)
 	a.palette(c, k)
@@ -67,19 +66,11 @@ func (a *app) workspace(c *ui.Context, k *colors) {
 	}
 	box := ui.Box(c.Key(key)).Grow(1).MinWidth(0).MinHeight(0).Clip().
 		Transition(motion.Page)
-	vw, vh := box.Bounds().W, box.Bounds().H
-	if vw <= 0 {
-		vw = 900
-	}
-	if vh <= 0 {
-		vh = 600
-	}
-	a.canvasW, a.canvasH = vw, vh
 	switch {
 	case a.git.Open:
 		box.Children(func() { a.gitPage(c, k) })
 	case t != nil:
-		box.Children(func() { a.tabContent(c, k, t, vw, vh) })
+		box.Children(func() { a.tabContent(c, k, t) })
 	default:
 		box.Children(func() { a.emptyState(c, k) })
 	}
@@ -99,6 +90,10 @@ func (a *app) titleBar(c *ui.Context, k *colors) {
 		// window, and leaves the corner itself to the resize edge.
 		ui.Box(c).Width(dragW).Height(titleH).DragWindow().
 			Cursor(ui.CursorGrab).Description("Drag Window")
+		if iconButton(c, k, "panel-left", "File Tree", 30, 17).
+			Tooltip(tip("File Tree", cmdTree)).Clicked() {
+			a.later(func() { a.toggleTree() })
+		}
 		a.serverChip(c, k)
 		a.projectChip(c, k)
 		a.tabStrip(c, k)
@@ -110,10 +105,6 @@ func (a *app) titleBar(c *ui.Context, k *colors) {
 		// window, and a double click on it zooms the window.
 		ui.Box(c).Grow(1).MinWidth(24)
 		ui.Row(c).Gap(2).AlignItems(ui.Center).Shrink(0).Children(func() {
-			if iconButton(c, k, "panel-left", "File Tree", 30, 17).
-				Tooltip(tip("File Tree", cmdTree)).Clicked() {
-				a.later(func() { a.toggleTree() })
-			}
 			if iconButton(c, k, "command", "Command Palette", 30, 17).
 				Tooltip(tip("Command Palette", cmdPalette)).Clicked() {
 				a.openPalette()
@@ -166,106 +157,42 @@ func iconButton(c *ui.Context, k *colors, name, label string, size, iconSize flo
 	return b
 }
 
-// tabContent lays out the panes of a tab, or the one zoomed. The
-// viewport follows the focused pane; Option+Tab shows the same live
-// canvas scaled to fit, without an animation.
-func (a *app) tabContent(c *ui.Context, k *colors, t *tab, vw, vh float32) {
+// tabContent lays out the tab's split tree, or the one zoomed. Each
+// split gives its two sides the same share of the space.
+func (a *app) tabContent(c *ui.Context, k *colors, t *tab) {
 	if t.Root == nil {
 		a.emptyState(c, k)
 		return
 	}
-	if t.Zoom != nil && !a.overview {
+	if t.Zoom != nil && t.contains(t.Zoom) {
 		a.paneCard(c, k, t, t.Zoom).Grow(1)
 		return
 	}
-	if !a.overview {
-		t.followFocus(vw, vh)
-	}
-	cw, ch := t.Root.extent(vw, vh)
-	if cw < vw {
-		cw = vw
-	}
-	if ch < vh {
-		ch = vh
-	}
-	viewport := ui.Box(c.Key("canvas-viewport:" + t.ID)).Grow(1).
-		MinWidth(0).MinHeight(0).Clip()
-	viewport.Children(func() {
-		canvas := ui.Box(c.Key("canvas:" + t.ID)).Absolute().Left(0).Top(0).
-			Width(cw).Height(ch)
-		canvas.Children(func() {
-			a.canvasNode(c, k, t, t.Root, vw, vh)
-		})
-		if a.overview {
-			scale := min((vw-2*gap)/cw, (vh-2*gap)/ch, 1)
-			scale = max(scale, 0.15)
-			x, y := (vw-cw*scale)/2, (vh-ch*scale)/2
-			canvas.TransformOrigin(0, 0).Scale(scale, scale).Translate(x, y)
-		} else {
-			canvas.Left(-t.panX).Top(-t.panY)
-		}
-	})
+	a.nodeView(c, k, t, t.Root)
 }
 
-// canvasNode lays out a split on the canvas. Its children keep their
-// declared sizes; a shorter sibling leaves empty canvas rather than
-// being stretched.
-func (a *app) canvasNode(c *ui.Context, k *colors, t *tab, n *node, vw, vh float32) ui.Element {
+func (a *app) nodeView(c *ui.Context, k *colors, t *tab, n *node) ui.Element {
 	if n == nil {
 		return ui.Box(c)
 	}
 	if n.Pane != nil {
-		p := n.Pane
-		return a.paneCard(c, k, t, p).
-			Width(p.width() * vw).Height(p.height() * vh)
+		return a.paneCard(c, k, t, n.Pane).Grow(1).MinWidth(0)
 	}
-	aw, ah := n.A.extent(vw, vh)
-	bw, bh := n.B.extent(vw, vh)
-	key := "split-"
+	key := "split:"
 	if p := firstPane(n); p != nil {
 		key += p.ID
 	}
 	var box ui.Element
-	var width, height float32
 	if n.Vertical {
-		width, height = max(aw, bw), ah+gap+bh
-		box = ui.Column(c.Key(key)).Width(width).Height(height).AlignItems(ui.Start)
+		box = ui.Column(c.Key(key)).Grow(1).MinWidth(0).MinHeight(0).
+			Gap(gap).AlignItems(ui.Stretch)
 	} else {
-		width, height = aw+gap+bw, max(ah, bh)
-		box = ui.Row(c.Key(key)).Width(width).Height(height).AlignItems(ui.Start)
+		box = ui.Row(c.Key(key)).Grow(1).MinWidth(0).MinHeight(0).
+			Gap(gap).AlignItems(ui.Stretch)
 	}
 	box.Children(func() {
-		a.canvasNode(c, k, t, n.A, vw, vh).Width(aw).Height(ah)
-		div := ui.Box(c.Key("divider")).Role(ui.RoleSplitter).Label("Divider")
-		if n.Vertical {
-			div.Height(gap).Width(width).Cursor(ui.CursorResizeRow)
-		} else {
-			div.Width(gap).Height(height).Cursor(ui.CursorResizeColumn)
-		}
-		if dx, dy, ok := div.Dragged(); ok {
-			d := dx
-			if n.Vertical {
-				d = dy
-			}
-			n.resize(d, vw, vh)
-			a.changed()
-		}
-		if div.DoubleClicked() {
-			n.balance()
-			a.changed()
-		}
-		if div.Hovered() || div.Dragging() || div.Pressed() {
-			div.Draw(func(p *ui.Painter, r ui.Rect) {
-				if n.Vertical {
-					p.Fill(ui.Rect{X: r.X + r.W/2 - 18, Y: r.Y + r.H/2 - 1.5, W: 36, H: 3},
-						k.IconMuted.Alpha(0.6), 1.5)
-				} else {
-					p.Fill(ui.Rect{X: r.X + r.W/2 - 1.5, Y: r.Y + r.H/2 - 18, W: 3, H: 36},
-						k.IconMuted.Alpha(0.6), 1.5)
-				}
-			})
-		}
-		a.canvasNode(c, k, t, n.B, vw, vh).Width(bw).Height(bh)
+		a.nodeView(c, k, t, n.A).Basis(0).Grow(1).MinWidth(0)
+		a.nodeView(c, k, t, n.B).Basis(0).Grow(1).MinWidth(0)
 	})
 	return box
 }
@@ -279,19 +206,16 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 	if focused {
 		bg, border, shadow = k.CardFocused, k.CardBorderFocused, k.ShadowFocused
 	}
-	if a.overview && focused {
-		border, borderW = k.Text, 2
-	}
 	card.Background(bg).Border(borderW, border).
 		Shadow(0, 1, 2, 0, shadow).
 		Shadow(0, 6, 22, -2, shadow)
-	card.Transition(motion.Pane)
 	hovered := card.Hovered()
 	width, height := card.Bounds().W, card.Bounds().H
-	overZone, overTarget := dropNone, false
+	overZone := dropNone
+	overTarget := false
 	if over, ok := ui.DragOver[*pane](card); ok && over != nil && over != p && t.contains(over) {
 		overTarget = true
-		if x, y, inside := card.PointerPosition(); inside {
+		if x, y, inside := card.PointerPosition(); inside && width > 0 && height > 0 {
 			overZone = dropZoneAt(x, y, width, height)
 		}
 	}
@@ -299,6 +223,10 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 		a.paneHeader(c, k, t, p, focused, hovered, width)
 		body := ui.Box(c).Grow(1).MinHeight(0).Padding(0, 0, 6, 0)
 		body.Children(func() {
+			if p.Note == nil && p.Asset == nil && p.Term == nil {
+				a.emptyPaneBody(c, k, t, p)
+				return
+			}
 			if p.Term != nil {
 				if p.Term.Term == nil {
 					a.startRestoredTerminal(p)
@@ -372,49 +300,19 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 				a.changed()
 			}
 		})
-		if overZone != dropNone {
+		if overZone != dropNone && overZone != dropCenter {
 			a.dropIndicator(c, k, overZone)
 		}
-		if a.overview {
-			// In the zoomed overview the whole pane is the handle: drag
-			// it anywhere to rearrange, click to select, double-click to
-			// return to it.
-			hit := ui.Box(c.Key("overview-hit")).Absolute().Fill().
-				Background(ui.Transparent).Cursor(ui.CursorGrab).
-				Role(ui.RoleButton).Label("Move pane " + paneName(p)).
-				Drag(p)
-			p.dragging = hit.Dragging()
-			dropped := false
-			if from, ok := ui.Drop[*pane](hit); ok && from != nil && from != p && t.contains(from) {
-				dropped = true
-				zone := dropCenter
-				if x, y, inside := hit.PointerPosition(); inside {
-					zone = dropZoneAt(x, y, width, height)
-				}
-				a.later(func() { a.movePane(t, from, p, zone) })
-			}
-			if !dropped && hit.Clicked() {
-				t.Focus = p
-				a.changed()
-			}
-			if !dropped && hit.DoubleClicked() {
-				a.later(func() { a.selectOverviewPane(t, p) })
-			}
-		}
 	})
-	if p.dragging {
-		card.Border(2, k.Text)
-	}
-	if !a.overview {
-		if from, ok := ui.Drop[*pane](card); ok && from != nil && from != p && t.contains(from) {
-			zone := dropCenter
-			if x, y, inside := card.PointerPosition(); inside {
-				zone = dropZoneAt(x, y, width, height)
+	if from, ok := ui.Drop[*pane](card); ok && from != nil && from != p && t.contains(from) {
+		if x, y, inside := card.PointerPosition(); inside && width > 0 && height > 0 {
+			zone := dropZoneAt(x, y, width, height)
+			if zone != dropNone && zone != dropCenter {
+				a.later(func() { a.movePaneTo(t, from, p, zone) })
 			}
-			a.later(func() { a.movePaneInPlace(t, from, p, zone) })
 		}
 	}
-	if overTarget {
+	if p.dragging || overTarget {
 		card.Border(2, k.Text)
 	}
 	if card.Pressed() && t.Focus != p {
@@ -427,98 +325,172 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 	return card
 }
 
-// movePane rearranges the tiling after a pane is dropped on another:
-// the middle swaps them, an edge inserts the dragged pane there.
-func (a *app) movePane(t *tab, from, to *pane, zone paneDrop) {
+// movePaneTo drops from on the named edge of to and inserts it there.
+func (a *app) movePaneTo(t *tab, from, to *pane, zone paneDrop) {
 	if t == nil || t != a.tab() || !t.movePane(from, to, zone) {
 		return
 	}
-	if a.overview {
-		a.focusReq = nil
-		a.overviewFocus = true
-	} else {
-		a.focusReq = from
-	}
-	a.changed()
-	a.invalidate()
-}
-
-// movePaneInPlace is the normal-view drag: the target's block is split
-// between the two panes instead of extending the canvas.
-func (a *app) movePaneInPlace(t *tab, from, to *pane, zone paneDrop) {
-	if t == nil || t != a.tab() || !t.movePaneInPlace(from, to, zone) {
-		return
-	}
+	t.Focus = from
 	a.focusReq = from
 	a.changed()
 	a.invalidate()
 }
 
-// dropZoneAt divides a pane into a swap target in the middle and insert
-// targets on its edges. Top and bottom are generous: those are the
-// directions a stack grows in.
+// dropZoneAt divides a pane into a middle and four edges.
 func dropZoneAt(x, y, w, h float32) paneDrop {
 	if w <= 0 || h <= 0 {
 		return dropCenter
 	}
 	switch {
-	case y < h*0.32:
+	case y < h*0.3:
 		return dropAbove
-	case y > h*0.68:
+	case y > h*0.7:
 		return dropBelow
-	case x < w*0.22:
+	case x < w*0.25:
 		return dropLeft
-	case x > w*0.78:
+	case x > w*0.75:
 		return dropRight
 	default:
 		return dropCenter
 	}
 }
 
-// dropIndicator draws where the dragged pane would land: a bar on the
-// edge and a small label, so dropping above and below is unmistakable.
+// dropIndicator paints the edge that will take the dragged pane.
 func (a *app) dropIndicator(c *ui.Context, k *colors, zone paneDrop) {
-	if zone == dropNone || zone == dropCenter {
-		return
-	}
 	bar := ui.Box(c.Key("drop-indicator")).Absolute().PassThrough().
 		Background(k.Text).Radius(2)
-	label := ""
 	switch zone {
 	case dropAbove:
 		bar.Top(2).Left(8).Right(8).Height(3)
-		label = "Drop above"
 	case dropBelow:
 		bar.Bottom(2).Left(8).Right(8).Height(3)
-		label = "Drop below"
 	case dropLeft:
 		bar.Top(8).Bottom(8).Left(2).Width(3)
-		label = "Drop left"
 	case dropRight:
 		bar.Top(8).Bottom(8).Right(2).Width(3)
-		label = "Drop right"
 	}
-	hint := ui.Row(c.Key("drop-hint")).Absolute().PassThrough().Justify(ui.Center)
-	switch zone {
-	case dropAbove:
-		hint.Top(10).Left(0).Right(0)
-	case dropBelow:
-		hint.Bottom(10).Left(0).Right(0)
-	case dropLeft:
-		hint.Left(10).Top(0).Bottom(0)
-	case dropRight:
-		hint.Right(10).Top(0).Bottom(0)
-	}
-	hint.Children(func() {
-		ui.Text(c, label).FontSize(10.5).FontWeight(650).TextColor(k.Panel).
-			Padding(3, 8).Radius(radius).Background(k.Text)
+}
+
+// emptyPaneBody is the file picker inside a blank split: type to filter,
+// Enter or a click opens the file in this pane.
+func (a *app) emptyPaneBody(c *ui.Context, k *colors, t *tab, p *pane) {
+	choices := a.paneChoices(p.emptyQuery)
+	p.emptySel = min(max(p.emptySel, 0), max(len(choices)-1, 0))
+	reveal := false
+	ui.Column(c).Fill().Padding(14, 16).Gap(8).Children(func() {
+		ui.Text(c, "Open a file in this pane").FontSize(12.5).
+			FontWeight(600).TextColor(k.Text)
+		ui.Row(c).Height(34).Padding(0, 9).Gap(7).Radius(radius).
+			Background(k.Hover).AlignItems(ui.Center).Children(func() {
+			ui.Icon(c, icons.Icon("search")).Size(14, 14).TextColor(k.TextFaint)
+			in := ui.TextInputBase(c, &p.emptyQuery).Grow(1).FontSize(13).
+				Placeholder("Type a file name…")
+			if t.Focus == p {
+				in.AutoFocus()
+			}
+			if in.Focused() && t.Focus != p {
+				t.Focus = p
+				a.changed()
+			}
+			if in.Changed() {
+				p.emptySel, reveal = 0, true
+			}
+			if in.Shortcut(0, ui.KeyDown) {
+				p.emptySel, reveal = min(p.emptySel+1, len(choices)-1), true
+			}
+			if in.Shortcut(0, ui.KeyUp) {
+				p.emptySel, reveal = max(p.emptySel-1, 0), true
+			}
+			if in.Submitted() && len(choices) > 0 {
+				ch := choices[p.emptySel]
+				a.later(func() { a.openPaneChoice(t, p, ch) })
+			}
+		})
+		ui.Scroll(c).Grow(1).MinHeight(0).Padding(2).Children(func() {
+			if len(choices) == 0 {
+				ui.Text(c, "No files match").FontSize(12).TextColor(k.TextFaint).Padding(10)
+				return
+			}
+			for i, ch := range choices {
+				i, ch := i, ch
+				row := ui.Row(c.Key("open:"+p.ID+":"+ch.rel)).Height(32).
+					Padding(0, 9).Gap(8).Radius(radius).AlignItems(ui.Center).
+					Cursor(ui.CursorPointer).Role(ui.RoleButton).Label(ch.title)
+				if i == p.emptySel {
+					row.Background(k.PanelSel)
+					if reveal {
+						row.ScrollIntoView()
+					}
+				} else if row.Hovered() {
+					row.Background(k.Hover)
+				}
+				if row.Clicked() {
+					a.later(func() { a.openPaneChoice(t, p, ch) })
+				}
+				row.Children(func() {
+					ui.Icon(c, icons.FileIcon(ch.rel)).Size(15, 15).TextColor(k.TextMuted)
+					ui.Text(c, ch.title).FontSize(12.5).TextColor(k.Text).
+						SingleLine().Ellipsis("…").Shrink(0.3).MinWidth(0)
+					ui.Text(c, ch.rel).FontSize(11.5).TextColor(k.TextFaint).
+						SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
+				})
+			}
+		})
 	})
+}
+
+type fileChoice struct {
+	title string
+	rel   string
+	note  *note
+	asset *assetFile
+}
+
+// paneChoices lists the files a blank pane can open, filtered by q.
+func (a *app) paneChoices(q string) []fileChoice {
+	if a.store == nil {
+		return nil
+	}
+	q = strings.ToLower(strings.TrimSpace(q))
+	match := func(s string) bool { return q == "" || fuzzy(strings.ToLower(s), q) }
+	var out []fileChoice
+	for _, n := range a.store.sorted() {
+		if !match(n.Title + " " + n.Rel) {
+			continue
+		}
+		out = append(out, fileChoice{title: n.Title, rel: n.Rel, note: n})
+	}
+	var assets []*assetFile
+	for _, f := range a.store.assets {
+		assets = append(assets, f)
+	}
+	sort.Slice(assets, func(i, j int) bool { return assets[i].Rel < assets[j].Rel })
+	for _, f := range assets {
+		if !match(f.Name + " " + f.Rel) {
+			continue
+		}
+		out = append(out, fileChoice{title: f.Name, rel: f.Rel, asset: f})
+	}
+	return out
+}
+
+func (a *app) openPaneChoice(t *tab, p *pane, ch fileChoice) {
+	if t == nil || t != a.tab() || p == nil || !t.contains(p) {
+		return
+	}
+	t.Focus = p
+	switch {
+	case ch.note != nil:
+		a.openNote(ch.note)
+	case ch.asset != nil:
+		a.openAsset(ch.asset)
+	}
 }
 
 func paneName(p *pane) string {
 	switch {
 	case p == nil:
-		return "Pane"
+		return "New Pane"
 	case p.Note != nil:
 		return p.Note.Title
 	case p.Asset != nil:
@@ -526,16 +498,16 @@ func paneName(p *pane) string {
 	case p.Term != nil:
 		return p.Term.Spec.title()
 	default:
-		return "Pane"
+		return "New Pane"
 	}
 }
 
-// paneHeader draws a note's icon, title and size, its unsaved dot, and
-// its buttons.
+// paneHeader draws a note's icon, title, its unsaved dot, and its
+// buttons.
 func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hovered bool, width float32) {
 	compact := width > 0 && width < 230
-	name := "Untitled"
-	ic := icons.FileIcon("")
+	name := "New Pane"
+	ic := icons.Icon("file-plus")
 	switch {
 	case p.Note != nil:
 		name, ic = p.Note.Title, icons.FileIcon(p.Note.Path)
@@ -553,15 +525,11 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hov
 		AlignItems(ui.Center).MinWidth(0)
 	if h.DoubleClicked() {
 		t.Focus = p
-		if a.overview {
-			a.later(func() { a.selectOverviewPane(t, p) })
-		} else {
-			a.toggleZoom()
-		}
+		a.toggleZoom()
 	}
 	if h.Clicked() {
 		t.Focus = p
-		if !a.overview && !p.Preview {
+		if !p.Preview {
 			a.focusReq = p
 		}
 		a.changed()
@@ -573,15 +541,13 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hov
 			iconSize, handleW, gripSize = 14, 12, 10
 		}
 		grip := ui.Row(c).Width(handleW).Height(headerH).Center().
-			Cursor(ui.CursorGrab).Role(ui.RoleButton).Label("Move Pane").
-			Description("Drag to move pane").Drag(p)
+			Cursor(ui.CursorGrab).Role(ui.RoleButton).Label("Move Pane " + name).Drag(p)
 		if grip.Hovered() {
 			grip.Background(k.Hover)
 		}
 		p.dragging = grip.Dragging()
 		grip.Children(func() {
-			ui.Icon(c, icons.Icon("grip-vertical")).Size(gripSize, gripSize).
-				TextColor(k.TextFaint)
+			ui.Icon(c, icons.Icon("grip-vertical")).Size(gripSize, gripSize).TextColor(k.TextFaint)
 		})
 		ui.Icon(c, ic).Size(iconSize, iconSize).TextColor(k.Text).Tooltip(name)
 		if compact {
@@ -600,7 +566,7 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hov
 				}
 			})
 		}
-		if p.Note != nil && isMarkdownPath(p.Note.Path) && !a.overview {
+		if p.Note != nil && isMarkdownPath(p.Note.Path) {
 			glyph, label := "file-text", "Preview"
 			if p.Preview {
 				glyph, label = "pencil", "Edit"
@@ -615,7 +581,7 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hov
 				a.changed()
 			}
 		}
-		show := (focused || hovered) && !a.overview
+		show := focused || hovered
 		ui.Row(c).Gap(1).AlignItems(ui.Center).Children(func() {
 			if !show {
 				return
@@ -624,14 +590,14 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hov
 				Tooltip(tip("Split Right", cmdSplitRight)).Clicked() {
 				a.later(func() {
 					t.Focus = p
-					a.splitFocused(false)
+					a.splitFocusedSide(splitRight)
 				})
 			}
 			if iconButton(c, k, "rows-2", "Split Down", btn, isize).
 				Tooltip(tip("Split Down", cmdSplitDown)).Clicked() {
 				a.later(func() {
 					t.Focus = p
-					a.splitFocused(true)
+					a.splitFocusedSide(splitDown)
 				})
 			}
 			zoom, label := "maximize-2", "Zoom"

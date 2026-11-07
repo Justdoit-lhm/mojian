@@ -61,21 +61,7 @@ type app struct {
 	tabs   []*tab
 	active int
 
-	// overview is niri's zoomed-out pane switcher: Option+Tab shrinks
-	// the workspace, and Tab, the arrows, a click or Return choose a pane.
-	overview      bool
-	overviewFocus bool
-	canvasW       float32 // the pane viewport, for directional focus
-	canvasH       float32
-
 	focusReq *pane
-
-	splitPick  bool
-	splitDir   splitSide
-	splitFrom  *pane
-	splitTab   *tab
-	splitQuery string
-	splitSel   int
 
 	sshPick  bool
 	sshHosts []sshHost
@@ -168,6 +154,7 @@ func Run() {
 		terminalFontSize: 12.5, terminalLineHeight: 1, terminalScrollback: 10,
 		notifyBell: true, notifyExit: true,
 	}
+	go warmSessionServer()
 	mygo.App.SetMenu(a.menu())
 	mygo.App.WhenReady(a.open)
 	mygo.App.OnActivate(func(hasVisibleWindows bool) {
@@ -305,8 +292,6 @@ func (a *app) windowClosed() {
 	}
 	a.win = nil
 	a.focusReq = nil
-	a.overview = false
-	a.overviewFocus = false
 	a.paletteOpen = false
 	a.projectOpen = false
 	a.treeDraft = nil
@@ -762,10 +747,11 @@ func (a *app) focusFirstNote() {
 	notes := a.store.sorted()
 	if len(notes) == 0 {
 		for _, f := range a.store.assets {
-			a.tabs = []*tab{{ID: nextID("t")}}
+			t := &tab{ID: nextID("t")}
 			p := newAssetPane(f)
-			a.tabs[0].Root = &node{Pane: p}
-			a.tabs[0].Focus = p
+			t.Root = &node{Pane: p}
+			t.Focus = p
+			a.tabs = []*tab{t}
 			a.active = 0
 			a.focusReq = p
 			a.revealTab = true
@@ -788,8 +774,6 @@ func (a *app) focusFirstNote() {
 // copy the current file; picking or creating a file fills it.
 func (a *app) newTab() {
 	a.git.Open = false
-	a.overview = false
-	a.overviewFocus = false
 	t := &tab{ID: nextID("t")}
 	a.tabs = append(a.tabs, t)
 	a.active = len(a.tabs) - 1
@@ -797,6 +781,7 @@ func (a *app) newTab() {
 	a.revealTab = true
 	a.treeDraft = nil
 	a.changed()
+	a.invalidate()
 }
 
 // openNoteInTab shows n in a tab of its own.
@@ -804,8 +789,6 @@ func (a *app) openNoteInTab(n *note) {
 	if n == nil {
 		return
 	}
-	a.overview = false
-	a.overviewFocus = false
 	a.git.Open = false
 	t := newTab(n)
 	if t.Focus != nil {
@@ -819,6 +802,7 @@ func (a *app) openNoteInTab(n *note) {
 	a.openPath(n.Rel)
 	a.treeReveal = n.Rel
 	a.changed()
+	a.invalidate()
 }
 
 // openNote shows n in the focused pane, or in a new tab when none is
@@ -827,8 +811,6 @@ func (a *app) openNote(n *note) {
 	if n == nil {
 		return
 	}
-	a.overview = false
-	a.overviewFocus = false
 	a.git.Open = false
 	a.treeDraft = nil
 	a.treeQuery = ""
@@ -842,6 +824,7 @@ func (a *app) openNote(n *note) {
 		a.revealTab = true
 		a.revealRel(n.Rel)
 		a.changed()
+		a.invalidate()
 		return
 	}
 	p := t.Focus
@@ -883,6 +866,7 @@ func (a *app) openNote(n *note) {
 	a.focusReq = p
 	a.revealRel(n.Rel)
 	a.changed()
+	a.invalidate()
 }
 
 // openRel opens a path from the project: a text file in the editor, or a
@@ -918,6 +902,7 @@ func (a *app) openAssetInTab(f *assetFile) {
 	a.openPath(f.Rel)
 	a.treeReveal = f.Rel
 	a.changed()
+	a.invalidate()
 }
 
 // openAsset shows a picture or PDF in the focused pane, or in a new tab
@@ -941,6 +926,7 @@ func (a *app) openAsset(f *assetFile) {
 		a.revealTab = true
 		a.revealRel(f.Rel)
 		a.changed()
+		a.invalidate()
 		return
 	}
 	p := t.Focus
@@ -975,6 +961,7 @@ func (a *app) openAsset(f *assetFile) {
 	a.focusReq = p
 	a.revealRel(f.Rel)
 	a.changed()
+	a.invalidate()
 }
 
 // closeTab closes a workspace.
@@ -1006,8 +993,6 @@ func (a *app) closeTab(t *tab) {
 	switch {
 	case len(a.tabs) == 0:
 		a.active = -1
-		a.overview = false
-		a.overviewFocus = false
 	case i < a.active:
 		a.active--
 	case wasActive:
@@ -1030,6 +1015,7 @@ func (a *app) closeTab(t *tab) {
 		a.focusReq = nil
 	}
 	a.changed()
+	a.invalidate()
 }
 
 // closePane closes the pane focused in its tab.
@@ -1057,6 +1043,7 @@ func (a *app) closePane(p *pane) {
 		}
 		a.focusReq = t.Focus
 		a.changed()
+		a.invalidate()
 		return
 	}
 }
@@ -1066,8 +1053,6 @@ func (a *app) toggleZoom() {
 	if t == nil || t.Focus == nil {
 		return
 	}
-	a.overview = false
-	a.overviewFocus = false
 	if t.Zoom == t.Focus {
 		t.Zoom = nil
 	} else {
@@ -1075,13 +1060,7 @@ func (a *app) toggleZoom() {
 	}
 	a.focusReq = t.Focus
 	a.changed()
-}
-
-func (a *app) equalize() {
-	if t := a.tab(); t != nil {
-		t.equalize()
-		a.changed()
-	}
+	a.invalidate()
 }
 
 func (a *app) cycleTab(delta int) {
@@ -1089,8 +1068,6 @@ func (a *app) cycleTab(delta int) {
 		return
 	}
 	a.git.Open = false
-	a.overview = false
-	a.overviewFocus = false
 	a.active = (a.active + delta + len(a.tabs)) % len(a.tabs)
 	a.revealTab = true
 	a.treeDraft = nil
@@ -1101,6 +1078,7 @@ func (a *app) cycleTab(delta int) {
 		}
 	}
 	a.changed()
+	a.invalidate()
 }
 
 // selectTab shows the tab at index i.
@@ -1109,8 +1087,6 @@ func (a *app) selectTab(i int) {
 		return
 	}
 	a.git.Open = false
-	a.overview = false
-	a.overviewFocus = false
 	a.active = i
 	a.revealTab = true
 	a.treeDraft = nil
@@ -1121,6 +1097,7 @@ func (a *app) selectTab(i int) {
 		}
 	}
 	a.changed()
+	a.invalidate()
 }
 
 // showTab shows the nth tab, from 1; 9 shows the last.
@@ -1252,7 +1229,6 @@ func (a *app) menu() *mygo.Menu {
 			item(cmdTerminal),
 			item(cmdGit),
 			item(cmdSSH),
-			item(cmdOverview),
 			item(cmdPalette),
 			mygo.Separator(),
 			item(cmdSettings),
@@ -1275,7 +1251,6 @@ func (a *app) menu() *mygo.Menu {
 			item(cmdSplitDown),
 			mygo.Separator(),
 			item(cmdZoom),
-			item(cmdEqualize),
 			mygo.Separator(),
 			item(cmdClosePane),
 		}},

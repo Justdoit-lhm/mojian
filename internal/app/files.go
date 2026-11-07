@@ -737,7 +737,7 @@ func (a *app) closePanesWhere(match func(*pane) bool) {
 			if match(p) {
 				releaseAsset(p)
 				t.closePane(p)
-				if t.Root == nil {
+				if len(t.panes()) == 0 {
 					break
 				}
 			}
@@ -745,7 +745,7 @@ func (a *app) closePanesWhere(match func(*pane) bool) {
 	}
 	kept := make([]*tab, 0, len(a.tabs))
 	for _, t := range a.tabs {
-		if t.Root != nil {
+		if len(t.panes()) > 0 {
 			kept = append(kept, t)
 		}
 	}

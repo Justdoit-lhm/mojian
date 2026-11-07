@@ -66,51 +66,42 @@ func TestCodeFilesLoad(t *testing.T) {
 	}
 }
 
-func TestSplitChoosesAnotherFile(t *testing.T) {
+func TestSplitOpensEmptyPaneThenFile(t *testing.T) {
 	registerFonts()
 	a := newProjectApp(t)
 	py := a.store.byRelPath(filepath.Join("scripts", "tasks.py"))
 	a.openNote(py)
 	tt := ui.NewTester(a.view, 1100, 700)
 	tt.Frame()
-	a.beginSplit(false)
+	a.splitFocusedSide(splitRight)
 	tt.Frame()
-	if !a.splitPick {
-		t.Fatal("Split Right did not open the file chooser")
-	}
-	if !tt.HasText("Choose a file for the new pane") {
-		t.Fatalf("split chooser texts: %q", tt.Texts())
-	}
-	var other *note
-	for _, n := range a.splitCandidates() {
-		if n != py {
-			other = n
-			break
-		}
-	}
-	if other == nil {
-		t.Fatal("the split chooser has no other file")
-	}
-	a.chooseSplit(other)
-	tt.Frame()
-	if a.splitPick {
-		t.Fatal("the split chooser stayed open")
-	}
 	tb := a.tab()
 	panes := tb.panes()
 	if len(panes) != 2 {
 		t.Fatalf("panes: %d", len(panes))
 	}
-	if panes[0].Note == panes[1].Note {
-		t.Fatal("a split opened the same file twice")
+	if panes[0].Note != py {
+		t.Fatal("the split changed the original pane")
 	}
-	if tb.Focus != panes[1] || panes[1].Note != other {
-		t.Fatal("the new pane did not receive the chosen file and focus")
+	if tb.Focus != panes[1] {
+		t.Fatal("the split did not focus the new pane")
 	}
-	for _, p := range panes {
-		if p.state == nil {
-			t.Fatal("a pane has no editor state")
-		}
+	if panes[1].Note != nil || panes[1].Asset != nil || panes[1].Term != nil {
+		t.Fatal("the split should start with an empty pane")
+	}
+	if !tt.HasText("Open a file in this pane") {
+		t.Fatalf("empty pane texts: %q", tt.Texts())
+	}
+
+	other := a.store.byRelPath("Reading notes.md")
+	a.openNote(other)
+	tt.Frame()
+	panes = tb.panes()
+	if len(panes) != 2 || panes[1].Note != other {
+		t.Fatal("the file did not open in the empty pane")
+	}
+	if tb.Focus != panes[1] {
+		t.Fatal("the opened file is not focused")
 	}
 	if panes[0].state == panes[1].state {
 		t.Error("the panes share one caret and scroll state")
@@ -527,5 +518,23 @@ func TestSettingsCategoriesAndFontFamily(t *testing.T) {
 	}
 	if p.state.LineHeight != 1.7 || p.state.TabSize != 2 || !p.state.NoActiveLine {
 		t.Fatalf("editor options: line=%v tab=%d active=%v", p.state.LineHeight, p.state.TabSize, p.state.NoActiveLine)
+	}
+}
+
+func TestFileTreeButtonSitsAtTheFarLeft(t *testing.T) {
+	registerFonts()
+	a := newProjectApp(t)
+	tt := ui.NewTester(a.view, 1100, 700)
+	tt.Frame()
+	tree, ok := tt.Find("File Tree")
+	if !ok {
+		t.Fatal("no File Tree button")
+	}
+	server, ok := tt.Find("Switch server: Local")
+	if !ok {
+		t.Fatal("no server chip")
+	}
+	if tree.X > server.X {
+		t.Fatalf("File Tree x=%.1f is not left of the server chip x=%.1f", tree.X, server.X)
 	}
 }

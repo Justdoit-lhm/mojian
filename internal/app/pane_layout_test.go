@@ -1,241 +1,11 @@
 package app
 
 import (
+	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 )
-
-func TestSplitLeftAndUp(t *testing.T) {
-	a := newProjectApp(t)
-	t0 := a.tab()
-	first := t0.Focus
-	second := a.store.byRelPath("Reading notes.md")
-
-	a.splitWithSide(second, splitLeft)
-	if t0.Root.Vertical {
-		t.Fatal("a left split should be side by side")
-	}
-	if t0.Root.A.Pane.Note != second || t0.Root.B.Pane.Note != first.Note {
-		t.Fatal("a left split did not put the new pane on the left")
-	}
-	if t0.Focus.Note != second {
-		t.Fatal("a left split did not focus the new pane")
-	}
-
-	third := a.store.byRelPath("scripts/tasks.py")
-	a.splitWithSide(third, splitUp)
-	left := t0.Root.A
-	if !left.Vertical {
-		t.Fatal("an up split should stack panes")
-	}
-	if left.A.Pane.Note != third || left.B.Pane.Note != second {
-		t.Fatal("an up split did not put the new pane above")
-	}
-	if t0.Focus.Note != third {
-		t.Fatal("an up split did not focus the new pane")
-	}
-}
-
-func TestMovePaneToEveryEdge(t *testing.T) {
-	for _, tc := range []struct {
-		name     string
-		zone     paneDrop
-		vertical bool
-		toFirst  bool
-	}{
-		{"above", dropAbove, true, false},
-		{"below", dropBelow, true, true},
-		{"left", dropLeft, false, false},
-		{"right", dropRight, false, true},
-	} {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			a := newProjectApp(t)
-			t0 := a.tab()
-			from := t0.Focus
-			to := newPane(a.store.byRelPath("Reading notes.md"))
-			if !t0.split(from, to, false) {
-				t.Fatal("setup split failed")
-			}
-			if !t0.movePane(from, to, tc.zone) {
-				t.Fatal("movePane returned false")
-			}
-			if t0.Root.Vertical != tc.vertical {
-				t.Fatalf("vertical=%v, want %v", t0.Root.Vertical, tc.vertical)
-			}
-			wantA, wantB := from, to
-			if tc.toFirst {
-				wantA, wantB = to, from
-			}
-			if t0.Root.A.Pane != wantA || t0.Root.B.Pane != wantB {
-				t.Fatalf("got %v / %v, want %v / %v", t0.Root.A.Pane, t0.Root.B.Pane, wantA, wantB)
-			}
-			if t0.Focus != from {
-				t.Fatal("the moved pane is not focused")
-			}
-		})
-	}
-}
-
-func TestMovePaneToCenterSwaps(t *testing.T) {
-	a := newProjectApp(t)
-	t0 := a.tab()
-	from := t0.Focus
-	to := newPane(a.store.byRelPath("Reading notes.md"))
-	if !t0.split(from, to, false) {
-		t.Fatal("setup split failed")
-	}
-	if !t0.movePane(from, to, dropCenter) {
-		t.Fatal("center move returned false")
-	}
-	if t0.Root.A.Pane != to || t0.Root.B.Pane != from {
-		t.Fatal("a center drop did not swap the panes")
-	}
-	if t0.Focus != from {
-		t.Fatal("the dragged pane is not focused")
-	}
-}
-
-func TestFocusDirection(t *testing.T) {
-	a := newProjectApp(t)
-	t0 := a.tab()
-	aPane := t0.Focus
-	bPane := newPane(a.store.byRelPath("Reading notes.md"))
-	cPane := newPane(a.store.byRelPath("scripts/tasks.py"))
-	if !t0.split(aPane, bPane, false) {
-		t.Fatal("horizontal split failed")
-	}
-	if !t0.split(bPane, cPane, true) {
-		t.Fatal("vertical split failed")
-	}
-	t0.Focus = aPane
-	if !t0.focusDirection(paneRight) || t0.Focus != bPane {
-		t.Fatalf("right focused %v, want %v", t0.Focus, bPane)
-	}
-	if !t0.focusDirection(paneDown) || t0.Focus != cPane {
-		t.Fatalf("down focused %v, want %v", t0.Focus, cPane)
-	}
-	if !t0.focusDirection(paneUp) || t0.Focus != bPane {
-		t.Fatalf("up focused %v, want %v", t0.Focus, bPane)
-	}
-	if !t0.focusDirection(paneLeft) || t0.Focus != aPane {
-		t.Fatalf("left focused %v, want %v", t0.Focus, aPane)
-	}
-}
-
-func TestDropZoneAt(t *testing.T) {
-	const w, h = 200, 200
-	for _, tc := range []struct {
-		x, y float32
-		want paneDrop
-	}{
-		{100, 10, dropAbove},
-		{100, 190, dropBelow},
-		{20, 100, dropLeft},
-		{180, 100, dropRight},
-		{100, 100, dropCenter},
-	} {
-		if got := dropZoneAt(tc.x, tc.y, w, h); got != tc.want {
-			t.Errorf("zone at (%v,%v)=%v, want %v", tc.x, tc.y, got, tc.want)
-		}
-	}
-}
-
-func TestOverviewKeys(t *testing.T) {
-	a := newProjectApp(t)
-	a.splitWith(a.store.byRelPath("Reading notes.md"), false)
-	tt := ui.NewTester(a.view, 1100, 700)
-	tt.Frame()
-	if len(a.tab().panes()) != 2 {
-		t.Fatal("no second pane")
-	}
-	before := a.tab().Focus
-	tt.Key(ui.Alt, ui.KeyTab)
-	tt.Frame()
-	if !a.overview || !tt.HasText("Panes") {
-		t.Fatalf("overview did not open: %q", tt.Texts())
-	}
-	tt.Key(0, ui.KeyTab)
-	tt.Frame()
-	if a.tab().Focus == before {
-		t.Fatal("Tab in overview did not switch panes")
-	}
-	tt.Key(0, ui.KeyEnter)
-	tt.Frame()
-	if a.overview {
-		t.Fatal("Return did not leave the overview")
-	}
-	tt.Key(ui.Alt, ui.KeyTab)
-	tt.Frame()
-	tt.Key(ui.Alt, ui.KeyTab)
-	tt.Frame()
-	if a.overview {
-		t.Fatal("Option+Tab did not leave the overview")
-	}
-}
-
-func TestOverviewClickAndArrows(t *testing.T) {
-	a := newProjectApp(t)
-	first := a.tab().Focus
-	a.splitWith(a.store.byRelPath("Reading notes.md"), false)
-	tt := ui.NewTester(a.view, 1100, 700)
-	tt.Frame()
-	tt.Key(ui.Alt, ui.KeyTab)
-	tt.Frame()
-	tt.Advance(250 * time.Millisecond)
-	tt.Frame()
-	if !a.overview {
-		t.Fatal("overview did not open")
-	}
-	tt.Key(0, ui.KeyLeft)
-	tt.Frame()
-	if a.tab().Focus != first {
-		t.Fatal("Left did not move to the pane on the left in the overview")
-	}
-	label := "Move pane Reading notes"
-	if _, ok := tt.Find(label); !ok {
-		t.Fatalf("no click target for the right pane: %q", tt.Texts())
-	}
-	if err := tt.Click(label); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
-	if !a.overview {
-		t.Fatal("selecting a pane should keep the overview open for rearranging")
-	}
-	if got := a.tab().Focus.Note.Title; got != "Reading notes" {
-		t.Fatalf("selected %q, want Reading notes", got)
-	}
-	tt.Key(0, ui.KeyEnter)
-	tt.Frame()
-	if a.overview {
-		t.Fatal("Return did not leave the overview")
-	}
-}
-
-func TestMovePaneOutOfNestedSplit(t *testing.T) {
-	a := newProjectApp(t)
-	t0 := a.tab()
-	aPane := t0.Focus
-	bPane := newPane(a.store.byRelPath("Reading notes.md"))
-	cPane := newPane(a.store.byRelPath("scripts/tasks.py"))
-	t0.split(aPane, bPane, false)
-	t0.split(bPane, cPane, true)
-	if !t0.movePane(cPane, aPane, dropAbove) {
-		t.Fatal("moving a nested pane failed")
-	}
-	if len(t0.panes()) != 3 {
-		t.Fatalf("panes after move: %d", len(t0.panes()))
-	}
-	if t0.Root.Vertical || t0.Root.A == nil || !t0.Root.A.Vertical {
-		t.Fatalf("root after moving C above A: %+v", t0.Root)
-	}
-	if t0.Root.A.A.Pane != cPane || t0.Root.A.B.Pane != aPane || t0.Root.B.Pane != bPane {
-		t.Fatal("the nested move put the panes in the wrong order")
-	}
-}
 
 func TestTerminalWithoutFileOpensAtProjectRoot(t *testing.T) {
 	a := newProjectApp(t)
@@ -262,151 +32,154 @@ func TestTerminalWithoutFileOpensAtProjectRoot(t *testing.T) {
 	}
 }
 
-func TestCanvasExtendsPastTheViewport(t *testing.T) {
-	a := newProjectApp(t)
-	a.splitWith(a.store.byRelPath("Reading notes.md"), false)
-	t0 := a.tab()
-	cw, ch := t0.Root.extent(840, 600)
-	if cw < 840-1 {
-		t.Fatalf("two columns did not fit the viewport: %v", cw)
-	}
-	if ch > 600+1 {
-		t.Fatalf("a right split changed the height: %v", ch)
-	}
-	a.splitWith(a.store.byRelPath("scripts/tasks.py"), true)
-	cw, ch = t0.Root.extent(840, 600)
-	if ch <= 600 {
-		t.Fatalf("canvas height %v did not grow after a down split", ch)
-	}
-	a.splitWith(a.store.byRelPath("scripts/app.js"), false)
-	cw, _ = t0.Root.extent(840, 600)
-	if cw <= 840 {
-		t.Fatalf("another column did not extend the canvas: %v", cw)
-	}
-	tt := ui.NewTester(a.view, 1100, 700)
-	tt.Frame()
-	tt.Frame()
-	if t0.panY <= 0 {
-		t.Fatalf("the viewport did not follow the focused pane: panY=%v", t0.panY)
-	}
-}
-
-func TestCanvasDividerResize(t *testing.T) {
-	a := newProjectApp(t)
-	a.splitWith(a.store.byRelPath("Reading notes.md"), false)
-	t0 := a.tab()
-	left := t0.Root.A.Pane
-	right := t0.Root.B.Pane
-	before := left.W
-	t0.Root.resize(40, 840, 600)
-	if left.W <= before || right.W >= paneColumnWidth {
-		t.Fatalf("resize moved widths: left %v right %v", left.W, right.W)
-	}
-}
-
-func TestOptionArrowFocusAndMove(t *testing.T) {
+func TestSplitPutsPaneOnEdge(t *testing.T) {
 	a := newProjectApp(t)
 	first := a.tab().Focus
-	a.splitWith(a.store.byRelPath("Reading notes.md"), false)
+	a.splitWith(a.store.byRelPath("Reading notes.md"))
+	second := a.tab().Focus
+	a.splitWithSide(a.store.byRelPath("scripts/tasks.py"), splitDown)
+	third := a.tab().Focus
+	root := a.tab().Root
+	if root == nil || root.Vertical || root.A.Pane != first || !root.B.Vertical {
+		t.Fatalf("root after right and down splits: %+v", root)
+	}
+	if root.B.A.Pane != second || root.B.B.Pane != third {
+		t.Fatalf("down split did not stack below the right pane: %+v", root.B)
+	}
+	if a.tab().Focus != third {
+		t.Fatal("the last split did not focus its pane")
+	}
+}
+
+func TestOptionArrowsMoveInAllDirections(t *testing.T) {
+	a := newProjectApp(t)
+	first := a.tab().Focus
+	a.splitWith(a.store.byRelPath("Reading notes.md"))
+	second := a.tab().Focus
+	a.splitWithSide(a.store.byRelPath("scripts/tasks.py"), splitDown)
+	third := a.tab().Focus
 	tt := ui.NewTester(a.view, 1100, 700)
 	tt.Frame()
-	if a.tab().Focus == first {
-		t.Fatal("the split did not focus the right pane")
+	tt.Key(ui.Alt, ui.KeyUp)
+	tt.Frame()
+	if a.tab().Focus != second {
+		t.Fatal("Option+Up did not focus the pane above")
+	}
+	tt.Key(ui.Alt, ui.KeyDown)
+	tt.Frame()
+	if a.tab().Focus != third {
+		t.Fatal("Option+Down did not focus the pane below")
 	}
 	tt.Key(ui.Alt, ui.KeyLeft)
 	tt.Frame()
 	if a.tab().Focus != first {
-		t.Fatal("Option+Left did not select the pane on the left")
+		t.Fatal("Option+Left did not focus the pane on the left")
 	}
-	tt.Key(ui.Alt|ui.Shift, ui.KeyRight)
+	tt.Key(ui.Alt, ui.KeyRight)
 	tt.Frame()
-	if got := a.tab().panes(); len(got) != 2 || got[0] == first || got[1] != first {
-		t.Fatalf("Option+Shift+Right did not move the selected pane right: %v", got)
+	if a.tab().Focus != second {
+		t.Fatal("Option+Right did not focus the pane on the right")
 	}
 }
 
-func TestOptionDirectionUsesCanvasGeometry(t *testing.T) {
+func TestOptionShiftInsertsPaneOnEdge(t *testing.T) {
 	a := newProjectApp(t)
 	first := a.tab().Focus
-	a.splitWith(a.store.byRelPath("Reading notes.md"), false)
-	a.splitWith(a.store.byRelPath("scripts/tasks.py"), true)
-	below := a.tab().Focus
-	tt := ui.NewTester(a.view, 1100, 700)
-	tt.Frame()
-	a.tab().Focus = first
-	tt.Frame()
-	tt.Key(ui.Alt, ui.KeyDown)
-	tt.Frame()
-	if a.tab().Focus != below {
-		t.Fatalf("Option+Down focused %v, want the pane below", a.tab().Focus.ID)
+	a.splitWith(a.store.byRelPath("Reading notes.md"))
+	second := a.tab().Focus
+	a.splitWithSide(a.store.byRelPath("scripts/tasks.py"), splitDown)
+	third := a.tab().Focus
+
+	a.movePaneDirection(paneUp)
+	root := a.tab().Root
+	if root == nil || root.Vertical || !root.B.Vertical || root.B.A.Pane != third || root.B.B.Pane != second {
+		t.Fatalf("moving up did not put the pane above its neighbor: %+v", root)
+	}
+	if a.tab().Focus != third {
+		t.Fatal("moving a pane lost its focus")
+	}
+
+	a.movePaneDirection(paneLeft)
+	panes := a.tab().panes()
+	if len(panes) != 3 || panes[0] != third || panes[1] != first || panes[2] != second {
+		t.Fatalf("moving left did not insert the pane before its neighbor: %v", panes)
 	}
 }
 
-func TestOpenedFileDefaultsToHalfScreen(t *testing.T) {
+func TestDropOnEdgeInsertsPane(t *testing.T) {
 	a := newProjectApp(t)
-	pane := a.tab().Focus
-	if pane.W != paneColumnWidth || pane.H != 1 {
-		t.Fatalf("new file size: %v x %v, want half a screen", pane.W, pane.H)
+	first := a.tab().Focus
+	a.splitWith(a.store.byRelPath("Reading notes.md"))
+	second := a.tab().Focus
+	a.movePaneTo(a.tab(), first, second, dropRight)
+	panes := a.tab().panes()
+	if len(panes) != 2 || panes[0] != second || panes[1] != first {
+		t.Fatalf("dropping on the right edge did not insert the pane there: %v", panes)
+	}
+	if a.tab().Focus != first {
+		t.Fatal("the dragged pane is not focused after the drop")
+	}
+}
+
+func TestPaneHeaderStartsADrag(t *testing.T) {
+	a := newProjectApp(t)
+	first := a.tab().Focus
+	a.splitWith(a.store.byRelPath("Reading notes.md"))
+	tt := ui.NewTester(a.view, 1100, 700)
+	tt.Frame()
+	handle, ok := tt.Find("Move Pane " + paneName(first))
+	if !ok {
+		t.Fatal("no move handle for the pane")
+	}
+	tt.Press(handle.X+handle.W/2, handle.Y+handle.H/2)
+	tt.Frame()
+	tt.Move(handle.X+20, handle.Y+20)
+	tt.Frame()
+	if !first.dragging {
+		t.Fatal("dragging the pane header did not start a drag")
+	}
+	tt.Release(handle.X+20, handle.Y+20)
+	tt.Frame()
+}
+
+func TestOpenedFileFillsAnEmptyTab(t *testing.T) {
+	a := newProjectApp(t)
+	if a.tab().Root == nil || a.tab().Root.Pane == nil {
+		t.Fatalf("the new tab has no pane: %+v", a.tab())
 	}
 	if got := a.terminalDir(); got != a.store.dir {
 		t.Fatalf("terminal directory: %q", got)
 	}
 }
 
-func TestOverviewDragRearranges(t *testing.T) {
+func TestEmptyPaneSearchOpensFile(t *testing.T) {
 	a := newProjectApp(t)
-	first := a.tab().Focus
-	a.splitWith(a.store.byRelPath("scripts/tasks.py"), false)
-	second := a.tab().Focus
+	a.splitFocusedSide(splitRight)
 	tt := ui.NewTester(a.view, 1100, 700)
 	tt.Frame()
-	tt.Key(ui.Alt, ui.KeyTab)
-	tt.Frame()
-	grip, ok := tt.Find("Move pane " + paneName(first))
-	if !ok {
-		t.Fatal("no draggable pane in overview")
+	p := a.tab().Focus
+	if p == nil || p.Note != nil {
+		t.Fatal("the split did not focus an empty pane")
 	}
-	label := "Move pane " + paneName(second)
-	target, ok := tt.Find(label)
-	if !ok {
-		t.Fatalf("no target %q", label)
+	tt.Type("Reading")
+	tt.Frame()
+	tt.Key(0, ui.KeyEnter)
+	tt.Frame()
+	if p.Note == nil || p.Note.Title != "Reading notes" {
+		t.Fatalf("the empty pane search opened %+v", p.Note)
 	}
-	tt.Press(grip.X+grip.W/2, grip.Y+grip.H/2)
-	tt.Frame()
-	tt.Move(grip.X+20, grip.Y+20)
-	tt.Frame()
-	tt.Move(target.X+target.W/2, target.Y+target.H/2)
-	tt.Frame()
-	tt.Release(target.X+target.W/2, target.Y+target.H/2)
-	tt.Frame()
-	if !a.overview {
-		t.Fatal("rearranging closed the overview")
-	}
-	if a.tab().Focus != first {
-		t.Fatal("the dragged pane is not focused")
-	}
-	if got := a.tab().panes(); got[0] != second || got[1] != first {
-		t.Fatal("the overview drag did not rearrange the panes")
+	if a.tab().Focus != p {
+		t.Fatal("the opened file lost the pane focus")
 	}
 }
 
-func TestNormalDragSplitsTargetBlockInPlace(t *testing.T) {
+func TestEmptyPaneSearchFiltersAssets(t *testing.T) {
 	a := newProjectApp(t)
-	first := a.tab().Focus
-	a.splitWith(a.store.byRelPath("scripts/tasks.py"), false)
-	second := a.tab().Focus
-	toW, toH := second.W, second.H
-	if !a.tab().movePaneInPlace(first, second, dropAbove) {
-		t.Fatal("in-place move failed")
+	choices := a.paneChoices("tasks")
+	if len(choices) != 1 || choices[0].note == nil || choices[0].rel != filepath.Join("scripts", "tasks.py") {
+		t.Fatalf("search choices: %+v", choices)
 	}
-	if !a.tab().Root.Vertical {
-		t.Fatal("dropping above did not stack the panes")
-	}
-	if first.W != toW || first.H != toH/2 || second.W != toW || second.H != toH/2 {
-		t.Fatalf("dragged block sizes: %v x %v and %v x %v, want %v x %v",
-			first.W, first.H, second.W, second.H, toW, toH/2)
-	}
-	if a.tab().Root.A.Pane != first || a.tab().Root.B.Pane != second {
-		t.Fatal("the dragged pane is not above the target")
+	if a.paneChoices("no such file") != nil {
+		t.Fatal("an impossible query returned choices")
 	}
 }

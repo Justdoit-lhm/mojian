@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"fmt"
+	"os"
 	"runtime"
 	"strings"
 
@@ -40,6 +41,18 @@ func (s termSpec) title() string {
 	return "Terminal"
 }
 
+// warmSessionServer starts the local session server before the first
+// terminal asks for it, so opening a terminal does not wait for a spawn.
+func warmSessionServer() {
+	if runtime.GOOS == "js" {
+		return
+	}
+	if _, err := os.Stat(session.SocketPath()); err == nil {
+		return
+	}
+	_ = session.Spawn()
+}
+
 // terminalDir is the project root. Terminals are about the repository,
 // not the file or folder selected in the Explorer, and one can be opened
 // before any file is.
@@ -75,37 +88,27 @@ func (a *app) toggleTerminal() {
 
 // splitFocused splits the focused pane: a terminal makes another shell,
 // a file asks which file the new editor should show.
-func (a *app) splitFocused(down bool) {
-	side := splitRight
-	if down {
-		side = splitDown
-	}
-	a.splitFocusedSide(side)
+func (a *app) splitFocused() {
+	a.splitFocusedSide(splitRight)
 }
 
-// splitFocusedSide splits the focused pane to any side.
+// splitFocusedSide splits the focused pane to either side.
 func (a *app) splitFocusedSide(side splitSide) {
 	t := a.tab()
 	if t == nil || t.Focus == nil {
 		return
 	}
-	a.overview = false
-	a.overviewFocus = false
 	if t.Focus.Term != nil {
 		a.splitTerminalSide(t.Focus, side)
 		return
 	}
-	a.beginSplitSide(side)
+	a.emptyPaneSide(side)
 }
 
-// splitTerminal starts another shell beside or below the terminal pane
-// that asked for the split.
-func (a *app) splitTerminal(from *pane, down bool) {
-	side := splitRight
-	if down {
-		side = splitDown
-	}
-	a.splitTerminalSide(from, side)
+// splitTerminal starts another shell beside the terminal pane that asked
+// for the split.
+func (a *app) splitTerminal(from *pane) {
+	a.splitTerminalSide(from, splitRight)
 }
 
 func (a *app) splitTerminalSide(from *pane, side splitSide) {
@@ -121,14 +124,10 @@ func (a *app) splitTerminalSide(from *pane, side splitSide) {
 	a.addSplitTerminalSide(from, tt, side)
 }
 
-// addSplitTerminal inserts an already started shell beside or below a
-// terminal pane. Tests use it without starting a process.
-func (a *app) addSplitTerminal(from *pane, tt *termTab, down bool) *pane {
-	side := splitRight
-	if down {
-		side = splitDown
-	}
-	return a.addSplitTerminalSide(from, tt, side)
+// addSplitTerminal inserts an already started shell beside a terminal
+// pane. Tests use it without starting a process.
+func (a *app) addSplitTerminal(from *pane, tt *termTab) *pane {
+	return a.addSplitTerminalSide(from, tt, splitRight)
 }
 
 func (a *app) addSplitTerminalSide(from *pane, tt *termTab, side splitSide) *pane {
@@ -185,8 +184,8 @@ func (a *app) terminalTab() *tab {
 	return t
 }
 
-// addTerminalPane wraps the active tab so the shell sits at its right
-// edge, beside every editor.
+// addTerminalPane adds the shell at the right edge of the active tab,
+// beside every editor.
 func (a *app) addTerminalPane(tt *termTab) *pane {
 	t := a.tab()
 	if t == nil || tt == nil {
@@ -196,12 +195,7 @@ func (a *app) addTerminalPane(tt *termTab) *pane {
 	if t.Root == nil {
 		t.Root = &node{Pane: p}
 	} else {
-		t.Root = &node{
-			Vertical: false,
-			Ratio:    0.5,
-			A:        t.Root,
-			B:        &node{Pane: p},
-		}
+		t.Root = &node{Vertical: false, A: t.Root, B: &node{Pane: p}}
 	}
 	t.Zoom = nil
 	t.Focus = p
@@ -396,7 +390,8 @@ func (a *app) endTerminal(t *termTab) {
 	if client == nil {
 		return
 	}
-	_ = client.Kill(t.SID)
+	sid := t.SID
+	go func() { _ = client.Kill(sid) }()
 }
 
 // closeTerminals detaches every terminal before the window or project

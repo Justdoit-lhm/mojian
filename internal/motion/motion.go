@@ -23,15 +23,6 @@ var Page = ui.ElementTransition{
 	Exit:     &ui.Motion{Y: -4, Opacity: 0},
 }
 
-// paneMotion is a new split arriving, or a closed one leaving.
-var Pane = ui.ElementTransition{
-	Duration: 150 * time.Millisecond,
-	Ease:     motionEase,
-	Colors:   true,
-	Enter:    &ui.Motion{Scale: 0.985, Opacity: 0},
-	Exit:     &ui.Motion{Scale: 0.99, Opacity: 0},
-}
-
 // tabMotion moves a tab into and out of the strip as tabs are added and
 // closed; its colors follow the active tab separately.
 var Tab = ui.ElementTransition{
