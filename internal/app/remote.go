@@ -351,6 +351,8 @@ func (a *app) openRemoteProject(host, remotePath string) error {
 	a.focusReq = nil
 	a.overview = false
 	a.overviewFocus = false
+	a.overviewLeave = false
+	a.overviewSeq++
 	a.treeSel = ""
 	a.treeQuery = ""
 	a.treeFocusSearch = false

@@ -114,6 +114,8 @@ func (a *app) openProject(dir string) {
 	a.focusReq = nil
 	a.overview = false
 	a.overviewFocus = false
+	a.overviewLeave = false
+	a.overviewSeq++
 	a.treeSel = ""
 	a.treeQuery = ""
 	a.treeFocusSearch = false

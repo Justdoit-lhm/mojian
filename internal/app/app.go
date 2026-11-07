@@ -64,6 +64,8 @@ type app struct {
 	// the workspace, and Tab, the arrows, a click or Return choose a pane.
 	overview      bool
 	overviewFocus bool
+	overviewLeave bool
+	overviewSeq   int
 	canvasW       float32 // the pane viewport, for directional focus
 	canvasH       float32
 
@@ -306,6 +308,8 @@ func (a *app) windowClosed() {
 	a.focusReq = nil
 	a.overview = false
 	a.overviewFocus = false
+	a.overviewLeave = false
+	a.overviewSeq++
 	a.paletteOpen = false
 	a.projectOpen = false
 	a.treeDraft = nil
@@ -748,6 +752,8 @@ func (a *app) newTab() {
 	a.git.Open = false
 	a.overview = false
 	a.overviewFocus = false
+	a.overviewLeave = false
+	a.overviewSeq++
 	t := &tab{ID: nextID("t")}
 	a.tabs = append(a.tabs, t)
 	a.active = len(a.tabs) - 1
@@ -764,6 +770,8 @@ func (a *app) openNoteInTab(n *note) {
 	}
 	a.overview = false
 	a.overviewFocus = false
+	a.overviewLeave = false
+	a.overviewSeq++
 	a.git.Open = false
 	t := newTab(n)
 	if t.Focus != nil {
@@ -787,6 +795,8 @@ func (a *app) openNote(n *note) {
 	}
 	a.overview = false
 	a.overviewFocus = false
+	a.overviewLeave = false
+	a.overviewSeq++
 	a.git.Open = false
 	a.treeDraft = nil
 	a.treeQuery = ""
@@ -1006,6 +1016,8 @@ func (a *app) toggleZoom() {
 	}
 	a.overview = false
 	a.overviewFocus = false
+	a.overviewLeave = false
+	a.overviewSeq++
 	if t.Zoom == t.Focus {
 		t.Zoom = nil
 	} else {
@@ -1029,6 +1041,8 @@ func (a *app) cycleTab(delta int) {
 	a.git.Open = false
 	a.overview = false
 	a.overviewFocus = false
+	a.overviewLeave = false
+	a.overviewSeq++
 	a.active = (a.active + delta + len(a.tabs)) % len(a.tabs)
 	a.revealTab = true
 	a.treeDraft = nil
@@ -1049,6 +1063,8 @@ func (a *app) showTab(n int) {
 	a.git.Open = false
 	a.overview = false
 	a.overviewFocus = false
+	a.overviewLeave = false
+	a.overviewSeq++
 	i := n - 1
 	if n >= 9 {
 		i = len(a.tabs) - 1
