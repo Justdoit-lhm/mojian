@@ -1,6 +1,7 @@
 package app
 
 import (
+	"mojian/internal/icons"
 	"mojian/internal/theme"
 
 	"github.com/egoist/mygo/ui"
@@ -20,3 +21,11 @@ func paintBackground(p *ui.Painter, r ui.Rect, k *colors) { theme.PaintBackgroun
 func editorThemeOf(t *ui.Theme) *editor.Theme { return theme.EditorTheme(t) }
 
 func registerFonts() { theme.RegisterFonts() }
+
+// brandMark is the Mojian mark, in the window's ink or reversed for dark.
+func brandMark(c *ui.Context) *ui.SVG {
+	if c.Theme().Dark {
+		return icons.Brand("mark-reversed")
+	}
+	return icons.Brand("mark")
+}

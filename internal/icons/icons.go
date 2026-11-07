@@ -130,3 +130,19 @@ func FileIcon(name string) *ui.SVG {
 func FolderIcon() *ui.SVG {
 	return Icon("material/folder-base")
 }
+
+// Brand returns a Mojian logo asset: "mark", "mark-reversed",
+// "wordmark" or "wordmark-reversed". The files come from logos/svg.
+func Brand(name string) *ui.SVG {
+	key := "brand/mojian-" + name
+	if s, ok := svgCache[key]; ok {
+		return s
+	}
+	data, err := assets.Files.ReadFile(key + ".svg")
+	if err != nil {
+		panic("mojian: brand " + name + ": " + err.Error())
+	}
+	s := ui.MustParseSVG(data)
+	svgCache[key] = s
+	return s
+}

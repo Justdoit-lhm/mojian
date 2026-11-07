@@ -1,5 +1,7 @@
 # Mojian
 
+<p align="center"><img src="logos/png/mojian-logo-horizontal-1600.png" alt="Mojian" width="420"></p>
+
 A quiet text editor for plain files, built with [MyGo](https://mygo.egoist.dev)'s
 native UI: no webview, no cgo, one small Go binary. Tabs hold workspaces,
 workspaces hold panes, and every pane edits a file with syntax highlighting.
@@ -136,7 +138,8 @@ The pieces that stand on their own are packages of their own.
 | `internal/git/` | the working-tree page: status, diffs, parsing and its view |
 | `internal/theme/` | light and dark palettes, the window gradient and fonts |
 | `internal/icons/` | Lucide action icons and Material Icon Theme file icons |
-| `internal/assets/` | the embedded icons and JetBrains Mono |
+| `internal/assets/` | the embedded icons, brand marks and JetBrains Mono |
+| `logos/` | logo masters and PNG exports: mark, wordmark, lockups and app icon |
 | `internal/motion/` | the page, pane, tab and tree transitions |
 | `internal/session/` | PTYs, terminal snapshots, remote file operations and attach; used locally and by the uploaded server |
 | `test/` | black-box integration tests and the helpers they share |
@@ -174,6 +177,7 @@ File and folder icons: [Material Icon Theme](https://github.com/PKief/vscode-mat
 Font: [JetBrains Mono](https://www.jetbrains.com/lp/mono/), OFL
 (`internal/assets/fonts/OFL.txt`).
 Pseudo-terminals: [creack/pty](https://github.com/creack/pty), MIT.
-The window's shape and interaction follow [GoRex](https://github.com/egoist/gorex),
+The logo is by the Mojian project: ink, paper and one vermilion cursor;
+the wordmark outlines Literata, SIL OFL. The window's shape and interaction follow [GoRex](https://github.com/egoist/gorex),
 also built with MyGo. Remote hosts and the settings shape follow
 [Kero](https://kero.sh).

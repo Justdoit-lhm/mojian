@@ -6,5 +6,5 @@ import "embed"
 // Files is the app's static assets, by path: icons/*.svg,
 // icons/material/*.svg and fonts/*.ttf.
 //
-//go:embed icons/*.svg icons/material/*.svg fonts/*.ttf
+//go:embed icons/*.svg icons/material/*.svg brand/*.svg fonts/*.ttf
 var Files embed.FS

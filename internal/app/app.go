@@ -42,6 +42,9 @@ type app struct {
 	remoteCache    string
 	remote         *remoteConn
 	remoteProjects []remoteProject
+	hosts          []hostConfig
+	hostDraftName  string
+	hostDraftAddr  string
 	serverOpen     bool
 	remotePicker   bool
 	remoteHost     string
@@ -332,6 +335,7 @@ type settingsFile struct {
 	Server              string          `json:"server,omitempty"`
 	RemotePath          string          `json:"remotePath,omitempty"`
 	RemoteProjects      []remoteProject `json:"remoteProjects,omitempty"`
+	Hosts               []hostConfig    `json:"hosts,omitempty"`
 }
 
 // loadSettings reads the appearance and the project the app was left in.
@@ -392,6 +396,7 @@ func (a *app) loadSettings() {
 	a.serverAlias = s.Server
 	a.remotePath = s.RemotePath
 	a.remoteProjects = s.RemoteProjects
+	a.hosts = s.Hosts
 }
 
 func (a *app) saveSettings() {
@@ -433,6 +438,7 @@ func (a *app) saveSettings() {
 		Server:              a.serverAlias,
 		RemotePath:          a.remotePath,
 		RemoteProjects:      a.remoteProjects,
+		Hosts:               a.hosts,
 	}, "", "  ")
 	_ = os.MkdirAll(filepath.Dir(a.settingsPath), 0o755)
 	_ = os.WriteFile(a.settingsPath, data, 0o644)

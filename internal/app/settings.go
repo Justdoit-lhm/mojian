@@ -73,6 +73,7 @@ func (a *app) settingsTitleBar(c *ui.Context, k *colors) {
 		AlignItems(ui.Center).DragWindow().Children(func() {
 		ui.Box(c).Width(dragW).Height(44).DragWindow().
 			Cursor(ui.CursorGrab).Description("Drag Window")
+		ui.Icon(c, brandMark(c)).Size(20, 20)
 		ui.Text(c, "Settings").FontSize(13).FontWeight(600).TextColor(k.Text)
 	})
 }
@@ -123,15 +124,7 @@ func (a *app) settingsRail(c *ui.Context, k *colors) {
 }
 
 func (a *app) settingsBody(c *ui.Context, k *colors) {
-	cat := settingsCats[a.settingsCat]
 	ui.Column(c).Grow(1).MinWidth(0).MinHeight(0).FillHeight().Children(func() {
-		ui.Row(c).Height(64).Padding(0, 30).AlignItems(ui.Center).Children(func() {
-			ui.Column(c).Gap(1).Children(func() {
-				ui.Text(c, cat.title).FontSize(16).FontWeight(650).TextColor(k.Text)
-				ui.Text(c, cat.detail).FontSize(11.5).TextColor(k.TextFaint)
-			})
-		})
-		ui.Divider(c)
 		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
 			ui.Column(c).MaxWidth(680).FillWidth().AlignSelf(ui.Center).
 				Padding(24, 30, 44, 30).Gap(24).Children(func() {
@@ -202,10 +195,32 @@ func (a *app) switchRow(c *ui.Context, k *colors, title, detail string, on *bool
 }
 
 func (a *app) settingsHostsPage(c *ui.Context, k *colors) {
+	a.settingsSection(c, k, "ADD HOST", func() {
+		a.settingRow(c, k, "Address", "Anything ssh accepts: buildbox, me@devbox, or ssh://me@devbox:2222.", func() {
+			ui.Row(c).Gap(7).AlignItems(ui.Center).Children(func() {
+				ui.TextInputBase(c, &a.hostDraftAddr).Width(170).FontSize(12).
+					Placeholder("me@devbox")
+				ui.TextInputBase(c, &a.hostDraftName).Width(90).FontSize(12).
+					Placeholder("Name")
+				if ui.PrimaryButton(c, "Add").Clicked() {
+					a.addHost(a.hostDraftName, a.hostDraftAddr)
+					a.hostDraftName, a.hostDraftAddr = "", ""
+				}
+			})
+		})
+	})
 	a.settingsSection(c, k, "SERVERS", func() {
 		a.hostSettingsRow(c, k, "", "Local", "This Mac", a.serverAlias == "")
-		for _, h := range sshConfigHosts() {
-			a.hostSettingsRow(c, k, h.Alias, h.Alias, h.detail(), a.serverAlias == h.Alias)
+		for _, h := range a.hosts {
+			label := h.Name
+			if label == "" {
+				label = h.Address
+			}
+			a.hostSettingsRow(c, k, h.Address, label, h.Address, a.serverAlias == h.Address)
+		}
+		if len(a.hosts) == 0 {
+			ui.Text(c, "No servers yet. Add an SSH host above.").
+				FontSize(11.5).TextColor(k.TextFaint).Padding(16)
 		}
 	})
 	if len(a.remoteProjects) > 0 {
@@ -232,7 +247,7 @@ func (a *app) settingsHostsPage(c *ui.Context, k *colors) {
 					ui.Column(c).Grow(1).MinWidth(0).Children(func() {
 						ui.Text(c, filepath.Base(p.Path)).FontSize(12.5).TextColor(k.Text).
 							SingleLine().Ellipsis("…")
-						ui.Text(c, p.Host+":"+p.Path).FontSize(10.5).TextColor(k.TextFaint).
+						ui.Text(c, a.hostLabel(p.Host)+":"+p.Path).FontSize(10.5).TextColor(k.TextFaint).
 							SingleLine().Ellipsis("…")
 					})
 				})
@@ -243,7 +258,7 @@ func (a *app) settingsHostsPage(c *ui.Context, k *colors) {
 		})
 	}
 	a.settingsSection(c, k, "ABOUT HOSTS", func() {
-		ui.Text(c, "Mojian uploads a small per-user server to a host over SSH on first connect. Nothing is installed system-wide and no port is opened.").
+		ui.Text(c, "Mojian uploads a small per-user server to a host over SSH on first connect. Nothing is installed system-wide and no port is opened. Add hosts here first; only those appear in the server menu.").
 			FontSize(11.5).TextColor(k.TextFaint).Padding(16)
 	})
 }
@@ -741,6 +756,14 @@ func (a *app) settingsAboutPage(c *ui.Context, k *colors) {
 		project = a.store.dir
 	}
 	a.settingsSection(c, k, "MOJIAN", func() {
+		ui.Row(c).Padding(14, 16).AlignItems(ui.Center).Children(func() {
+			wm := "wordmark"
+			if c.Theme().Dark {
+				wm = "wordmark-reversed"
+			}
+			ui.Icon(c, icons.Brand(wm)).Size(150, 36)
+		})
+		a.settingDivider(c, k)
 		a.aboutRow(c, k, "Version", version)
 		a.settingDivider(c, k)
 		a.aboutRow(c, k, "System", runtime.GOOS+" · "+runtime.GOARCH)

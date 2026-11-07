@@ -41,7 +41,7 @@ func (a *app) remoteName() string {
 	if a.serverAlias == "" {
 		return "Local"
 	}
-	return a.serverAlias
+	return a.hostLabel(a.serverAlias)
 }
 
 func (a *app) remoteProjectName() string {
@@ -52,9 +52,18 @@ func (a *app) remoteProjectName() string {
 }
 
 // sshOutput runs a command over SSH with the user's config and agent.
+func sshCommon() []string {
+	return []string{
+		"-o", "BatchMode=yes", "-o", "ConnectTimeout=20",
+		"-o", "ServerAliveInterval=15",
+		"-o", "ControlMaster=auto", "-o", "ControlPath=/tmp/mojian-ssh-%C",
+		"-o", "ControlPersist=60",
+	}
+}
+
 func sshOutput(host, command string) (string, error) {
-	cmd := exec.Command("ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10",
-		host, command)
+	args := append(sshCommon(), host, command)
+	cmd := exec.Command("ssh", args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		msg := strings.TrimSpace(string(out))
@@ -106,10 +115,10 @@ func (a *app) ensureRemote(host string) (*remoteConn, error) {
 	// Upload the server when the remote copy differs.
 	size, _ := sshOutput(host, "stat -c %s "+shellQuote(binPath)+" 2>/dev/null || true")
 	if size != fmt.Sprint(len(bin)) {
-		cmd := exec.Command("ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host,
+		cmd := exec.Command("ssh", append(sshCommon(), host,
 			"mkdir -p "+shellQuote(dir)+" && cat > "+shellQuote(binPath+".tmp")+
 				" && chmod 755 "+shellQuote(binPath+".tmp")+
-				" && mv "+shellQuote(binPath+".tmp")+" "+shellQuote(binPath))
+				" && mv "+shellQuote(binPath+".tmp")+" "+shellQuote(binPath))...)
 		cmd.Stdin = bytes.NewReader(bin)
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr
@@ -120,8 +129,8 @@ func (a *app) ensureRemote(host string) (*remoteConn, error) {
 	// The server's headless terminal needs libghostty-vt beside it.
 	libSize, _ := sshOutput(host, "stat -c %s "+shellQuote(libPath)+" 2>/dev/null || true")
 	if libSize != fmt.Sprint(len(lib)) {
-		cmd := exec.Command("ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host,
-			"cat > "+shellQuote(libPath+".tmp")+" && mv "+shellQuote(libPath+".tmp")+" "+shellQuote(libPath))
+		cmd := exec.Command("ssh", append(sshCommon(), host,
+			"cat > "+shellQuote(libPath+".tmp")+" && mv "+shellQuote(libPath+".tmp")+" "+shellQuote(libPath))...)
 		cmd.Stdin = bytes.NewReader(lib)
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr
@@ -129,35 +138,27 @@ func (a *app) ensureRemote(host string) (*remoteConn, error) {
 			return nil, fmt.Errorf("uploading libghostty-vt: %v %s", err, strings.TrimSpace(stderr.String()))
 		}
 	}
-	// Start the per-user server if its socket is not there. It outlives
-	// this app; another server is refused by its lock.
-	if _, err := sshOutput(host, "test -S "+shellQuote(sock)); err != nil {
-		start := "MOJIAN_DIR=" + shellQuote(dir) + " nohup " + shellQuote(binPath) +
-			" >>" + shellQuote(dir+"/server.log") + " 2>&1 &"
-		if _, err := sshOutput(host, start); err != nil {
-			return nil, err
-		}
-		deadline := time.Now().Add(5 * time.Second)
-		for {
-			if _, err := sshOutput(host, "test -S "+shellQuote(sock)); err == nil {
-				break
-			}
-			if time.Now().After(deadline) {
-				return nil, fmt.Errorf("the session server on %s did not start", host)
-			}
-			time.Sleep(100 * time.Millisecond)
-		}
+	// Start the per-user server. A live server refuses the second one
+	// through its lock; a stale socket from a server that exited is
+	// replaced by the new process. Starting it every time also recovers
+	// from the server's idle timeout.
+	startCmd := "MOJIAN_DIR=" + shellQuote(dir) + " nohup " + shellQuote(binPath) +
+		" >>" + shellQuote(dir+"/server.log") + " 2>&1 &"
+	if _, err := sshOutput(host, startCmd); err != nil {
+		return nil, err
 	}
+	time.Sleep(250 * time.Millisecond)
 	local := filepath.Join(os.TempDir(), "mojian-"+shortHash(host)+".sock")
 	_ = os.Remove(local)
-	fwd := exec.Command("ssh", "-N", "-o", "BatchMode=yes", "-o", "ExitOnForwardFailure=yes",
-		"-o", "ServerAliveInterval=15", "-L", local+":"+sock, host)
+	fwd := exec.Command("ssh", "-N", "-o", "BatchMode=yes", "-o", "ConnectTimeout=20",
+		"-o", "ExitOnForwardFailure=yes", "-o", "ServerAliveInterval=15",
+		"-L", local+":"+sock, host)
 	var ferr bytes.Buffer
 	fwd.Stderr = &ferr
 	if err := fwd.Start(); err != nil {
 		return nil, err
 	}
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(20 * time.Second)
 	var conn net.Conn
 	for {
 		conn, err = net.DialTimeout("unix", local, 200*time.Millisecond)
@@ -530,8 +531,16 @@ func (a *app) serverChip(c *ui.Context, k *colors) {
 			Border(1, k.PanelBorder).Shadow(0, 12, 32, 0, k.ShadowFocused).Gap(1)
 		ui.Text(c, "SERVERS").FontSize(10).FontWeight(650).TextColor(k.TextFaint).Padding(4, 8)
 		a.serverRow(c, k, "", "Local")
-		for _, h := range sshConfigHosts() {
-			a.serverRow(c, k, h.Alias, h.Alias)
+		for _, h := range a.hosts {
+			label := h.Name
+			if label == "" {
+				label = h.Address
+			}
+			a.serverRow(c, k, h.Address, label)
+		}
+		if len(a.hosts) == 0 {
+			ui.Text(c, "Add a server in Settings › Hosts.").FontSize(11).
+				TextColor(k.TextFaint).Padding(4, 8)
 		}
 	})
 }
@@ -658,4 +667,58 @@ func (a *app) syncRemoteProject() {
 		files = append(files, rel)
 	}
 	writeRemoteManifest(a.remoteCache, files)
+}
+
+// hostConfig is a server the user added in Settings › Hosts. Address is
+// anything the system ssh accepts, such as buildbox, me@devbox or
+// ssh://me@devbox:2222 (the last is passed through as ssh accepts it).
+type hostConfig struct {
+	Name    string `json:"name"`
+	Address string `json:"address"`
+}
+
+func (a *app) hostLabel(address string) string {
+	for _, h := range a.hosts {
+		if h.Address == address {
+			if h.Name != "" {
+				return h.Name
+			}
+			return h.Address
+		}
+	}
+	return address
+}
+
+func (a *app) addHost(name, address string) {
+	address = strings.TrimSpace(address)
+	name = strings.TrimSpace(name)
+	if address == "" {
+		return
+	}
+	if name == "" {
+		name = address
+	}
+	for i := range a.hosts {
+		if a.hosts[i].Address == address {
+			a.hosts[i].Name = name
+			a.saveSettings()
+			a.invalidate()
+			return
+		}
+	}
+	a.hosts = append(a.hosts, hostConfig{Name: name, Address: address})
+	a.saveSettings()
+	a.invalidate()
+}
+
+func (a *app) removeHost(address string) {
+	out := a.hosts[:0]
+	for _, h := range a.hosts {
+		if h.Address != address {
+			out = append(out, h)
+		}
+	}
+	a.hosts = out
+	a.saveSettings()
+	a.invalidate()
 }

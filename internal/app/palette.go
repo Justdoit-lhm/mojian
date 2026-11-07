@@ -65,7 +65,7 @@ var (
 		run: func(a *app) { a.toggleGit() }}
 	cmdSettings = &command{title: "Settings…", accel: "CmdOrCtrl+,", keys: "⌘,", glyph: "settings",
 		run: func(a *app) { a.openSettingsWindow() }}
-	cmdSSH = &command{title: "Connect to Server…", accel: "CmdOrCtrl+Shift+L", keys: "⇧⌘L", glyph: "server",
+	cmdSSH = &command{title: "New SSH Terminal…", accel: "CmdOrCtrl+Shift+L", keys: "⇧⌘L", glyph: "server",
 		run: func(a *app) { a.openSSHPicker() }}
 )
 

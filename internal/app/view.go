@@ -489,9 +489,9 @@ func (a *app) laterPane(p *pane) {
 // emptyState shows when no note is open.
 func (a *app) emptyState(c *ui.Context, k *colors) {
 	ui.Column(c).Grow(1).FillWidth().Center().Gap(14).Children(func() {
-		ui.Box(c).Size(54, 54).Radius(15).Background(k.CardFocused).
+		ui.Box(c).Size(64, 54).Radius(15).Background(k.CardFocused).
 			Border(1, k.CardBorderFocused).Center().Children(func() {
-			ui.Icon(c, icons.FileIcon("")).Size(28, 28).TextColor(k.TextMuted)
+			ui.Icon(c, brandMark(c)).Size(38, 38)
 		})
 		ui.Text(c, "No file open").FontSize(19).FontWeight(600).TextColor(k.Text)
 		ui.Text(c, "Write something, or pick a file in Explorer.").
