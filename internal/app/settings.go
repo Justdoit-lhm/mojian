@@ -91,6 +91,9 @@ func (a *app) settingsRail(c *ui.Context, k *colors) {
 		q := strings.ToLower(strings.TrimSpace(a.settingsQuery))
 		found := false
 		for i, cat := range settingsCats {
+			if !settingsCatAvailable(i) {
+				continue
+			}
 			if q != "" && !strings.Contains(strings.ToLower(cat.title+" "+cat.detail), q) {
 				continue
 			}
@@ -129,7 +132,11 @@ func (a *app) settingsBody(c *ui.Context, k *colors) {
 		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
 			ui.Column(c).MaxWidth(680).FillWidth().AlignSelf(ui.Center).
 				Padding(24, 30, 44, 30).Gap(24).Children(func() {
-				switch a.settingsCat {
+				cat := a.settingsCat
+				if !settingsCatAvailable(cat) {
+					cat = settingsGeneral
+				}
+				switch cat {
 				case settingsGeneral:
 					a.settingsGeneralPage(c, k)
 				case settingsAppearance:
@@ -211,7 +218,7 @@ func (a *app) settingsHostsPage(c *ui.Context, k *colors) {
 		})
 	})
 	a.settingsSection(c, k, "SERVERS", func() {
-		a.hostSettingsRow(c, k, "", "Local", "This Mac", a.serverAlias == "")
+		a.hostSettingsRow(c, k, "", "Local", thisComputerName(), a.serverAlias == "")
 		for _, h := range a.hosts {
 			label := h.Name
 			if label == "" {
@@ -415,19 +422,25 @@ func (a *app) settingsNotificationsPage(c *ui.Context, k *colors) {
 
 func (a *app) settingsKeyboardPage(c *ui.Context, k *colors) {
 	a.settingsSection(c, k, "SHORTCUTS", func() {
-		cmds := []*command{
+		var cmds []*command
+		for _, cmd := range []*command{
 			cmdOpenProject, cmdNewNote, cmdNewFolder, cmdNewTab, cmdSave,
 			cmdPalette, cmdNotes, cmdTree, cmdTerminal, cmdGit, cmdSSH,
 			cmdSplitLeft, cmdSplitRight, cmdSplitUp, cmdSplitDown, cmdZoom,
 			cmdClosePane, cmdCloseTab, cmdRenameTab, cmdNextTab, cmdPrevTab,
-		}
-		for i, cmd := range cmds {
+		} {
 			if cmd.keys == "" {
 				continue
 			}
+			if !terminalsSupported() && (cmd == cmdTerminal || cmd == cmdSSH) {
+				continue
+			}
+			cmds = append(cmds, cmd)
+		}
+		for i, cmd := range cmds {
 			ui.Row(c).Height(34).Padding(0, 14).Gap(12).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, cmd.title).FontSize(12.5).TextColor(k.Text).Grow(1)
-				ui.Text(c, cmd.keys).FontSize(11.5).TextColor(k.TextFaint).Font(noteFont.Family)
+				ui.Text(c, shortcutHint(cmd)).FontSize(11.5).TextColor(k.TextFaint).Font(noteFont.Family)
 			})
 			if i != len(cmds)-1 {
 				ui.Divider(c).Margin(0, 14)
@@ -438,8 +451,8 @@ func (a *app) settingsKeyboardPage(c *ui.Context, k *colors) {
 		for _, row := range []struct {
 			label, keys, detail string
 		}{
-			{"Move focus", "⌥←  ⌥→  ⌥↑  ⌥↓", "Focus the neighboring pane."},
-			{"Move the focused pane", "⌥⇧←  ⌥⇧→  ⌥⇧↑  ⌥⇧↓", "Put it on the neighbor's edge."},
+			{"Move focus", nativeKeys("⌥←  ⌥→  ⌥↑  ⌥↓"), "Focus the neighboring pane."},
+			{"Move the focused pane", nativeKeys("⌥⇧←  ⌥⇧→  ⌥⇧↑  ⌥⇧↓"), "Put it on the neighbor's edge."},
 		} {
 			ui.Row(c).MinHeight(46).Padding(0, 14).Gap(12).AlignItems(ui.Center).Children(func() {
 				ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
@@ -463,8 +476,10 @@ func (a *app) settingsAdvancedPage(c *ui.Context, k *colors) {
 		a.aboutRow(c, k, "Settings", a.settingsPath)
 		a.settingDivider(c, k)
 		a.aboutRow(c, k, "Project cache", a.remoteCache)
-		a.settingDivider(c, k)
-		a.aboutRow(c, k, "Local sessions", session.SocketPath())
+		if terminalsSupported() {
+			a.settingDivider(c, k)
+			a.aboutRow(c, k, "Local sessions", session.SocketPath())
+		}
 		if a.remote != nil {
 			a.settingDivider(c, k)
 			a.aboutRow(c, k, "Remote server", a.remote.host+" · "+a.remote.socket)
@@ -711,7 +726,7 @@ func (a *app) settingsFilesPage(c *ui.Context, k *colors) {
 	a.settingsSection(c, k, "CURRENT PROJECT", func() {
 		a.aboutRow(c, k, "Folder", a.projectPath())
 		a.settingDivider(c, k)
-		a.settingRow(c, k, "Reveal", "Show the project in Finder.", func() {
+		a.settingRow(c, k, "Reveal", "Show the project in "+fileManagerName()+".", func() {
 			b := ui.Row(c).Padding(4, 9).Radius(radius).Cursor(ui.CursorPointer).
 				Role(ui.RoleButton).Label("Reveal Project")
 			if b.Hovered() {
@@ -765,7 +780,7 @@ func (a *app) settingsGitPage(c *ui.Context, k *colors) {
 	a.settingsSection(c, k, "ABOUT THE PAGE", func() {
 		a.aboutRow(c, k, "Status", "Working tree against HEAD")
 		a.settingDivider(c, k)
-		ui.Text(c, "Open it with ⇧⌘G, or the Git button in the title bar.").
+		ui.Text(c, "Open it with "+nativeKeys("⇧⌘G")+", or the Git button in the title bar.").
 			FontSize(11.5).TextColor(k.TextFaint).Padding(14, 16)
 	})
 }

@@ -101,7 +101,9 @@ func (a *app) titleBar(c *ui.Context, k *colors) {
 			Tooltip(tip("File Tree", cmdTree)).Clicked() {
 			a.later(func() { a.toggleTree() })
 		}
-		a.serverChip(c, k)
+		if terminalsSupported() {
+			a.serverChip(c, k)
+		}
 		a.projectChip(c, k)
 		a.tabStrip(c, k)
 		if iconButton(c, k, "plus", "New Tab", 26, 16).
@@ -120,7 +122,7 @@ func (a *app) titleBar(c *ui.Context, k *colors) {
 				Tooltip(tip("Git Diff", cmdGit)).Clicked() {
 				a.later(func() { a.toggleGit() })
 			}
-			if runtime.GOOS != "js" {
+			if terminalsSupported() {
 				if iconButton(c, k, "square-terminal", "Toggle Terminal", 30, 17).
 					Tooltip(tip("Toggle Terminal", cmdTerminal)).Clicked() {
 					a.later(func() { a.toggleTerminal() })
@@ -658,8 +660,10 @@ func (a *app) emptyState(c *ui.Context, k *colors, vw, vh float32) {
 					if runtime.GOOS != "js" {
 						ui.Divider(c)
 						a.welcomeAction(c, k, "folder-open", "Open Project…", cmdOpenProject, func() { a.openProjectPicker() })
-						ui.Divider(c)
-						a.welcomeAction(c, k, "square-terminal", "Open Terminal", cmdTerminal, func() { a.toggleTerminal() })
+						if terminalsSupported() {
+							ui.Divider(c)
+							a.welcomeAction(c, k, "square-terminal", "Open Terminal", cmdTerminal, func() { a.toggleTerminal() })
+						}
 					}
 				})
 
@@ -695,7 +699,7 @@ func (a *app) emptyState(c *ui.Context, k *colors, vw, vh float32) {
 					})
 				}
 
-				ui.Text(c, "⌘, Settings     ⇧⌘P Commands     ⌘O Open Project").
+				ui.Text(c, nativeKeys("⌘,")+" Settings     "+nativeKeys("⇧⌘P")+" Commands     "+nativeKeys("⌘O")+" Open Project").
 					FontSize(11).TextColor(k.TextFaint).TextAlign(ui.Center)
 			})
 		})
@@ -714,8 +718,8 @@ func (a *app) welcomeAction(c *ui.Context, k *colors, glyph, title string, cmd *
 	row.Children(func() {
 		ui.Icon(c, icons.Icon(glyph)).Size(15, 15).TextColor(k.TextMuted)
 		ui.Text(c, title).FontSize(12.5).TextColor(k.Text).Grow(1)
-		if cmd != nil && cmd.keys != "" {
-			ui.Text(c, cmd.keys).FontSize(11).TextColor(k.TextFaint)
+		if hint := shortcutHint(cmd); hint != "" {
+			ui.Text(c, hint).FontSize(11).TextColor(k.TextFaint)
 		}
 	})
 }

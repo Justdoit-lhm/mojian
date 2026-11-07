@@ -351,7 +351,7 @@ func (a *app) startTreeDraft(kind draftKind, parent, target, name string) {
 	}
 	a.treeOpen = true
 	a.treeQuery = ""
-	a.treeFocusSearch = false
+	a.treeSearch.CancelFocus()
 	if kind == draftRename {
 		parent = filepath.Dir(target)
 		if parent == "." {
@@ -832,7 +832,7 @@ func (a *app) nodeMenu(m *ui.Menu, rel string, dir bool) {
 	if m.Item("Copy Path").Chosen() {
 		a.later(func() { a.copyPath(rel, true) })
 	}
-	if runtime.GOOS != "js" && m.Item("Reveal in Finder").Chosen() {
+	if runtime.GOOS != "js" && m.Item(revealLabel()).Chosen() {
 		a.later(func() { a.reveal(rel) })
 	}
 	m.Separator()

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.1
+
+- Fix **Open File** on the welcome page: it now focuses the Explorer's
+  search field, including when the Explorer was already open, so typing
+  filters files at once.
+- Show shortcuts, reveal labels and the welcome note in the platform's
+  own keys and words: `⌘`/`⌥` on macOS, `Ctrl`/`Alt` on Linux and Windows.
+- Add a portable Windows 10/11 amd64 build with the editor, Explorer,
+  panes, Git page and settings. Terminal, SSH and remote-project features
+  are hidden because they need the Unix session server.
+- Build and test macOS, Linux and Windows in the tag-driven release
+  workflow. Linux now runs the test suite in CI too.
+- Rewrite both READMEs with per-platform install steps, a support matrix
+  and a cross-platform shortcut table.
+
 ## 0.1.0
 
 First release.

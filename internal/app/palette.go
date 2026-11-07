@@ -110,14 +110,17 @@ func (a *app) paletteItems() []paletteItem {
 	q := strings.ToLower(strings.TrimSpace(a.paletteQuery))
 	match := func(s string) bool { return q == "" || fuzzy(strings.ToLower(s), q) }
 	for _, c := range paletteCommands {
-		if (c == cmdTerminal || c == cmdOpenProject || c == cmdNewFolder) && runtime.GOOS == "js" {
+		if !terminalsSupported() && (c == cmdTerminal || c == cmdSSH) {
+			continue
+		}
+		if runtime.GOOS == "js" && (c == cmdTerminal || c == cmdOpenProject || c == cmdNewFolder) {
 			continue
 		}
 		if !match(c.title) {
 			continue
 		}
 		c := c
-		items = append(items, paletteItem{title: c.title, keys: c.keys, glyph: c.glyph,
+		items = append(items, paletteItem{title: c.title, keys: shortcutHint(c), glyph: c.glyph,
 			run: func() { a.run(c) }})
 	}
 	if a.store != nil {
@@ -141,7 +144,7 @@ func (a *app) paletteItems() []paletteItem {
 		i := i
 		keys := ""
 		if i < 9 {
-			keys = fmt.Sprintf("⌘%d", i+1)
+			keys = nativeKeys(fmt.Sprintf("⌘%d", i+1))
 		}
 		tabDetail := "Tab"
 		if detail != "" {

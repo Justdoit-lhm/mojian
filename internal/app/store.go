@@ -596,7 +596,7 @@ func (s *store) displayDir() string {
 	return s.dir
 }
 
-const welcomeNote = `# Welcome to Mojian
+const welcomeNoteText = `# Welcome to Mojian
 
 Mojian is a quiet text editor for plain files, built with [MyGo](https://mygo.egoist.dev)'s native UI.
 
@@ -615,6 +615,16 @@ TypeScript, Go, Rust, Swift, Markdown and more. The Explorer copies, cuts,
 pastes and renames files like a code editor; files stay ordinary files in
 ` + "`~/Documents/Mojian`" + `, or wherever the project lives.
 `
+
+var welcomeNote = platformWelcomeNote()
+
+func platformWelcomeNote() string {
+	note := welcomeNoteText
+	if !terminalsSupported() {
+		note = strings.Replace(note, "- **⇧⌘T** opens a terminal on the right, in the folder you are in.\n", "", 1)
+	}
+	return nativeKeys(note)
+}
 
 const sampleNote = `# Reading notes
 

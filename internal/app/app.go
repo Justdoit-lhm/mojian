@@ -68,16 +68,16 @@ type app struct {
 	sshQuery string
 	sshSel   int
 
-	treeOpen        bool
-	treeQuery       string
-	treeFocusSearch bool
-	treeSel         string
-	treeReveal      string
-	openDirs        map[string]bool
-	treeDraft       *treeDraft
-	draftSeq        int
-	revealTab       bool
-	tabScroll       ui.ScrollState
+	treeOpen   bool
+	treeQuery  string
+	treeSearch ui.Handle
+	treeSel    string
+	treeReveal string
+	openDirs   map[string]bool
+	treeDraft  *treeDraft
+	draftSeq   int
+	revealTab  bool
+	tabScroll  ui.ScrollState
 
 	fileClip []string
 	fileCut  bool
@@ -1193,28 +1193,42 @@ func (a *app) menu() *mygo.Menu {
 			},
 		})
 	}
+	fileItems := []*mygo.MenuItem{
+		item(cmdOpenProject),
+		item(cmdNotes),
+		mygo.Separator(),
+		item(cmdNewNote),
+		item(cmdNewFolder),
+		item(cmdNewTab),
+		item(cmdSave),
+		mygo.Separator(),
+		item(cmdRenameNode),
+		item(cmdTrashNode),
+		mygo.Separator(),
+		item(cmdCloseTab),
+	}
+	if terminalsSupported() {
+		fileItems = append(fileItems, mygo.Separator(), item(cmdTerminal), item(cmdSSH))
+	}
+	fileItems = append(fileItems, mygo.Separator(), &mygo.MenuItem{Label: "Reveal Project", Click: func(*mygo.MenuItem, *mygo.Window) {
+		a.revealVault()
+	}})
+	viewItems := []*mygo.MenuItem{item(cmdTree)}
+	if terminalsSupported() {
+		viewItems = append(viewItems, item(cmdTerminal), item(cmdSSH))
+	}
+	viewItems = append(viewItems, item(cmdGit), item(cmdPalette), mygo.Separator(), item(cmdSettings),
+		&mygo.MenuItem{Label: "Appearance", Submenu: []*mygo.MenuItem{
+			appearance("System", 0),
+			appearance("Light", 1),
+			appearance("Dark", 2),
+		}},
+		mygo.Separator(),
+		&mygo.MenuItem{Role: mygo.RoleToggleFullScreen},
+	)
 	return mygo.NewMenu([]*mygo.MenuItem{
 		{Role: mygo.RoleAppMenu},
-		{Label: "File", Submenu: []*mygo.MenuItem{
-			item(cmdOpenProject),
-			item(cmdNotes),
-			mygo.Separator(),
-			item(cmdNewNote),
-			item(cmdNewFolder),
-			item(cmdNewTab),
-			item(cmdSave),
-			mygo.Separator(),
-			item(cmdRenameNode),
-			item(cmdTrashNode),
-			mygo.Separator(),
-			item(cmdCloseTab),
-			mygo.Separator(),
-			item(cmdTerminal),
-			item(cmdSSH),
-			{Label: "Reveal Project", Click: func(*mygo.MenuItem, *mygo.Window) {
-				a.revealVault()
-			}},
-		}},
+		{Label: "File", Submenu: fileItems},
 		{Label: "Edit", Submenu: []*mygo.MenuItem{
 			{Role: mygo.RoleUndo},
 			{Role: mygo.RoleRedo},
@@ -1224,22 +1238,7 @@ func (a *app) menu() *mygo.Menu {
 			{Role: mygo.RolePaste},
 			{Role: mygo.RoleSelectAll},
 		}},
-		{Label: "View", Submenu: []*mygo.MenuItem{
-			item(cmdTree),
-			item(cmdTerminal),
-			item(cmdGit),
-			item(cmdSSH),
-			item(cmdPalette),
-			mygo.Separator(),
-			item(cmdSettings),
-			{Label: "Appearance", Submenu: []*mygo.MenuItem{
-				appearance("System", 0),
-				appearance("Light", 1),
-				appearance("Dark", 2),
-			}},
-			mygo.Separator(),
-			{Role: mygo.RoleToggleFullScreen},
-		}},
+		{Label: "View", Submenu: viewItems},
 		{Label: "Tabs", Submenu: append(tabItems,
 			mygo.Separator(),
 			item(cmdRenameTab),

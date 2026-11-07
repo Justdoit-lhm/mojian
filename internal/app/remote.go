@@ -355,6 +355,9 @@ func (a *app) uploadRemoteNote(n *note) error {
 
 // openRemoteProject mirrors path from host and makes it the open project.
 func (a *app) openRemoteProject(host, remotePath string) error {
+	if !terminalsSupported() {
+		return fmt.Errorf("remote projects need macOS or Linux")
+	}
 	if host == "" || remotePath == "" {
 		return fmt.Errorf("choose a server and a project")
 	}
@@ -406,7 +409,7 @@ func (a *app) openRemoteProject(host, remotePath string) error {
 	a.focusReq = nil
 	a.treeSel = ""
 	a.treeQuery = ""
-	a.treeFocusSearch = false
+	a.treeSearch.CancelFocus()
 	a.treeReveal = ""
 	a.openDirs = map[string]bool{}
 	a.tabScroll = ui.ScrollState{}
@@ -597,7 +600,7 @@ func (a *app) serverChip(c *ui.Context, k *colors) {
 	label := a.remoteName()
 	chip := ui.Row(c).Gap(6).Padding(3, 8, 3, 6).Radius(radius).AlignItems(ui.Center).
 		Cursor(ui.CursorPointer).Role(ui.RoleButton).Label("Switch server: " + label).
-		Tooltip("Server  ⇧⌘L").MaxWidth(170).Shrink(0).ClipX()
+		Tooltip("Server  " + nativeKeys("⇧⌘L")).MaxWidth(170).Shrink(0).ClipX()
 	if chip.Hovered() || a.serverOpen {
 		chip.Background(k.Hover)
 	}

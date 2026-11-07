@@ -1,9 +1,9 @@
 name: Release
 
-# A release is a tag: pushing vX.Y.Z tests the tree, builds the macOS app
-# for Apple Silicon and Intel and the Linux app for amd64 and arm64, and
-# creates or fills the draft release of that version. The draft is
-# published only after every asset is uploaded.
+# A release is a tag: pushing vX.Y.Z tests the tree, builds macOS for
+# Apple Silicon and Intel, Linux for amd64 and arm64, and Windows for
+# amd64, then creates or fills the draft release of that version. The
+# draft is published only after every asset is uploaded.
 on:
   push:
     tags: ["v*"]
@@ -58,6 +58,8 @@ jobs:
             echo "::error::the tag $GITHUB_REF_NAME does not match mygo.json's v$version"
             exit 1
           }
+      - name: Test
+        run: go test ./...
       - name: Build
         run: go tool mygo build -platform linux/amd64,linux/arm64
       - name: Check the artifacts
@@ -77,9 +79,45 @@ jobs:
             build/linux-arm64/*.tar.gz
             build/linux-arm64/*.deb
 
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Check the tag against mygo.json
+        shell: pwsh
+        run: |
+          $version = (Get-Content mygo.json | ConvertFrom-Json).version
+          if ("v$version" -ne "$env:GITHUB_REF_NAME") {
+            Write-Error "the tag $env:GITHUB_REF_NAME does not match mygo.json's v$version"
+            exit 1
+          }
+      - name: Test
+        run: go test ./...
+      - name: Build
+        run: go tool mygo build -platform windows/amd64
+      - name: Check the artifacts and zip
+        shell: pwsh
+        run: |
+          $version = (Get-Content mygo.json | ConvertFrom-Json).version
+          foreach ($name in @("Mojian.exe", "ghostty-vt.dll", "icon.png")) {
+            if (-not (Test-Path "build/windows-amd64/$name")) {
+              Write-Error "build/windows-amd64/$name is missing"
+              exit 1
+            }
+          }
+          Compress-Archive -Path build/windows-amd64/* -DestinationPath "build/mojian-$version-windows-amd64.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: build/*.zip
+
   release:
     name: Publish
-    needs: [macos, linux]
+    needs: [macos, linux, windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -90,6 +128,10 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: linux
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows
           path: dist
       - name: Flatten the artifacts
         run: |
@@ -104,6 +146,7 @@ jobs:
           test -f "dist/mojian-$version-linux-arm64.tar.gz"
           test -f "dist/mojian_${version}_amd64.deb"
           test -f "dist/mojian_${version}_arm64.deb"
+          test -f "dist/mojian-$version-windows-amd64.zip"
           test -f "dist/install.sh"
           ls -lh dist
       - name: Create the draft release
@@ -125,9 +168,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          (cd dist && sha256sum *.dmg *.tar.gz *.deb install.sh > SHA256SUMS)
+          (cd dist && sha256sum *.dmg *.tar.gz *.deb *.zip install.sh > SHA256SUMS)
           gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber \
-            dist/*.dmg dist/*.tar.gz dist/*.deb dist/install.sh dist/SHA256SUMS
+            dist/*.dmg dist/*.tar.gz dist/*.deb dist/*.zip dist/install.sh dist/SHA256SUMS
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}

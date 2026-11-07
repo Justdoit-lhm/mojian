@@ -1,13 +1,14 @@
 # Releasing Mojian
 
 A release is a tag. Pushing `vX.Y.Z` runs the Release workflow
-(`.github/workflows/release.yml`), which tests the tree, builds the macOS
-app for Apple Silicon and Intel and the Linux archives and packages for
-amd64 and arm64, and publishes the GitHub release with every installer.
+(`.github/workflows/release.yml`), which tests the tree on macOS, Linux
+and Windows, builds the macOS app for Apple Silicon and Intel, the Linux
+archives and packages for amd64 and arm64, and the Windows portable zip,
+then publishes the GitHub release with every installer.
 
 ## Steps
 
-1. Pick the version: a patch (`0.1.0` → `0.1.1`) for fixes, a minor for
+1. Pick the version: a patch (`0.1.1` → `0.1.2`) for fixes, a minor for
    features.
 2. Set it in `mygo.json` (`"version"`).
 3. Add its section to the top of `CHANGELOG.md`.
@@ -31,9 +32,10 @@ amd64 and arm64, and publishes the GitHub release with every installer.
 The workflow refuses a tag that does not match `mygo.json`, builds
 `mojian-X.Y.Z-arm64.dmg`, `mojian-X.Y.Z-amd64.dmg`,
 `mojian-X.Y.Z-linux-amd64.tar.gz`, `mojian-X.Y.Z-linux-arm64.tar.gz`,
-`install.sh` and the matching `.deb` packages, creates a draft release with generated notes,
-uploads every installer and `SHA256SUMS`, and publishes the draft only after
-every upload succeeds. If a job fails, fix it, move the tag to
+`mojian-X.Y.Z-windows-amd64.zip`, `install.sh` and the matching `.deb`
+packages, creates a draft release with generated notes, uploads every
+installer and `SHA256SUMS`, and publishes the draft only after every upload
+succeeds. If a job fails, fix it, move the tag to
 the new commit and push the tag again; the workflow replaces the draft.
 A published release is not overwritten.
 

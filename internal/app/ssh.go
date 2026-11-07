@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
@@ -119,6 +120,10 @@ func sshConfigHosts() []sshHost {
 }
 
 func (a *app) openSSHPicker() {
+	if !terminalsSupported() {
+		a.fail(errors.New("SSH terminals need macOS or Linux"))
+		return
+	}
 	a.sshHosts = sshConfigHosts()
 	a.sshQuery = ""
 	a.sshSel = 0

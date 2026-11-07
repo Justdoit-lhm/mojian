@@ -120,7 +120,7 @@ func (a *app) openProject(dir string) {
 	a.focusReq = nil
 	a.treeSel = ""
 	a.treeQuery = ""
-	a.treeFocusSearch = false
+	a.treeSearch.CancelFocus()
 	a.treeReveal = ""
 	a.openDirs = map[string]bool{}
 	a.tabScroll = ui.ScrollState{}
@@ -151,7 +151,7 @@ func (a *app) projectChip(c *ui.Context, k *colors) {
 	}
 	chip := ui.Row(c).Gap(7).Padding(3, 8, 3, 6).Radius(radius).AlignItems(ui.Center).
 		Cursor(ui.CursorPointer).Role(ui.RoleButton).Label("Switch project: " + a.projectName()).
-		Tooltip(a.projectPath() + "  ⌘O").MaxWidth(230).Shrink(0).ClipX()
+		Tooltip(a.projectPath() + "  " + nativeKeys("⌘O")).MaxWidth(230).Shrink(0).ClipX()
 	if chip.Hovered() || a.projectOpen {
 		chip.Background(k.Hover)
 	}
@@ -192,7 +192,7 @@ func (a *app) projectChip(c *ui.Context, k *colors) {
 		ui.Row(c).Padding(4, 8, 5, 8).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, "Projects").FontSize(11).FontWeight(600).TextColor(k.TextFaint)
 			ui.Spacer(c)
-			ui.Text(c, "⌘O").FontSize(11).TextColor(k.TextFaint)
+			ui.Text(c, nativeKeys("⌘O")).FontSize(11).TextColor(k.TextFaint)
 		})
 		for _, p := range a.recentProjects() {
 			a.projectRow(c, k, p)

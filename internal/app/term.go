@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"runtime"
 	"strings"
 
 	"mojian/internal/session"
@@ -44,7 +43,7 @@ func (s termSpec) title() string {
 // warmSessionServer starts the local session server before the first
 // terminal asks for it, so opening a terminal does not wait for a spawn.
 func warmSessionServer() {
-	if runtime.GOOS == "js" {
+	if !terminalsSupported() {
 		return
 	}
 	if _, err := os.Stat(session.SocketPath()); err == nil {
@@ -64,8 +63,8 @@ func (a *app) terminalDir() string {
 }
 
 func (a *app) toggleTerminal() {
-	if runtime.GOOS == "js" {
-		a.fail(errors.New("terminals need the desktop app"))
+	if !terminalsSupported() {
+		a.fail(errors.New("terminals need macOS or Linux"))
 		return
 	}
 	t := a.terminalTab()
@@ -149,8 +148,8 @@ func (a *app) addSplitTerminalSide(from *pane, tt *termTab, side splitSide) *pan
 // newTerminalPane starts a shell and puts it in a pane on the right edge
 // of the active tab, as one of the tab's panes.
 func (a *app) newTerminalPane() {
-	if runtime.GOOS == "js" {
-		a.fail(errors.New("terminals need the desktop app"))
+	if !terminalsSupported() {
+		a.fail(errors.New("terminals need macOS or Linux"))
 		return
 	}
 	if a.store == nil || a.store.memory {
@@ -214,6 +213,9 @@ func (a *app) startTerminal() (*termTab, error) {
 // startTerminalSpec starts a login shell, or SSH to a configured host, in
 // the session server. The process outlives the app.
 func (a *app) startTerminalSpec(spec termSpec) (*termTab, error) {
+	if !terminalsSupported() {
+		return nil, errors.New("terminals need macOS or Linux")
+	}
 	if a.shellStarter != nil {
 		return a.shellStarter()
 	}

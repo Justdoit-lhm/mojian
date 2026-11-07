@@ -302,7 +302,7 @@ func (a *app) toggleTree() {
 		a.refreshProject()
 	} else {
 		a.treeDraft = nil
-		a.treeFocusSearch = false
+		a.treeSearch.CancelFocus()
 	}
 	a.invalidate()
 }
@@ -312,8 +312,8 @@ func (a *app) openTreeSearch() {
 	a.paletteOpen = false
 	a.treeOpen = true
 	a.treeQuery = ""
-	a.treeFocusSearch = true
 	a.refreshProject()
+	a.later(func() { a.treeSearch.Focus() })
 	a.invalidate()
 }
 
@@ -398,13 +398,7 @@ func (a *app) sidebarSearch(c *ui.Context, k *colors) {
 	field.Children(func() {
 		ui.Icon(c, icons.Icon("search")).Size(14, 14).TextColor(k.TextFaint)
 		in := ui.TextInputBase(c, &a.treeQuery).Grow(1).FontSize(12.5).
-			Placeholder("Search files…")
-		if a.treeFocusSearch {
-			in.AutoFocus()
-			if in.Focused() {
-				a.treeFocusSearch = false
-			}
-		}
+			Placeholder("Search files…").Label("Search files").Bind(&a.treeSearch)
 		if in.Submitted() {
 			if notes := a.filteredNotes(); len(notes) > 0 {
 				a.treeSel = notes[0].Rel
@@ -414,7 +408,7 @@ func (a *app) sidebarSearch(c *ui.Context, k *colors) {
 		if a.treeQuery != "" {
 			if iconButton(c, k, "x", "Clear Search", 20, 11).Clicked() {
 				a.treeQuery = ""
-				a.treeFocusSearch = true
+				a.later(func() { a.treeSearch.Focus() })
 			}
 		}
 	})
