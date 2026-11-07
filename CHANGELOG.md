@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.6
 
 - Removed the separate Fonts settings page; editor and terminal font
   families are still picked from their own pages, through the same
