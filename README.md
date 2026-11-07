@@ -42,6 +42,14 @@ workspaces hold panes, and every pane edits a file with syntax highlighting.
   and startup are there too. Every change applies and is saved at once.
   ![The Settings window](docs/settings.png)
 
+- **SSH servers with persistent sessions.** `⇧⌘L` lists the Host aliases in
+  `~/.ssh/config` and opens the system `ssh` in a terminal pane, so keys,
+  ProxyJump and the agent keep working. Mojian's own session server keeps
+  the SSH process and its screen alive: quitting the app detaches, opening it
+  again reattaches, and agents keep running. Nothing is installed on the
+  server; the session server is a local process of Mojian.
+
+  ![Connect to Server](docs/ssh.png)
 - **A terminal inside the window.** `⇧⌘T` opens a terminal pane on the right,
   in the selected folder. It tiles with the same split, zoom and close
   controls as a file pane, and a pane's grip moves it like any other tile;
@@ -69,6 +77,7 @@ workspaces hold panes, and every pane edits a file with syntax highlighting.
 | `⌘T` | New tab |
 | `⇧⌘B` | Show or hide the Explorer |
 | `⇧⌘T` | Open or close the terminal pane |
+| `⇧⌘L` | Connect to an SSH host |
 | `⇧⌘G` | Show the Git diff page |
 | `⇧⌘D` / `⇧⌘E` | Split right / down |
 | `⌘W` / `⇧⌘W` | Close pane / tab |
@@ -118,13 +127,14 @@ The pieces that stand on their own are packages of their own.
 
 | | |
 |---|---|
-| `main.go` | starts the app |
+| `main.go` | starts the app, or `-server` for the session server |
 | `internal/app/` | the window: shell, tabs, panes, Explorer, pickers, settings and the file operations |
 | `internal/git/` | the working-tree page: status, diffs, parsing and its view |
 | `internal/theme/` | light and dark palettes, the window gradient and fonts |
 | `internal/icons/` | Lucide action icons and Material Icon Theme file icons |
 | `internal/assets/` | the embedded icons and JetBrains Mono |
 | `internal/motion/` | the page, pane, tab and tree transitions |
+| `internal/session/` | the local session server: PTYs, SSH processes, screen snapshots and reattach; quit detaches, close a pane ends it |
 | `test/` | black-box integration tests and the helpers they share |
 
 Go requires `_test.go` files that read unexported state to sit beside their
@@ -140,7 +150,7 @@ Inside `internal/app/`:
 | `store.go` | a project folder: text files, assets, new notes and atomic saves |
 | `tree.go` | the file tree, folder creation and file search |
 | `project.go` | the project switcher and recent projects |
-| `term.go` | the terminal pane, via MyGo's terminal plugin |
+| `term.go` | terminal panes, attached to the session server |
 | `files.go` | file operations: rename, copy, move, trash and the context menu |
 | `picker.go` | the in-window project folder chooser |
 | `split.go` | the split file chooser |
@@ -157,5 +167,6 @@ Action icons: [Lucide](https://lucide.dev), ISC (`internal/assets/icons/LICENSE`
 File and folder icons: [Material Icon Theme](https://github.com/PKief/vscode-material-icon-theme), MIT (`internal/assets/icons/material/LICENSE`).
 Font: [JetBrains Mono](https://www.jetbrains.com/lp/mono/), OFL
 (`internal/assets/fonts/OFL.txt`).
+Pseudo-terminals: [creack/pty](https://github.com/creack/pty), MIT.
 The window's shape and interaction follow [GoRex](https://github.com/egoist/gorex),
 also built with MyGo.

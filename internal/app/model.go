@@ -90,6 +90,10 @@ func newTermPane(t *termTab) *pane {
 	return &pane{ID: nextID("p"), Term: t}
 }
 
+func newTermPaneSpec(spec termSpec, sid string) *termTab {
+	return &termTab{Spec: spec, SID: sid}
+}
+
 func newAssetPane(f *assetFile) *pane {
 	return &pane{ID: nextID("p"), Asset: f, assetView: &assetView{}}
 }
@@ -129,7 +133,7 @@ func (t *tab) label() (name, detail string) {
 		case t.Focus.Asset != nil:
 			name = t.Focus.Asset.Name
 		case t.Focus.Term != nil:
-			name = "Terminal"
+			name = t.Focus.Term.Spec.title()
 		}
 	}
 	if name == "" {
@@ -344,10 +348,16 @@ type layoutNode struct {
 }
 
 type layoutPane struct {
-	ID      string `json:"id"`
-	Note    string `json:"note,omitempty"`
-	Asset   string `json:"asset,omitempty"`
-	Preview bool   `json:"preview,omitempty"`
+	ID       string          `json:"id"`
+	Note     string          `json:"note,omitempty"`
+	Asset    string          `json:"asset,omitempty"`
+	Preview  bool            `json:"preview,omitempty"`
+	Terminal *layoutTerminal `json:"terminal,omitempty"`
+}
+
+type layoutTerminal struct {
+	SID  string `json:"sid,omitempty"`
+	Host string `json:"host,omitempty"`
 }
 
 func layoutOf(t *tab) layoutTab {
@@ -366,14 +376,16 @@ func layoutNodeOf(n *node) *layoutNode {
 		return nil
 	}
 	if n.Pane != nil {
-		if n.Pane.Note == nil && n.Pane.Asset == nil {
-			return nil // shells are not saved; the file panes around them are
-		}
 		lp := &layoutPane{ID: n.Pane.ID, Preview: n.Pane.Preview}
-		if n.Pane.Note != nil {
+		switch {
+		case n.Pane.Term != nil:
+			lp.Terminal = &layoutTerminal{SID: n.Pane.Term.SID, Host: n.Pane.Term.Spec.Host}
+		case n.Pane.Note != nil:
 			lp.Note = n.Pane.Note.Rel
-		} else {
+		case n.Pane.Asset != nil:
 			lp.Asset = n.Pane.Asset.Rel
+		default:
+			return nil
 		}
 		return &layoutNode{Pane: lp}
 	}
@@ -437,13 +449,24 @@ func (a *app) restoreNode(ln *layoutNode, byID map[string]*pane) *node {
 	}
 	if ln.Pane != nil {
 		p := &pane{ID: nextID("p"), Preview: ln.Pane.Preview}
-		if n := a.store.byRelPath(ln.Pane.Note); n != nil {
+		switch {
+		case ln.Pane.Terminal != nil:
+			p.Term = newTermPaneSpec(termSpec{Host: ln.Pane.Terminal.Host}, ln.Pane.Terminal.SID)
+		case ln.Pane.Note != "":
+			n := a.store.byRelPath(ln.Pane.Note)
+			if n == nil {
+				return nil
+			}
 			p.Note = n
-		} else if f := a.store.assetByRel(ln.Pane.Asset); f != nil {
+		case ln.Pane.Asset != "":
+			f := a.store.assetByRel(ln.Pane.Asset)
+			if f == nil {
+				return nil
+			}
 			p.Asset = f
 			p.assetView = &assetView{}
 			p.Preview = false
-		} else {
+		default:
 			return nil
 		}
 		byID[ln.Pane.ID] = p

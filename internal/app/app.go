@@ -18,6 +18,7 @@ import (
 	"time"
 
 	gitpage "mojian/internal/git"
+	"mojian/internal/session"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -54,6 +55,11 @@ type app struct {
 	splitQuery string
 	splitSel   int
 
+	sshPick  bool
+	sshHosts []sshHost
+	sshQuery string
+	sshSel   int
+
 	treeOpen        bool
 	treeQuery       string
 	treeFocusSearch bool
@@ -68,7 +74,8 @@ type app struct {
 	fileClip []string
 	fileCut  bool
 
-	shellStarter func() (*termTab, error) // tests replace this
+	shellStarter  func() (*termTab, error) // tests replace this
+	sessionClient *session.Client
 
 	git gitpage.Page
 
@@ -147,6 +154,10 @@ func Run() {
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
 		a.saveNow()
 		a.closeTerminals()
+		if a.sessionClient != nil {
+			_ = a.sessionClient.Close()
+			a.sessionClient = nil
+		}
 		if a.settingsWin != nil {
 			a.settingsWin.Close()
 		}
@@ -231,6 +242,10 @@ func (a *app) windowClosed() {
 	}
 	a.saveNow()
 	a.closeTerminals()
+	if a.sessionClient != nil {
+		_ = a.sessionClient.Close()
+		a.sessionClient = nil
+	}
 	if a.layoutTimer != nil {
 		a.layoutTimer.Stop()
 		a.layoutTimer = nil
@@ -829,8 +844,14 @@ func (a *app) closeTab(t *tab) {
 		return
 	}
 	for _, p := range t.panes() {
-		if p.Term != nil && p.Term.Term != nil {
-			_ = p.Term.Term.Close()
+		if p.Term != nil {
+			a.endTerminal(p.Term)
+			if p.Term.Term != nil {
+				_ = p.Term.Term.Close()
+			}
+			if p.Term.stream != nil {
+				_ = p.Term.stream.Close()
+			}
 		}
 		releaseAsset(p)
 	}
@@ -872,8 +893,14 @@ func (a *app) closePane(p *pane) {
 		if !t.contains(p) {
 			continue
 		}
-		if p.Term != nil && p.Term.Term != nil {
-			_ = p.Term.Term.Close()
+		if p.Term != nil {
+			a.endTerminal(p.Term)
+			if p.Term.Term != nil {
+				_ = p.Term.Term.Close()
+			}
+			if p.Term.stream != nil {
+				_ = p.Term.stream.Close()
+			}
 		}
 		releaseAsset(p)
 		if !t.closePane(p) {
@@ -1044,6 +1071,7 @@ func (a *app) menu() *mygo.Menu {
 			item(cmdCloseTab),
 			mygo.Separator(),
 			item(cmdTerminal),
+			item(cmdSSH),
 			{Label: "Reveal Project", Click: func(*mygo.MenuItem, *mygo.Window) {
 				a.revealVault()
 			}},
@@ -1061,6 +1089,7 @@ func (a *app) menu() *mygo.Menu {
 			item(cmdTree),
 			item(cmdTerminal),
 			item(cmdGit),
+			item(cmdSSH),
 			item(cmdPalette),
 			mygo.Separator(),
 			item(cmdSettings),

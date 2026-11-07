@@ -65,11 +65,13 @@ var (
 		run: func(a *app) { a.toggleGit() }}
 	cmdSettings = &command{title: "Settings…", accel: "CmdOrCtrl+,", keys: "⌘,", glyph: "settings",
 		run: func(a *app) { a.openSettingsWindow() }}
+	cmdSSH = &command{title: "Connect to Server…", accel: "CmdOrCtrl+Shift+L", keys: "⇧⌘L", glyph: "server",
+		run: func(a *app) { a.openSSHPicker() }}
 )
 
 // paletteCommands are the commands the palette lists.
 var paletteCommands = []*command{
-	cmdOpenProject, cmdNewNote, cmdNewFolder, cmdNewTab, cmdSave, cmdPalette, cmdNotes, cmdTree, cmdTerminal, cmdGit, cmdSettings,
+	cmdOpenProject, cmdNewNote, cmdNewFolder, cmdNewTab, cmdSave, cmdPalette, cmdNotes, cmdTree, cmdTerminal, cmdGit, cmdSettings, cmdSSH,
 	cmdRenameNode, cmdTrashNode,
 	cmdSplitRight, cmdSplitDown, cmdZoom, cmdEqualize,
 	cmdClosePane, cmdCloseTab, cmdRenameTab, cmdNextTab, cmdPrevTab,
@@ -279,6 +281,7 @@ func (a *app) shortcuts(c *ui.Context) {
 		{ui.Cmd | ui.Shift, ui.KeyW, func() { a.run(cmdCloseTab) }},
 		{ui.Cmd | ui.Shift, ui.KeyR, func() { a.run(cmdRenameTab) }},
 		{ui.Cmd | ui.Shift, ui.KeyG, func() { a.run(cmdGit) }},
+		{ui.Cmd | ui.Shift, ui.KeyL, func() { a.run(cmdSSH) }},
 	} {
 		b := b
 		c.OnShortcut(b.mods, b.key, b.run)

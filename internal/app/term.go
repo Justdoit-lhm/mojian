@@ -3,14 +3,38 @@ package app
 import (
 	"errors"
 	"fmt"
-	"github.com/egoist/mygo/plugins/terminal"
 	"runtime"
+
+	"mojian/internal/session"
+
+	"github.com/egoist/mygo/plugins/terminal"
 )
 
-// termTab is the shell shown by a terminal pane.
+// termTab is the shell shown by a terminal pane. Its process lives in the
+// session server, so closing the app only detaches it.
 type termTab struct {
 	Term   *terminal.Terminal
 	Exited bool
+
+	SID    string
+	Spec   termSpec
+	stream *session.Stream
+
+	starting bool
+	startErr string
+}
+
+// termSpec is what a terminal pane opens: the login shell, or SSH to a
+// host alias from ~/.ssh/config.
+type termSpec struct {
+	Host string
+}
+
+func (s termSpec) title() string {
+	if s.Host != "" {
+		return "SSH · " + s.Host
+	}
+	return "Terminal"
 }
 
 // terminalDir is the folder a new shell starts in: the selected folder,
@@ -74,7 +98,7 @@ func (a *app) splitTerminal(from *pane, down bool) {
 	if t == nil || from == nil || from.Term == nil || !t.contains(from) {
 		return
 	}
-	tt, err := a.startTerminal()
+	tt, err := a.startTerminalSpec(from.Term.Spec)
 	if err != nil {
 		a.fail(err)
 		return
@@ -152,14 +176,55 @@ func (a *app) addTerminalPane(tt *termTab) *pane {
 	return p
 }
 
-// startTerminal starts a shell without adding it to a tab, so callers can
-// put it in a pane.
+// startTerminal starts the login shell without adding it to a tab.
 func (a *app) startTerminal() (*termTab, error) {
+	return a.startTerminalSpec(termSpec{})
+}
+
+// startTerminalSpec starts a login shell, or SSH to a configured host, in
+// the session server. The process outlives the app.
+func (a *app) startTerminalSpec(spec termSpec) (*termTab, error) {
 	if a.shellStarter != nil {
 		return a.shellStarter()
 	}
+	client, err := a.sessions()
+	if err != nil {
+		return nil, err
+	}
+	var cmd []string
 	dir := a.terminalDir()
-	tt := &termTab{}
+	if spec.Host != "" {
+		cmd = sshArgs(spec.Host)
+		dir = ""
+	}
+	info, err := client.Create(session.CreateOptions{
+		Command: cmd, Dir: dir, Cols: 80, Rows: 24,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("session: %w", err)
+	}
+	return a.attachTerminal(info.ID, spec)
+}
+
+// attachTerminal makes a terminal view attached to a session.
+func (a *app) attachTerminal(sid string, spec termSpec) (*termTab, error) {
+	client, err := a.sessions()
+	if err != nil {
+		return nil, err
+	}
+	stream := client.Stream(sid, 80, 24)
+	tt := &termTab{SID: sid, Spec: spec, stream: stream}
+	term, err := terminal.New(a.terminalOptions(stream, tt))
+	if err != nil {
+		_ = stream.Close()
+		return nil, fmt.Errorf("terminal: %w", err)
+	}
+	term.Resize(80, 24)
+	tt.Term = term
+	return tt, nil
+}
+
+func (a *app) terminalOptions(conn *session.Stream, tt *termTab) terminal.Options {
 	win := a.win
 	update := func(fn func()) {
 		if win != nil {
@@ -170,8 +235,8 @@ func (a *app) startTerminal() (*termTab, error) {
 	if a.terminalCopySelect {
 		copySelect = terminal.CopyOnSelectClipboard
 	}
-	term, err := terminal.New(terminal.Options{
-		Dir: dir,
+	return terminal.Options{
+		Conn: conn,
 		Font: terminal.Font{
 			Family:     a.terminalFontFamily,
 			Size:       float32(a.termFontSize()),
@@ -189,20 +254,93 @@ func (a *app) startTerminal() (*termTab, error) {
 				a.invalidate()
 			})
 		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("terminal: %w", err)
 	}
-	tt.Term = term
-	return tt, nil
 }
 
-// closeTerminals ends every shell, before the window or project goes.
+// sessions returns the control connection to the session server, starting
+// it when needed.
+func (a *app) sessions() (*session.Client, error) {
+	if a.sessionClient != nil {
+		return a.sessionClient, nil
+	}
+	c, err := session.Connect()
+	if err != nil {
+		return nil, err
+	}
+	a.sessionClient = c
+	return c, nil
+}
+
+// startRestoredTerminal starts or reattaches a terminal restored by the
+// layout, once its pane is first shown.
+func (a *app) startRestoredTerminal(p *pane) {
+	if p == nil || p.Term == nil || p.Term.Term != nil || p.Term.starting || p.Term.startErr != "" {
+		return
+	}
+	if p.Term.SID == "" && p.Term.Spec.Host == "" {
+		return
+	}
+	t := p.Term
+	t.starting = true
+	defer func() { t.starting = false }()
+	client, err := a.sessions()
+	if err != nil {
+		t.startErr = err.Error()
+		return
+	}
+	sid := t.SID
+	if sid != "" {
+		if list, listErr := client.List(); listErr == nil {
+			found := false
+			for _, info := range list {
+				if info.ID == sid {
+					found = true
+					break
+				}
+			}
+			if !found {
+				sid = ""
+			}
+		}
+	}
+	var tt *termTab
+	if sid != "" {
+		tt, err = a.attachTerminal(sid, t.Spec)
+	} else {
+		tt, err = a.startTerminalSpec(t.Spec)
+	}
+	if err != nil {
+		t.startErr = err.Error()
+		a.invalidate()
+		return
+	}
+	t.Term, t.SID, t.stream = tt.Term, tt.SID, tt.stream
+	a.changed()
+	a.invalidate()
+}
+
+// endTerminal ends a session when its pane is closed by the user.
+func (a *app) endTerminal(t *termTab) {
+	if a.sessionClient == nil || t == nil || t.SID == "" {
+		return
+	}
+	_ = a.sessionClient.Kill(t.SID)
+}
+
+// closeTerminals detaches every terminal before the window or project
+// goes: the server keeps the shells running.
 func (a *app) closeTerminals() {
 	for _, t := range a.tabs {
 		for _, p := range t.panes() {
-			if p.Term != nil && p.Term.Term != nil {
-				_ = p.Term.Term.Close()
+			if p.Term != nil {
+				if p.Term.Term != nil {
+					_ = p.Term.Term.Close()
+					p.Term.Term = nil
+				}
+				if p.Term.stream != nil {
+					_ = p.Term.stream.Close()
+					p.Term.stream = nil
+				}
 			}
 		}
 	}

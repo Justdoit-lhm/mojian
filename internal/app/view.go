@@ -41,6 +41,7 @@ func (a *app) view(c *ui.Context) {
 	}
 	a.projectPickerModal(c, k)
 	a.splitPicker(c, k)
+	a.sshPicker(c, k)
 	a.palette(c, k)
 	a.shortcuts(c)
 	a.persistLayout(c)
@@ -107,6 +108,10 @@ func (a *app) titleBar(c *ui.Context, k *colors) {
 					Tooltip(tip("Toggle Terminal", cmdTerminal)).Clicked() {
 					a.later(func() { a.toggleTerminal() })
 				}
+			}
+			if iconButton(c, k, "server", "Connect to Server", 30, 17).
+				Tooltip(tip("Connect to Server", cmdSSH)).Clicked() {
+				a.later(func() { a.openSSHPicker() })
 			}
 			if iconButton(c, k, "settings", "Settings", 30, 17).
 				Tooltip(tip("Settings", cmdSettings)).Clicked() {
@@ -257,6 +262,17 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 		body.Children(func() {
 			if p.Term != nil {
 				if p.Term.Term == nil {
+					a.startRestoredTerminal(p)
+					if p.Term.startErr != "" {
+						ui.Column(c).Fill().Center().Padding(20).Gap(8).Children(func() {
+							ui.Text(c, "Could not open the terminal").FontSize(13).
+								FontWeight(600).TextColor(k.Text)
+							ui.Text(c, p.Term.startErr).FontSize(11.5).
+								TextColor(k.TextFaint).TextAlign(ui.Center).MaxWidth(460)
+						})
+					} else {
+						ui.Text(c, "Attaching…").FontSize(12).TextColor(k.TextFaint)
+					}
 					return
 				}
 				tv := terminal.View(c, p.Term.Term).Fill()
@@ -362,7 +378,7 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hov
 	case p.Asset != nil:
 		name, ic = p.Asset.Name, icons.FileIcon(p.Asset.Path)
 	case p.Term != nil:
-		name, ic = "Terminal", icons.Icon("square-terminal")
+		name, ic = p.Term.Spec.title(), icons.Icon("square-terminal")
 	}
 	hpad, hgap := float32(12), float32(7)
 	btn, isize := float32(26), float32(16)
