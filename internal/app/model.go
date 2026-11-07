@@ -27,6 +27,7 @@ type pane struct {
 	previewScroll ui.ScrollState
 	md            *markdown.Options
 	assetView     *assetView
+	dragging      bool
 }
 
 // assetView is what a picture or PDF pane has loaded, and its headings.
@@ -194,6 +195,35 @@ func (t *tab) split(p, with *pane, down bool) bool {
 	t.Focus = with
 	t.Zoom = nil
 	return true
+}
+
+// swapPanes exchanges two panes' places, keeping their contents and the
+// tab's layout.
+func (t *tab) swapPanes(a, b *pane) bool {
+	if t == nil || a == nil || b == nil || a == b || t.Root == nil {
+		return false
+	}
+	if !t.contains(a) || !t.contains(b) {
+		return false
+	}
+	t.Root.swapPanes(a, b)
+	return true
+}
+
+func (n *node) swapPanes(a, b *pane) {
+	if n == nil {
+		return
+	}
+	if n.Pane == a {
+		n.Pane = b
+		return
+	}
+	if n.Pane == b {
+		n.Pane = a
+		return
+	}
+	n.A.swapPanes(a, b)
+	n.B.swapPanes(a, b)
 }
 
 func (n *node) split(p, with *pane, down bool) bool {

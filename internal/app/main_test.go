@@ -72,24 +72,24 @@ func TestSplitAndClose(t *testing.T) {
 	}
 }
 
-func TestSplitStopsAtFourPanes(t *testing.T) {
+func TestSplitsPastFourPanes(t *testing.T) {
 	a := newProjectApp(t)
 	t0 := a.tab()
-	for i, n := range a.store.sorted() {
+	notes := a.store.sorted()
+	for i, n := range notes {
 		if i == 0 {
 			continue
 		}
-		a.splitWith(n, false)
+		a.splitWith(n, i%2 == 1)
 	}
-	if got := len(t0.panes()); got != min(len(a.store.sorted()), maxPanes) {
-		t.Fatalf("panes: %d", got)
+	if got, want := len(t0.panes()), len(notes); got != want {
+		t.Fatalf("panes: %d, want %d", got, want)
 	}
-	if len(t0.panes()) < maxPanes {
+	if len(t0.panes()) <= 4 {
 		t.Skip("the fixture has too few files")
 	}
-	a.beginSplit(false)
-	if !strings.Contains(a.err, "at most 4 panes") {
-		t.Fatalf("the fifth pane was allowed: %q", a.err)
+	if a.err != "" {
+		t.Fatalf("splitting past four failed: %q", a.err)
 	}
 }
 
@@ -255,5 +255,29 @@ func TestSplitAnimatesToHalf(t *testing.T) {
 	tt.Advance(300 * time.Millisecond)
 	if root.animating || math.Abs(float64(root.Ratio-0.5)) > 0.001 {
 		t.Fatalf("split settled at %v (animating=%v)", root.Ratio, root.animating)
+	}
+}
+
+func TestDragPaneSwapsPlaces(t *testing.T) {
+	a := newProjectApp(t)
+	a.splitWith(a.store.byRelPath("Reading notes.md"), false)
+	tt := ui.NewTester(a.view, 1100, 700)
+	tt.Frame()
+	tt.Advance(300 * time.Millisecond)
+	first, second := a.tab().panes()[0], a.tab().panes()[1]
+	handle, ok := tt.Find("Move Pane")
+	if !ok {
+		t.Fatal("the pane has no move handle")
+	}
+	tt.Press(handle.X+handle.W/2, handle.Y+handle.H/2)
+	tt.Move(handle.X+40, handle.Y+10)
+	tt.Move(880, 380)
+	tt.Release(880, 380)
+	tt.Frame()
+	if got := a.tab().panes(); got[0] != second || got[1] != first {
+		t.Fatalf("the drag did not swap the panes: %v, %v", got[0].Note.Title, got[1].Note.Title)
+	}
+	if a.tab().Focus != first {
+		t.Fatal("the moved pane is not focused")
 	}
 }

@@ -9,17 +9,11 @@ import (
 	"mojian/internal/icons"
 )
 
-const maxPanes = 4 // the most editors one tab shows
-
 // beginSplit asks which file the new editor should show, rather than
 // opening a second view of the file already focused.
 func (a *app) beginSplit(down bool) {
 	t := a.tab()
 	if t == nil || t.Focus == nil {
-		return
-	}
-	if len(t.panes()) >= maxPanes {
-		a.fail(fmt.Errorf("a tab can show at most %d panes", maxPanes))
 		return
 	}
 	a.git.Open = false
@@ -68,10 +62,6 @@ func (a *app) chooseSplit(n *note) {
 	if n == nil || t == nil || t != a.tab() || !t.contains(from) {
 		return
 	}
-	if len(t.panes()) >= maxPanes {
-		a.fail(fmt.Errorf("a tab can show at most %d panes", maxPanes))
-		return
-	}
 	with := newPane(n)
 	if !t.split(from, with, a.splitDown) {
 		a.fail(fmt.Errorf("could not split the editor"))
@@ -88,10 +78,6 @@ func (a *app) chooseSplit(n *note) {
 func (a *app) splitWith(n *note, down bool) {
 	t := a.tab()
 	if t == nil || t.Focus == nil || n == nil {
-		return
-	}
-	if len(t.panes()) >= maxPanes {
-		a.fail(fmt.Errorf("a tab can show at most %d panes", maxPanes))
 		return
 	}
 	with := newPane(n)

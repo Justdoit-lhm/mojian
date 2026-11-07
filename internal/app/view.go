@@ -318,6 +318,15 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 			}
 		})
 	})
+	if p.dragging {
+		card.Border(2, k.Text)
+	}
+	if from, ok := ui.Drop[*pane](card); ok && from != nil && from != p && t.contains(from) {
+		a.later(func() { a.movePane(t, from, p) })
+	}
+	if over, ok := ui.DragOver[*pane](card); ok && over != nil && over != p && t.contains(over) {
+		card.Border(2, k.Text)
+	}
 	if card.Pressed() && t.Focus != p {
 		t.Focus = p
 		if !p.Preview && p.Note != nil {
@@ -326,6 +335,19 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 		a.changed()
 	}
 	return card
+}
+
+// movePane puts from where to was, and to where from was, so dragging a
+// pane's top-left handle rearranges the tiling.
+func (a *app) movePane(t *tab, from, to *pane) {
+	if t == nil || t != a.tab() || !t.swapPanes(from, to) {
+		return
+	}
+	t.Focus = from
+	t.Zoom = nil
+	a.focusReq = from
+	a.changed()
+	a.invalidate()
 }
 
 // paneHeader draws a note's icon, title and size, its unsaved dot, and
@@ -362,9 +384,21 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hov
 	}
 	h.Children(func() {
 		iconSize := float32(16)
+		handleW, gripSize := float32(15), float32(12)
 		if compact {
-			iconSize = 14
+			iconSize, handleW, gripSize = 14, 12, 10
 		}
+		grip := ui.Row(c).Width(handleW).Height(headerH).Center().
+			Cursor(ui.CursorGrab).Role(ui.RoleButton).Label("Move Pane").
+			Description("Drag to move pane").Drag(p)
+		if grip.Hovered() {
+			grip.Background(k.Hover)
+		}
+		p.dragging = grip.Dragging()
+		grip.Children(func() {
+			ui.Icon(c, icons.Icon("grip-vertical")).Size(gripSize, gripSize).
+				TextColor(k.TextFaint)
+		})
 		ui.Icon(c, ic).Size(iconSize, iconSize).TextColor(k.Text).Tooltip(name)
 		if compact {
 			ui.Spacer(c)
@@ -403,14 +437,14 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hov
 				return
 			}
 			if iconButton(c, k, "columns-2", "Split Right", btn, isize).
-				Tooltip(tip("Split Right", cmdSplitRight)).Disabled(len(t.panes()) >= maxPanes).Clicked() {
+				Tooltip(tip("Split Right", cmdSplitRight)).Clicked() {
 				a.later(func() {
 					t.Focus = p
 					a.splitFocused(false)
 				})
 			}
 			if iconButton(c, k, "rows-2", "Split Down", btn, isize).
-				Tooltip(tip("Split Down", cmdSplitDown)).Disabled(len(t.panes()) >= maxPanes).Clicked() {
+				Tooltip(tip("Split Down", cmdSplitDown)).Clicked() {
 				a.later(func() {
 					t.Focus = p
 					a.splitFocused(true)

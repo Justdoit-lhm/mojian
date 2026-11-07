@@ -25,8 +25,10 @@ workspaces hold panes, and every pane edits a file with syntax highlighting.
 - **Tabs and split panes.** A tab is a workspace; each pane is an editor.
   The `+` beside the tabs opens an empty workspace, not a copy of the current
   one. Split right or down and choose the file for the new pane; a split never
-  opens the same file twice. A tab holds at most four panes. Drag the divider,
-  double-click it for half and half, zoom a pane, or close it.
+  opens the same file twice. A tab tiles as many panes as you split, horizontally
+  and vertically. Drag a pane's top-left grip onto another pane to swap their
+  places, drag a divider to resize, double-click it for half and half, zoom a
+  pane, or close it.
 - **Markdown, source or rendered.** A Markdown pane has a Preview button at
   the top right; `⇧⌘V` is not needed, and the setting opens new `.md` files
   rendered when preferred.
@@ -41,8 +43,9 @@ workspaces hold panes, and every pane edits a file with syntax highlighting.
   ![The Settings window](docs/settings.png)
 
 - **A terminal inside the window.** `⇧⌘T` opens a terminal pane on the right,
-  in the selected folder. It shares the tab's four-pane limit and the same
-  split, zoom and close controls as a file pane; `⇧⌘T` again closes it. It is a
+  in the selected folder. It tiles with the same split, zoom and close
+  controls as a file pane, and a pane's grip moves it like any other tile;
+  `⇧⌘T` again closes it. It is a
   real terminal (the MyGo terminal plugin, libghostty-vt) with colors,
   selection and clipboard.
 - **A Git diff page.** `⇧⌘G` shows the working tree against `HEAD`: changed
@@ -140,7 +143,7 @@ Inside `internal/app/`:
 | `term.go` | the terminal pane, via MyGo's terminal plugin |
 | `files.go` | file operations: rename, copy, move, trash and the context menu |
 | `picker.go` | the in-window project folder chooser |
-| `split.go` | the split file chooser and the four-pane limit |
+| `split.go` | the split file chooser |
 | `model.go` | files, tabs, panes, the split tree and the saved layout |
 | `view.go` | the title bar, pane cards and splitters |
 | `tabs.go` | the tab strip and tab menu |

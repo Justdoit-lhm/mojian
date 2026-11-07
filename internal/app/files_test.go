@@ -204,9 +204,12 @@ func TestTerminalPaneAndSharedLimit(t *testing.T) {
 	if got := len(a.tab().panes()); got != 4 {
 		t.Fatalf("panes after fourth: %d", got)
 	}
-	a.splitFocused(false)
-	if !strings.Contains(a.err, "at most 4 panes") {
-		t.Fatalf("the terminal did not share the four-pane limit: %q", a.err)
+	a.splitTerminal(a.tab().Focus, false)
+	if got := len(a.tab().panes()); got != 5 {
+		t.Fatalf("panes after fifth: %d", got)
+	}
+	if a.err != "" {
+		t.Fatalf("splitting past four failed: %q", a.err)
 	}
 }
 

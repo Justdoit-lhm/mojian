@@ -74,10 +74,6 @@ func (a *app) splitTerminal(from *pane, down bool) {
 	if t == nil || from == nil || from.Term == nil || !t.contains(from) {
 		return
 	}
-	if len(t.panes()) >= maxPanes {
-		a.fail(fmt.Errorf("a tab can show at most %d panes", maxPanes))
-		return
-	}
 	tt, err := a.startTerminal()
 	if err != nil {
 		a.fail(err)
@@ -93,10 +89,6 @@ func (a *app) addSplitTerminal(from *pane, tt *termTab, down bool) *pane {
 	if t == nil || from == nil || tt == nil || !t.contains(from) {
 		return nil
 	}
-	if len(t.panes()) >= maxPanes {
-		a.fail(fmt.Errorf("a tab can show at most %d panes", maxPanes))
-		return nil
-	}
 	with := newTermPane(tt)
 	if !t.split(from, with, down) {
 		return nil
@@ -109,7 +101,7 @@ func (a *app) addSplitTerminal(from *pane, tt *termTab, down bool) *pane {
 }
 
 // newTerminalPane starts a shell and puts it in a pane on the right edge
-// of the active tab, as one of the tab's four panes.
+// of the active tab, as one of the tab's panes.
 func (a *app) newTerminalPane() {
 	if runtime.GOOS == "js" {
 		a.fail(errors.New("terminals need the desktop app"))
@@ -122,10 +114,6 @@ func (a *app) newTerminalPane() {
 	t := a.tab()
 	if t == nil {
 		a.fail(errors.New("open a file before starting a terminal"))
-		return
-	}
-	if len(t.panes()) >= maxPanes {
-		a.fail(fmt.Errorf("a tab can show at most %d panes", maxPanes))
 		return
 	}
 	tt, err := a.startTerminal()
@@ -141,10 +129,6 @@ func (a *app) newTerminalPane() {
 func (a *app) addTerminalPane(tt *termTab) *pane {
 	t := a.tab()
 	if t == nil || tt == nil {
-		return nil
-	}
-	if len(t.panes()) >= maxPanes {
-		a.fail(fmt.Errorf("a tab can show at most %d panes", maxPanes))
 		return nil
 	}
 	p := newTermPane(tt)
