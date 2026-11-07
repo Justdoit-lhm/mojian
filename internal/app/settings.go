@@ -414,7 +414,8 @@ func (a *app) settingsKeyboardPage(c *ui.Context, k *colors) {
 		cmds := []*command{
 			cmdOpenProject, cmdNewNote, cmdNewFolder, cmdNewTab, cmdSave,
 			cmdPalette, cmdNotes, cmdTree, cmdTerminal, cmdGit, cmdSSH,
-			cmdSplitRight, cmdSplitDown, cmdZoom, cmdEqualize,
+			cmdOverview, cmdSplitLeft, cmdSplitRight, cmdSplitUp, cmdSplitDown,
+			cmdZoom, cmdEqualize,
 			cmdClosePane, cmdCloseTab, cmdRenameTab, cmdNextTab, cmdPrevTab,
 		}
 		for i, cmd := range cmds {

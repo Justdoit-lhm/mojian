@@ -26,11 +26,16 @@ workspaces hold panes, and every pane edits a file with syntax highlighting.
   per-language icons.
 - **Tabs and split panes.** A tab is a workspace; each pane is an editor.
   The `+` beside the tabs opens an empty workspace, not a copy of the current
-  one. Split right or down and choose the file for the new pane; a split never
-  opens the same file twice. A tab tiles as many panes as you split, horizontally
-  and vertically. Drag a pane's top-left grip onto another pane to swap their
-  places, drag a divider to resize, double-click it for half and half, zoom a
-  pane, or close it.
+  one. Split left, right, up or down and choose the file for the new pane; a
+  split never opens the same file twice. A tab tiles as many panes as you
+  split, without a four-pane limit. Drag a pane's top-left grip onto another
+  pane to swap them, or onto its edge to put the pane above, below, left or
+  right of it. Drag a divider to resize, double-click it for half and half,
+  zoom a pane, or close it.
+  Option+Tab zooms the workspace out into the niri-style pane switcher:
+  Tab, the arrow keys or a click move between panes, Return focuses the chosen
+  one, and Escape closes the switcher.
+  ![The pane overview](docs/overview.png)
 - **Markdown, source or rendered.** A Markdown pane has a Preview button at
   the top right; `⇧⌘V` is not needed, and the setting opens new `.md` files
   rendered when preferred.
@@ -82,7 +87,9 @@ workspaces hold panes, and every pane edits a file with syntax highlighting.
 | `⇧⌘T` | Open or close the terminal pane |
 | `⇧⌘L` | Connect to an SSH host |
 | `⇧⌘G` | Show the Git diff page |
+| `⌥⇥` | Toggle the pane overview |
 | `⇧⌘D` / `⇧⌘E` | Split right / down |
+| `⌥⌘←` / `⌥⌘↑` | Split left / up |
 | `⌘W` / `⇧⌘W` | Close pane / tab |
 | `⇧⌘M` | Zoom the pane |
 | `⌃⌘=` | Equalize panes |

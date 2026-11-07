@@ -12,15 +12,26 @@ import (
 // beginSplit asks which file the new editor should show, rather than
 // opening a second view of the file already focused.
 func (a *app) beginSplit(down bool) {
+	side := splitRight
+	if down {
+		side = splitDown
+	}
+	a.beginSplitSide(side)
+}
+
+// beginSplitSide is beginSplit for a pane inserted on any side.
+func (a *app) beginSplitSide(side splitSide) {
 	t := a.tab()
 	if t == nil || t.Focus == nil {
 		return
 	}
+	a.overview = false
+	a.overviewFocus = false
 	a.git.Open = false
 	a.paletteOpen = false
 	a.projectPicker = false
 	a.splitPick = true
-	a.splitDown = down
+	a.splitDir = side
 	a.splitFrom = t.Focus
 	a.splitTab = t
 	a.splitQuery = ""
@@ -63,7 +74,7 @@ func (a *app) chooseSplit(n *note) {
 		return
 	}
 	with := newPane(n)
-	if !t.split(from, with, a.splitDown) {
+	if !t.splitSide(from, with, a.splitDir) {
 		a.fail(fmt.Errorf("could not split the editor"))
 		return
 	}
@@ -76,12 +87,21 @@ func (a *app) chooseSplit(n *note) {
 // splitWith opens n in a new pane; tests and keyboard callers that have
 // already chosen a file use it.
 func (a *app) splitWith(n *note, down bool) {
+	side := splitRight
+	if down {
+		side = splitDown
+	}
+	a.splitWithSide(n, side)
+}
+
+// splitWithSide opens n on the named side of the focused pane.
+func (a *app) splitWithSide(n *note, side splitSide) {
 	t := a.tab()
 	if t == nil || t.Focus == nil || n == nil {
 		return
 	}
 	with := newPane(n)
-	if !t.split(t.Focus, with, down) {
+	if !t.splitSide(t.Focus, with, side) {
 		return
 	}
 	t.Focus = with
@@ -99,10 +119,14 @@ func (a *app) splitPicker(c *ui.Context, k *colors) {
 	a.splitSel = min(max(a.splitSel, 0), max(len(notes)-1, 0))
 	was := a.splitPick
 	reveal := false
-	title := "Split Right"
-	glyph := "columns-2"
-	if a.splitDown {
+	title, glyph := "Split Right", "columns-2"
+	switch a.splitDir {
+	case splitDown:
 		title, glyph = "Split Down", "rows-2"
+	case splitLeft:
+		title, glyph = "Split Left", "columns-2"
+	case splitUp:
+		title, glyph = "Split Up", "rows-2"
 	}
 	ui.DialogBase(c, &a.splitPick, func(backdrop, panel ui.Element) {
 		backdrop.Background(k.Backdrop).Justify(ui.Start).Padding(78, 0, 0, 0)

@@ -112,6 +112,8 @@ func (a *app) openProject(dir string) {
 	a.tabs = nil
 	a.active = -1
 	a.focusReq = nil
+	a.overview = false
+	a.overviewFocus = false
 	a.treeSel = ""
 	a.treeQuery = ""
 	a.treeFocusSearch = false

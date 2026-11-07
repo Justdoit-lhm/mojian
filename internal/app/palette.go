@@ -35,10 +35,16 @@ var (
 		run: func(a *app) { a.newTab() }}
 	cmdSave = &command{title: "Save", accel: "CmdOrCtrl+S", keys: "⌘S", glyph: "save",
 		run: func(a *app) { a.saveNow() }}
+	cmdSplitLeft = &command{title: "Split Left", accel: "CmdOrCtrl+Alt+Left", keys: "⌥⌘←", glyph: "columns-2",
+		run: func(a *app) { a.splitFocusedSide(splitLeft) }}
 	cmdSplitRight = &command{title: "Split Right", accel: "CmdOrCtrl+Shift+D", keys: "⇧⌘D", glyph: "columns-2",
 		run: func(a *app) { a.splitFocused(false) }}
+	cmdSplitUp = &command{title: "Split Up", accel: "CmdOrCtrl+Alt+Up", keys: "⌥⌘↑", glyph: "rows-2",
+		run: func(a *app) { a.splitFocusedSide(splitUp) }}
 	cmdSplitDown = &command{title: "Split Down", accel: "CmdOrCtrl+Shift+E", keys: "⇧⌘E", glyph: "rows-2",
 		run: func(a *app) { a.splitFocused(true) }}
+	cmdOverview = &command{title: "Toggle Overview", accel: "Alt+Tab", keys: "⌥⇥", glyph: "layout-grid",
+		run: func(a *app) { a.toggleOverview() }}
 	cmdZoom = &command{title: "Zoom Pane", accel: "CmdOrCtrl+Shift+M", keys: "⇧⌘M", glyph: "maximize-2",
 		run: func(a *app) { a.toggleZoom() }}
 	cmdEqualize = &command{title: "Equalize Panes", accel: "CmdOrCtrl+Ctrl+=", keys: "⌃⌘=", glyph: "columns-2",
@@ -73,7 +79,8 @@ var (
 var paletteCommands = []*command{
 	cmdOpenProject, cmdNewNote, cmdNewFolder, cmdNewTab, cmdSave, cmdPalette, cmdNotes, cmdTree, cmdTerminal, cmdGit, cmdSettings, cmdSSH,
 	cmdRenameNode, cmdTrashNode,
-	cmdSplitRight, cmdSplitDown, cmdZoom, cmdEqualize,
+	cmdOverview,
+	cmdSplitLeft, cmdSplitRight, cmdSplitUp, cmdSplitDown, cmdZoom, cmdEqualize,
 	cmdClosePane, cmdCloseTab, cmdRenameTab, cmdNextTab, cmdPrevTab,
 }
 
@@ -276,6 +283,8 @@ func (a *app) shortcuts(c *ui.Context) {
 		{ui.Cmd | ui.Shift, ui.KeyO, func() { a.run(cmdNotes) }},
 		{ui.Cmd | ui.Shift, ui.KeyD, func() { a.run(cmdSplitRight) }},
 		{ui.Cmd | ui.Shift, ui.KeyE, func() { a.run(cmdSplitDown) }},
+		{ui.Cmd | ui.Alt, ui.KeyLeft, func() { a.run(cmdSplitLeft) }},
+		{ui.Cmd | ui.Alt, ui.KeyUp, func() { a.run(cmdSplitUp) }},
 		{ui.Cmd | ui.Shift, ui.KeyM, func() { a.run(cmdZoom) }},
 		{ui.Cmd, ui.KeyW, func() { a.run(cmdClosePane) }},
 		{ui.Cmd | ui.Shift, ui.KeyW, func() { a.run(cmdCloseTab) }},

@@ -7,6 +7,8 @@ import (
 
 // toggleGit shows the working-tree page or returns to the editor.
 func (a *app) toggleGit() {
+	a.overview = false
+	a.overviewFocus = false
 	a.git.Toggle(a)
 	a.invalidate()
 }

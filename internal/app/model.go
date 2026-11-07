@@ -60,7 +60,14 @@ type node struct {
 // startSplitAnim eases a fresh split from the old pane's full size to
 // the proportion the two panes share.
 func (n *node) startSplitAnim(to float32) {
-	n.animFrom, n.animTo = 0.97, to
+	n.startSplitAnimFrom(0.97, to)
+}
+
+// startSplitAnimFrom is startSplitAnim for a split where the pane that
+// was there first is B, as in a pane inserted to the left or above: it
+// starts with B nearly full.
+func (n *node) startSplitAnimFrom(from, to float32) {
+	n.animFrom, n.animTo = from, to
 	n.animAt, n.animating = time.Now(), true
 	n.Ratio = n.animFrom
 }
@@ -187,13 +194,61 @@ func (t *tab) dirty() bool {
 	return false
 }
 
-// split puts with beside p, or below it. It reports whether p is in this
-// tab.
+// splitSide is where a split puts the new pane relative to the pane it
+// splits. The tree can grow in every direction, without a limit.
+type splitSide int
+
+const (
+	splitRight splitSide = iota
+	splitDown
+	splitLeft
+	splitUp
+)
+
+func (s splitSide) vertical() bool { return s == splitDown || s == splitUp }
+func (s splitSide) before() bool   { return s == splitLeft || s == splitUp }
+
+// paneDrop is where a dragged pane is let go over another pane: the
+// middle swaps them, and an edge inserts it on that side.
+type paneDrop int
+
+const (
+	dropNone paneDrop = iota - 1
+	dropCenter
+	dropAbove
+	dropBelow
+	dropLeft
+	dropRight
+)
+
+func (d paneDrop) vertical() bool { return d == dropAbove || d == dropBelow }
+func (d paneDrop) before() bool   { return d == dropAbove || d == dropLeft }
+
+type paneDirection int
+
+const (
+	paneLeft paneDirection = iota
+	paneRight
+	paneUp
+	paneDown
+)
+
+// split puts with beside p, or below it.
 func (t *tab) split(p, with *pane, down bool) bool {
-	if t.Root == nil {
+	side := splitRight
+	if down {
+		side = splitDown
+	}
+	return t.splitSide(p, with, side)
+}
+
+// splitSide puts with to one side of p. It reports whether p is in this
+// tab.
+func (t *tab) splitSide(p, with *pane, side splitSide) bool {
+	if t.Root == nil || p == nil || with == nil || p == with || t.contains(with) {
 		return false
 	}
-	if !t.Root.split(p, with, down) {
+	if !t.Root.splitSide(p, with, side) {
 		return false
 	}
 	t.Focus = with
@@ -230,25 +285,184 @@ func (n *node) swapPanes(a, b *pane) {
 	n.B.swapPanes(a, b)
 }
 
+// movePane moves from into the place a drop edge names around to, or
+// swaps the two on a center drop. The rest of the tree is collapsed as
+// from leaves it, and the new split grows from to's side.
+func (t *tab) movePane(from, to *pane, zone paneDrop) bool {
+	if t == nil || from == nil || to == nil || from == to || t.Root == nil {
+		return false
+	}
+	if !t.contains(from) || !t.contains(to) {
+		return false
+	}
+	if zone == dropNone {
+		return false
+	}
+	if zone == dropCenter {
+		if !t.swapPanes(from, to) {
+			return false
+		}
+		t.Focus = from
+		t.Zoom = nil
+		return true
+	}
+	if t.Root.Pane == from {
+		return false // from is the only pane; to cannot also be here
+	}
+	if !t.Root.remove(from) {
+		return false
+	}
+	if !t.wrapPane(to, from, zone) {
+		return false
+	}
+	t.Focus = from
+	t.Zoom = nil
+	return true
+}
+
+// wrapPane replaces to's leaf with a split holding from on the named
+// side. to must still be in the tree.
+func (t *tab) wrapPane(to, from *pane, zone paneDrop) bool {
+	if t.Root == nil || !t.contains(to) || zone == dropNone || zone == dropCenter {
+		return false
+	}
+	split := &node{
+		Vertical: zone.vertical(),
+		Ratio:    0.5,
+	}
+	toLeaf, fromLeaf := &node{Pane: to}, &node{Pane: from}
+	if zone.before() {
+		split.A, split.B = fromLeaf, toLeaf
+		split.startSplitAnimFrom(0.03, 0.5)
+	} else {
+		split.A, split.B = toLeaf, fromLeaf
+		split.startSplitAnim(0.5)
+	}
+	if t.Root.Pane == to {
+		t.Root = split
+		return true
+	}
+	return t.Root.wrapLeaf(to, split)
+}
+
+// wrapLeaf replaces the leaf showing p with replacement.
+func (n *node) wrapLeaf(p *pane, replacement *node) bool {
+	if n == nil || n.Pane != nil {
+		return false
+	}
+	if n.A != nil && n.A.Pane == p {
+		n.A = replacement
+		return true
+	}
+	if n.B != nil && n.B.Pane == p {
+		n.B = replacement
+		return true
+	}
+	if n.A != nil && n.A.wrapLeaf(p, replacement) {
+		return true
+	}
+	return n.B != nil && n.B.wrapLeaf(p, replacement)
+}
+
+// focusDirection moves the focus to the nearest pane in a direction,
+// climbing out of splits that run the other way. It is how niri's focus
+// commands move around a tiling.
+func (t *tab) focusDirection(dir paneDirection) bool {
+	if t.Root == nil || t.Focus == nil {
+		return false
+	}
+	path := t.Root.pathTo(t.Focus)
+	for i := len(path) - 2; i >= 0; i-- {
+		n := path[i]
+		child := path[i+1]
+		var target *pane
+		switch {
+		case n.Vertical && child == n.B && dir == paneUp:
+			target = lastPane(n.A)
+		case n.Vertical && child == n.A && dir == paneDown:
+			target = firstPane(n.B)
+		case !n.Vertical && child == n.B && dir == paneLeft:
+			target = lastPane(n.A)
+		case !n.Vertical && child == n.A && dir == paneRight:
+			target = firstPane(n.B)
+		}
+		if target != nil && target != t.Focus {
+			t.Focus = target
+			return true
+		}
+	}
+	return false
+}
+
+// pathTo returns the nodes from the root to p, or nil.
+func (n *node) pathTo(p *pane) []*node {
+	if n == nil {
+		return nil
+	}
+	if n.Pane == p {
+		return []*node{n}
+	}
+	if n.A != nil {
+		if path := n.A.pathTo(p); path != nil {
+			return append([]*node{n}, path...)
+		}
+	}
+	if n.B != nil {
+		if path := n.B.pathTo(p); path != nil {
+			return append([]*node{n}, path...)
+		}
+	}
+	return nil
+}
+
+func lastPane(n *node) *pane {
+	if n == nil {
+		return nil
+	}
+	if n.Pane != nil {
+		return n.Pane
+	}
+	if p := lastPane(n.B); p != nil {
+		return p
+	}
+	return lastPane(n.A)
+}
+
 func (n *node) split(p, with *pane, down bool) bool {
+	side := splitRight
+	if down {
+		side = splitDown
+	}
+	return n.splitSide(p, with, side)
+}
+
+func (n *node) splitSide(p, with *pane, side splitSide) bool {
 	if n.Pane != nil {
 		if n.Pane != p {
 			return false
 		}
 		old := n.Pane
-		*n = node{
-			Vertical: down,
-			Ratio:    0.5,
-			A:        &node{Pane: old},
-			B:        &node{Pane: with},
+		left, right := &node{Pane: old}, &node{Pane: with}
+		if side.before() {
+			left, right = right, left
 		}
-		n.startSplitAnim(0.5)
+		*n = node{
+			Vertical: side.vertical(),
+			Ratio:    0.5,
+			A:        left,
+			B:        right,
+		}
+		if side.before() {
+			n.startSplitAnimFrom(0.03, 0.5)
+		} else {
+			n.startSplitAnim(0.5)
+		}
 		return true
 	}
-	if n.A != nil && n.A.split(p, with, down) {
+	if n.A != nil && n.A.splitSide(p, with, side) {
 		return true
 	}
-	return n.B != nil && n.B.split(p, with, down)
+	return n.B != nil && n.B.splitSide(p, with, side)
 }
 
 // closePane removes p. It returns false when the tab is left with no

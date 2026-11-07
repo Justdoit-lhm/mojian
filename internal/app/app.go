@@ -60,10 +60,15 @@ type app struct {
 	tabs   []*tab
 	active int
 
+	// overview is niri's zoomed-out pane switcher: Option+Tab shrinks
+	// the workspace, and Tab, the arrows, a click or Return choose a pane.
+	overview      bool
+	overviewFocus bool
+
 	focusReq *pane
 
 	splitPick  bool
-	splitDown  bool
+	splitDir   splitSide
 	splitFrom  *pane
 	splitTab   *tab
 	splitQuery string
@@ -297,6 +302,8 @@ func (a *app) windowClosed() {
 	}
 	a.win = nil
 	a.focusReq = nil
+	a.overview = false
+	a.overviewFocus = false
 	a.paletteOpen = false
 	a.projectOpen = false
 	a.treeDraft = nil
@@ -737,6 +744,8 @@ func (a *app) focusFirstNote() {
 // copy the current file; picking or creating a file fills it.
 func (a *app) newTab() {
 	a.git.Open = false
+	a.overview = false
+	a.overviewFocus = false
 	t := &tab{ID: nextID("t")}
 	a.tabs = append(a.tabs, t)
 	a.active = len(a.tabs) - 1
@@ -751,6 +760,8 @@ func (a *app) openNoteInTab(n *note) {
 	if n == nil {
 		return
 	}
+	a.overview = false
+	a.overviewFocus = false
 	a.git.Open = false
 	t := newTab(n)
 	if t.Focus != nil {
@@ -772,6 +783,8 @@ func (a *app) openNote(n *note) {
 	if n == nil {
 		return
 	}
+	a.overview = false
+	a.overviewFocus = false
 	a.git.Open = false
 	a.treeDraft = nil
 	a.treeQuery = ""
@@ -929,6 +942,8 @@ func (a *app) closeTab(t *tab) {
 	switch {
 	case len(a.tabs) == 0:
 		a.active = -1
+		a.overview = false
+		a.overviewFocus = false
 	case i < a.active:
 		a.active--
 	case wasActive:
@@ -987,6 +1002,8 @@ func (a *app) toggleZoom() {
 	if t == nil || t.Focus == nil {
 		return
 	}
+	a.overview = false
+	a.overviewFocus = false
 	if t.Zoom == t.Focus {
 		t.Zoom = nil
 	} else {
@@ -1008,6 +1025,8 @@ func (a *app) cycleTab(delta int) {
 		return
 	}
 	a.git.Open = false
+	a.overview = false
+	a.overviewFocus = false
 	a.active = (a.active + delta + len(a.tabs)) % len(a.tabs)
 	a.revealTab = true
 	a.treeDraft = nil
@@ -1026,6 +1045,8 @@ func (a *app) showTab(n int) {
 		return
 	}
 	a.git.Open = false
+	a.overview = false
+	a.overviewFocus = false
 	i := n - 1
 	if n >= 9 {
 		i = len(a.tabs) - 1
@@ -1159,6 +1180,7 @@ func (a *app) menu() *mygo.Menu {
 			item(cmdTerminal),
 			item(cmdGit),
 			item(cmdSSH),
+			item(cmdOverview),
 			item(cmdPalette),
 			mygo.Separator(),
 			item(cmdSettings),
@@ -1175,7 +1197,9 @@ func (a *app) menu() *mygo.Menu {
 			item(cmdRenameTab),
 		)},
 		{Label: "Pane", Submenu: []*mygo.MenuItem{
+			item(cmdSplitLeft),
 			item(cmdSplitRight),
+			item(cmdSplitUp),
 			item(cmdSplitDown),
 			mygo.Separator(),
 			item(cmdZoom),

@@ -28,17 +28,24 @@ func (a *app) view(c *ui.Context) {
 		Draw(func(p *ui.Painter, r ui.Rect) { paintBackground(p, r, k) }).
 		Children(func() {
 			a.titleBar(c, k)
-			ui.Row(c).Grow(1).MinHeight(0).Gap(gap).Padding(0, gap, gap, gap).
-				AlignItems(ui.Stretch).Children(func() {
+			content := ui.Row(c.Key("workspace-content")).Grow(1).MinHeight(0).Gap(gap).
+				Padding(0, gap, gap, gap).AlignItems(ui.Stretch)
+			content.Children(func() {
 				if a.treeOpen {
 					a.sidebar(c, k)
 				}
 				a.workspace(c, k)
 			})
+			// Option+Tab zooms the workspace out while the panes stay
+			// live. The pose is the same element every frame, so the
+			// spring in and out is smooth.
+			content.AnimatePose(ui.Pose{Scale: a.overviewScaleValue()}, ui.Smooth)
 		})
 	if a.err != "" {
 		a.errorBanner(c, k)
 	}
+	a.overviewChrome(c, k)
+	a.overviewKeys(c)
 	a.projectPickerModal(c, k)
 	a.splitPicker(c, k)
 	a.remotePickerModal(c, k)
@@ -155,7 +162,7 @@ func (a *app) tabContent(c *ui.Context, k *colors, t *tab) {
 		a.emptyState(c, k)
 		return
 	}
-	if t.Zoom != nil {
+	if t.Zoom != nil && !a.overview {
 		a.paneCard(c, k, t, t.Zoom).Grow(1)
 		return
 	}
@@ -245,15 +252,27 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 	focused := t.Focus == p
 	card := ui.Column(c.Key(p.ID)).Radius(cardR).Clip().MinWidth(0).MinHeight(0)
 	bg, border, shadow := k.Card, k.CardBorder, k.Shadow
+	borderW := float32(1)
 	if focused {
 		bg, border, shadow = k.CardFocused, k.CardBorderFocused, k.ShadowFocused
 	}
-	card.Background(bg).Border(1, border).
+	if a.overview && focused {
+		// In the zoomed-out switcher the selected pane gets a stronger
+		// edge than the regular focus tint.
+		border, borderW = k.Text, 2
+	}
+	card.Background(bg).Border(borderW, border).
 		Shadow(0, 1, 2, 0, shadow).
 		Shadow(0, 6, 22, -2, shadow)
 	card.Transition(motion.Pane)
 	hovered := card.Hovered()
-	width := card.Bounds().W
+	width, height := card.Bounds().W, card.Bounds().H
+	overZone := dropNone
+	if over, ok := ui.DragOver[*pane](card); ok && over != nil && over != p && t.contains(over) {
+		if x, y, inside := card.PointerPosition(); inside {
+			overZone = dropZoneAt(x, y, width, height)
+		}
+	}
 	card.Children(func() {
 		a.paneHeader(c, k, t, p, focused, hovered, width)
 		body := ui.Box(c).Grow(1).MinHeight(0).Padding(0, 0, 6, 0)
@@ -331,14 +350,36 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 				a.changed()
 			}
 		})
+		if overZone != dropNone {
+			a.dropIndicator(c, k, overZone)
+		}
+		if a.overview {
+			// The editor or terminal would take a press inside its own
+			// body; this transparent surface makes the whole pane a
+			// target in the switcher. The header and its grip stay live
+			// above it.
+			hit := ui.Box(c.Key("overview-hit")).Absolute().Top(headerH).Bottom(0).
+				Left(0).Right(0).Background(ui.Transparent).Cursor(ui.CursorPointer).
+				Role(ui.RoleButton).Label("Focus pane " + paneName(p))
+			if hit.Clicked() {
+				a.later(func() { a.selectOverviewPane(t, p) })
+			}
+		}
 	})
 	if p.dragging {
 		card.Border(2, k.Text)
 	}
 	if from, ok := ui.Drop[*pane](card); ok && from != nil && from != p && t.contains(from) {
-		a.later(func() { a.movePane(t, from, p) })
+		zone := overZone
+		if x, y, inside := card.PointerPosition(); inside {
+			zone = dropZoneAt(x, y, width, height)
+		}
+		if zone == dropNone {
+			zone = dropCenter
+		}
+		a.later(func() { a.movePane(t, from, p, zone) })
 	}
-	if over, ok := ui.DragOver[*pane](card); ok && over != nil && over != p && t.contains(over) {
+	if overZone != dropNone {
 		card.Border(2, k.Text)
 	}
 	if card.Pressed() && t.Focus != p {
@@ -348,20 +389,97 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 		}
 		a.changed()
 	}
+	if card.Pressed() && a.overview {
+		a.later(func() { a.selectOverviewPane(t, p) })
+	}
 	return card
 }
 
-// movePane puts from where to was, and to where from was, so dragging a
-// pane's top-left handle rearranges the tiling.
-func (a *app) movePane(t *tab, from, to *pane) {
-	if t == nil || t != a.tab() || !t.swapPanes(from, to) {
+// movePane rearranges the tiling after a pane is dropped on another:
+// the middle swaps them, an edge inserts the dragged pane there.
+func (a *app) movePane(t *tab, from, to *pane, zone paneDrop) {
+	if t == nil || t != a.tab() || !t.movePane(from, to, zone) {
 		return
 	}
-	t.Focus = from
-	t.Zoom = nil
 	a.focusReq = from
 	a.changed()
 	a.invalidate()
+}
+
+// dropZoneAt divides a pane into a swap target in the middle and insert
+// targets on its edges. Top and bottom are generous: those are the
+// directions a stack grows in.
+func dropZoneAt(x, y, w, h float32) paneDrop {
+	if w <= 0 || h <= 0 {
+		return dropCenter
+	}
+	switch {
+	case y < h*0.32:
+		return dropAbove
+	case y > h*0.68:
+		return dropBelow
+	case x < w*0.22:
+		return dropLeft
+	case x > w*0.78:
+		return dropRight
+	default:
+		return dropCenter
+	}
+}
+
+// dropIndicator draws where the dragged pane would land: a bar on the
+// edge and a small label, so dropping above and below is unmistakable.
+func (a *app) dropIndicator(c *ui.Context, k *colors, zone paneDrop) {
+	if zone == dropNone || zone == dropCenter {
+		return
+	}
+	bar := ui.Box(c.Key("drop-indicator")).Absolute().PassThrough().
+		Background(k.Text).Radius(2)
+	label := ""
+	switch zone {
+	case dropAbove:
+		bar.Top(2).Left(8).Right(8).Height(3)
+		label = "Drop above"
+	case dropBelow:
+		bar.Bottom(2).Left(8).Right(8).Height(3)
+		label = "Drop below"
+	case dropLeft:
+		bar.Top(8).Bottom(8).Left(2).Width(3)
+		label = "Drop left"
+	case dropRight:
+		bar.Top(8).Bottom(8).Right(2).Width(3)
+		label = "Drop right"
+	}
+	hint := ui.Row(c.Key("drop-hint")).Absolute().PassThrough().Justify(ui.Center)
+	switch zone {
+	case dropAbove:
+		hint.Top(10).Left(0).Right(0)
+	case dropBelow:
+		hint.Bottom(10).Left(0).Right(0)
+	case dropLeft:
+		hint.Left(10).Top(0).Bottom(0)
+	case dropRight:
+		hint.Right(10).Top(0).Bottom(0)
+	}
+	hint.Children(func() {
+		ui.Text(c, label).FontSize(10.5).FontWeight(650).TextColor(k.Panel).
+			Padding(3, 8).Radius(6).Background(k.Text)
+	})
+}
+
+func paneName(p *pane) string {
+	switch {
+	case p == nil:
+		return "Pane"
+	case p.Note != nil:
+		return p.Note.Title
+	case p.Asset != nil:
+		return p.Asset.Name
+	case p.Term != nil:
+		return p.Term.Spec.title()
+	default:
+		return "Pane"
+	}
 }
 
 // paneHeader draws a note's icon, title and size, its unsaved dot, and
@@ -395,6 +513,9 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hov
 			a.focusReq = p
 		}
 		a.changed()
+		if a.overview {
+			a.later(func() { a.selectOverviewPane(t, p) })
+		}
 	}
 	h.Children(func() {
 		iconSize := float32(16)

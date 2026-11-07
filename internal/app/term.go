@@ -83,20 +83,39 @@ func (a *app) toggleTerminal() {
 // splitFocused splits the focused pane: a terminal makes another shell,
 // a file asks which file the new editor should show.
 func (a *app) splitFocused(down bool) {
+	side := splitRight
+	if down {
+		side = splitDown
+	}
+	a.splitFocusedSide(side)
+}
+
+// splitFocusedSide splits the focused pane to any side.
+func (a *app) splitFocusedSide(side splitSide) {
 	t := a.tab()
 	if t == nil || t.Focus == nil {
 		return
 	}
+	a.overview = false
+	a.overviewFocus = false
 	if t.Focus.Term != nil {
-		a.splitTerminal(t.Focus, down)
+		a.splitTerminalSide(t.Focus, side)
 		return
 	}
-	a.beginSplit(down)
+	a.beginSplitSide(side)
 }
 
 // splitTerminal starts another shell beside or below the terminal pane
 // that asked for the split.
 func (a *app) splitTerminal(from *pane, down bool) {
+	side := splitRight
+	if down {
+		side = splitDown
+	}
+	a.splitTerminalSide(from, side)
+}
+
+func (a *app) splitTerminalSide(from *pane, side splitSide) {
 	t := a.tab()
 	if t == nil || from == nil || from.Term == nil || !t.contains(from) {
 		return
@@ -106,18 +125,26 @@ func (a *app) splitTerminal(from *pane, down bool) {
 		a.fail(err)
 		return
 	}
-	a.addSplitTerminal(from, tt, down)
+	a.addSplitTerminalSide(from, tt, side)
 }
 
 // addSplitTerminal inserts an already started shell beside or below a
 // terminal pane. Tests use it without starting a process.
 func (a *app) addSplitTerminal(from *pane, tt *termTab, down bool) *pane {
+	side := splitRight
+	if down {
+		side = splitDown
+	}
+	return a.addSplitTerminalSide(from, tt, side)
+}
+
+func (a *app) addSplitTerminalSide(from *pane, tt *termTab, side splitSide) *pane {
 	t := a.tab()
 	if t == nil || from == nil || tt == nil || !t.contains(from) {
 		return nil
 	}
 	with := newTermPane(tt)
-	if !t.split(from, with, down) {
+	if !t.splitSide(from, with, side) {
 		return nil
 	}
 	t.Focus = with
