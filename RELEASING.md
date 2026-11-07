@@ -32,12 +32,21 @@ then publishes the GitHub release with every installer.
 The workflow refuses a tag that does not match `mygo.json`, builds
 `mojian-X.Y.Z-arm64.dmg`, `mojian-X.Y.Z-amd64.dmg`,
 `mojian-X.Y.Z-linux-amd64.tar.gz`, `mojian-X.Y.Z-linux-arm64.tar.gz`,
-`mojian-X.Y.Z-windows-amd64.zip`, `install.sh` and the matching `.deb`
+`mojian-X.Y.Z-windows-amd64.zip`, the NSIS installer, the signed
+`*-darwin-*.tar.gz` and `*-windows-*.tar.gz` update archives,
+`update-<target>.json` manifests, `install.sh` and the matching `.deb`
 packages, creates a draft release with generated notes, uploads every
-installer and `SHA256SUMS`, and publishes the draft only after every upload
-succeeds. If a job fails, fix it, move the tag to
-the new commit and push the tag again; the workflow replaces the draft.
-A published release is not overwritten.
+installer and `SHA256SUMS`, and publishes it as the latest release only
+after every upload succeeds.
+
+Updates are signed with the Ed25519 key pair from `go tool mygo keygen`.
+`mygo.json` holds only the public key; set the private key as the
+`MYGO_UPDATER_PRIVATE_KEY` GitHub Actions secret. Never commit
+`mygo-update.key`; losing it prevents installed apps from updating.
+
+If a job fails, fix it, move the tag to the new commit and push the tag
+again; the workflow replaces the draft. A published release is not
+overwritten.
 
 The app is ad-hoc signed because this repository has no Developer ID
 certificate or notary credentials. A downloaded build may need

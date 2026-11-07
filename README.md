@@ -82,9 +82,10 @@ The Linux app needs GTK 3 and a desktop session.
 
 ### Windows
 
-Extract `mojian-<version>-windows-amd64.zip` and run `Mojian.exe`. Keep
-`ghostty-vt.dll` beside it. The executable is unsigned, so SmartScreen may
-ask you to confirm the first launch.
+Run `mojian-setup-<version>-amd64.exe`, or extract
+`mojian-<version>-windows-amd64.zip` and run `Mojian.exe`. Keep
+`ghostty-vt.dll` beside the executable. The binaries are unsigned, so
+SmartScreen may ask you to confirm the first launch.
 
 ## The editor
 
@@ -145,9 +146,22 @@ untracked work are all included.
 
 `Shift+Cmd+P` / `Ctrl+Shift+P` searches commands, files and tabs with fuzzy
 matching. `Cmd+,` / `Ctrl+,` opens Settings: General, Appearance, Editor,
-Fonts, Terminal, Shell, Notifications, Keyboard, Hosts, Git and Advanced.
-The window follows the system appearance by default; View › Appearance
-overrides it.
+Fonts, Terminal, Shell, Notifications, Keyboard, Hosts, Git, Advanced and
+Updates. The window follows the system appearance by default; View ›
+Appearance overrides it.
+
+### Updates
+
+Settings › Updates checks the latest signed release on GitHub. **Check for
+Updates** reports when the app is current or offers a newer version;
+**Install Update** downloads it and verifies its signature; **Restart to
+Update** applies a staged update and relaunches Mojian. The check never
+blocks the editor.
+
+Self-updates need a writable installation: the macOS app bundle, the
+per-user Linux archive, or a Windows folder you own. A `.deb` installed in
+`/opt` and the Windows machine-wide installer are updated by their package
+manager instead.
 
 ## Keyboard shortcuts
 
@@ -224,7 +238,8 @@ Each release contains:
 
 - macOS: `mojian-<version>-arm64.dmg`, `mojian-<version>-amd64.dmg`
 - Linux: `mojian-<version>-linux-{amd64,arm64}.tar.gz`, matching `.deb` packages, `install.sh`
-- Windows: `mojian-<version>-windows-amd64.zip`
+- Windows: `mojian-<version>-windows-amd64.zip`, `mojian-setup-<version>-amd64.exe`
+- Signed update archives (`*-darwin-*.tar.gz`, `*-linux-*.tar.gz`, `*-windows-*.tar.gz`) and `update-<target>.json` manifests
 - `SHA256SUMS`
 
 ## Design

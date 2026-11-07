@@ -30,18 +30,25 @@ jobs:
       - name: Test
         run: go test ./...
       - name: Build
+        env:
+          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
         run: go tool mygo build -platform darwin/arm64,darwin/amd64
       - name: Check the artifacts
         run: |
           version="$(jq -r .version mygo.json)"
           test -f "build/darwin-arm64/mojian-$version-arm64.dmg"
           test -f "build/darwin-amd64/mojian-$version-amd64.dmg"
+          test -f "build/darwin-arm64/mojian-$version-darwin-arm64.tar.gz"
+          test -f "build/darwin-amd64/mojian-$version-darwin-amd64.tar.gz"
+          test -f "build/darwin-arm64/update-darwin-arm64.json"
+          test -f "build/darwin-amd64/update-darwin-amd64.json"
       - uses: actions/upload-artifact@v4
         with:
           name: macos
           path: |
             build/darwin-arm64/*.dmg
-            build/darwin-amd64/*.dmg
+            build/darwin-*/*-darwin-*.tar.gz
+            build/darwin-*/update-*.json
 
   linux:
     name: Linux
@@ -61,6 +68,8 @@ jobs:
       - name: Test
         run: go test ./...
       - name: Build
+        env:
+          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
         run: go tool mygo build -platform linux/amd64,linux/arm64
       - name: Check the artifacts
         run: |
@@ -69,6 +78,8 @@ jobs:
           test -f "build/linux-amd64/mojian_${version}_amd64.deb"
           test -f "build/linux-arm64/mojian-$version-linux-arm64.tar.gz"
           test -f "build/linux-arm64/mojian_${version}_arm64.deb"
+          test -f "build/linux-amd64/update-linux-amd64.json"
+          test -f "build/linux-arm64/update-linux-arm64.json"
       - uses: actions/upload-artifact@v4
         with:
           name: linux
@@ -76,8 +87,10 @@ jobs:
             build/linux-amd64/*.tar.gz
             build/linux-amd64/*.deb
             build/linux-amd64/install.sh
+            build/linux-amd64/update-*.json
             build/linux-arm64/*.tar.gz
             build/linux-arm64/*.deb
+            build/linux-arm64/update-*.json
 
   windows:
     name: Windows
@@ -98,22 +111,36 @@ jobs:
       - name: Test
         run: go test ./...
       - name: Build
+        env:
+          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
         run: go tool mygo build -platform windows/amd64
       - name: Check the artifacts and zip
         shell: pwsh
         run: |
           $version = (Get-Content mygo.json | ConvertFrom-Json).version
-          foreach ($name in @("Mojian.exe", "ghostty-vt.dll", "icon.png")) {
+          foreach ($name in @("Mojian.exe", "ghostty-vt.dll", "icon.png",
+                             "mojian-$version-windows-amd64.tar.gz",
+                             "update-windows-amd64.json",
+                             "mojian-setup-$version-amd64.exe")) {
             if (-not (Test-Path "build/windows-amd64/$name")) {
               Write-Error "build/windows-amd64/$name is missing"
               exit 1
             }
           }
-          Compress-Archive -Path build/windows-amd64/* -DestinationPath "build/mojian-$version-windows-amd64.zip"
+          $portable = @(
+            "build/windows-amd64/Mojian.exe",
+            "build/windows-amd64/ghostty-vt.dll",
+            "build/windows-amd64/icon.png"
+          )
+          Compress-Archive -Path $portable -DestinationPath "build/mojian-$version-windows-amd64.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: build/*.zip
+          path: |
+            build/*.zip
+            build/windows-amd64/mojian-setup-*.exe
+            build/windows-amd64/*-windows-amd64.tar.gz
+            build/windows-amd64/update-windows-amd64.json
 
   release:
     name: Publish
@@ -142,11 +169,20 @@ jobs:
           version="$(jq -r .version mygo.json)"
           test -f "dist/mojian-$version-arm64.dmg"
           test -f "dist/mojian-$version-amd64.dmg"
+          test -f "dist/mojian-$version-darwin-amd64.tar.gz"
+          test -f "dist/mojian-$version-darwin-arm64.tar.gz"
+          test -f "dist/update-darwin-amd64.json"
+          test -f "dist/update-darwin-arm64.json"
           test -f "dist/mojian-$version-linux-amd64.tar.gz"
           test -f "dist/mojian-$version-linux-arm64.tar.gz"
           test -f "dist/mojian_${version}_amd64.deb"
           test -f "dist/mojian_${version}_arm64.deb"
+          test -f "dist/update-linux-amd64.json"
+          test -f "dist/update-linux-arm64.json"
           test -f "dist/mojian-$version-windows-amd64.zip"
+          test -f "dist/mojian-setup-$version-amd64.exe"
+          test -f "dist/mojian-$version-windows-amd64.tar.gz"
+          test -f "dist/update-windows-amd64.json"
           test -f "dist/install.sh"
           ls -lh dist
       - name: Create the draft release
@@ -168,10 +204,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          (cd dist && sha256sum *.dmg *.tar.gz *.deb *.zip install.sh > SHA256SUMS)
+          (cd dist && sha256sum *.dmg *.tar.gz *.deb *.zip *.exe *.json install.sh > SHA256SUMS)
           gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber \
-            dist/*.dmg dist/*.tar.gz dist/*.deb dist/*.zip dist/install.sh dist/SHA256SUMS
+            dist/*.dmg dist/*.tar.gz dist/*.deb dist/*.zip dist/*.exe dist/*.json dist/install.sh dist/SHA256SUMS
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false
+        run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --latest

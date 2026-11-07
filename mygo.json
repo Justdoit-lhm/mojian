@@ -1,8 +1,16 @@
 {
   "name": "Mojian",
   "identifier": "dev.mojian.app",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "copyright": "Mojian, a quiet text editor built with MyGo",
   "out": "build",
-  "macos": { "minimumSystemVersion": "13.0" }
+  "macos": {
+    "minimumSystemVersion": "13.0"
+  },
+  "updates": {
+    "publicKey": "6/RbtBScDpL9EAoKiUXWKso3/Dz4lZl9TYoC9u3VVsM=",
+    "github": "ox0pine/mojian",
+    "tagPrefix": "v",
+    "deltas": 0
+  }
 }

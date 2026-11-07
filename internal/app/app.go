@@ -82,6 +82,16 @@ type app struct {
 	fileClip []string
 	fileCut  bool
 
+	updateCheckFn    updateCheckFunc
+	updateInstallFn  updateInstallFunc
+	updateRelaunchFn func()
+	updateChecking   bool
+	updateInstalling bool
+	updateReady      bool
+	updateChecked    bool
+	pendingUpdate    *updateRelease
+	updateErr        string
+
 	shellStarter  func() (*termTab, error) // tests replace this
 	sessionClient *session.Client
 

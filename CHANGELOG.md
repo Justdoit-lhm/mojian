@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.2
+
+- Settings › Updates now has **Check for Updates**, **Install Update** and
+  **Restart to Update**. The check reads the latest signed GitHub release;
+  the app verifies the update before installing it, and the restart applies
+  a staged or replaced version.
+- Signed update archives and manifests are built and published with every
+  release. The update signing public key is in `mygo.json`; the private key
+  lives only in the repository's GitHub Actions secret.
+- Windows releases now also include the NSIS installer beside the portable
+  zip and the signed update archive.
+
 ## 0.1.1
 
 - Fix **Open File** on the welcome page: it now focuses the Explorer's

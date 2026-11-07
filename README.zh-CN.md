@@ -67,8 +67,9 @@ Linux 版需要 GTK 3 和桌面会话。
 
 ### Windows
 
-解压 `mojian-<版本>-windows-amd64.zip`，运行 `Mojian.exe`。请让
-`ghostty-vt.dll` 与它保持在同一目录。可执行文件未签名，首次启动时
+运行 `mojian-setup-<版本>-amd64.exe`，或解压
+`mojian-<版本>-windows-amd64.zip` 后运行 `Mojian.exe`。请让
+`ghostty-vt.dll` 与可执行文件保持在同一目录。程序未签名，首次启动时
 SmartScreen 可能要求确认。
 
 ## 编辑器
@@ -99,7 +100,13 @@ Markdown 窗格可在源码与预览之间切换；设置 › 编辑器可以让
 
 `Shift+Cmd+G` / `Ctrl+Shift+G` 打开工作区页面：左侧是相对 `HEAD` 的变更状态，右侧是带行号栏的 diff。暂存、未暂存和未跟踪的改动都会列出。
 
-`Shift+Cmd+P` / `Ctrl+Shift+P` 用模糊匹配搜索命令、文件和标签页。`Cmd+,` / `Ctrl+,` 打开独立设置窗口：通用、外观、编辑器、字体、终端、Shell、通知、快捷键、主机、Git、高级。窗口默认跟随系统外观，也可在「视图 › 外观」中覆盖。
+`Shift+Cmd+P` / `Ctrl+Shift+P` 用模糊匹配搜索命令、文件和标签页。`Cmd+,` / `Ctrl+,` 打开独立设置窗口：通用、外观、编辑器、字体、终端、Shell、通知、快捷键、主机、Git、高级、更新。窗口默认跟随系统外观，也可在「视图 › 外观」中覆盖。
+
+### 更新
+
+设置 › 更新会检查 GitHub 上最新的签名版本。**检查更新**会提示当前已是最新版本，或给出新版本；**安装更新**会下载并校验签名；**重启更新**会应用已暂存的更新并重新启动墨间。检查在后台进行，不会阻塞编辑。
+
+自动更新要求应用所在位置可写：macOS 应用包、Linux 用户目录安装，或你有写权限的 Windows 文件夹。安装在 `/opt` 的 `.deb` 和 Windows 全局安装版由包管理器负责更新。
 
 ## 快捷键
 
@@ -166,7 +173,8 @@ go tool mygo build -platform windows/amd64
 
 - macOS：`mojian-<版本>-arm64.dmg`、`mojian-<版本>-amd64.dmg`
 - Linux：`mojian-<版本>-linux-{amd64,arm64}.tar.gz`、对应的 `.deb` 包、`install.sh`
-- Windows：`mojian-<版本>-windows-amd64.zip`
+- Windows：`mojian-<版本>-windows-amd64.zip`、`mojian-setup-<版本>-amd64.exe`
+- 签名更新包（`*-darwin-*.tar.gz`、`*-linux-*.tar.gz`、`*-windows-*.tar.gz`）与 `update-<target>.json` 清单
 - `SHA256SUMS`
 
 ## 设计

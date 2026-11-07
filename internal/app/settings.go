@@ -25,6 +25,7 @@ const (
 	settingsHosts
 	settingsGit
 	settingsAdvanced
+	settingsUpdates
 )
 
 type settingsCat struct {
@@ -43,6 +44,7 @@ var settingsCats = []settingsCat{
 	{"Hosts", "Servers, SSH hosts and projects", "server"},
 	{"Git", "The working-tree page", "git-branch"},
 	{"Advanced", "Data, server and version", "settings"},
+	{"Updates", "Signed releases and restart", "refresh-cw"},
 }
 
 // settingsWindowView is the whole content of the separate Settings
@@ -157,6 +159,8 @@ func (a *app) settingsBody(c *ui.Context, k *colors) {
 					a.settingsHostsPage(c, k)
 				case settingsGit:
 					a.settingsGitPage(c, k)
+				case settingsUpdates:
+					a.settingsUpdatesPage(c, k)
 				default:
 					a.settingsAdvancedPage(c, k)
 				}
@@ -788,7 +792,7 @@ func (a *app) settingsGitPage(c *ui.Context, k *colors) {
 func (a *app) settingsAboutPage(c *ui.Context, k *colors) {
 	version := mygo.App.Version()
 	if version == "" {
-		version = "0.1.0"
+		version = "dev"
 	}
 	project := "No project"
 	if a.store != nil {
@@ -812,6 +816,40 @@ func (a *app) settingsAboutPage(c *ui.Context, k *colors) {
 		a.aboutRow(c, k, "Settings", a.settingsPath)
 		a.settingDivider(c, k)
 		a.aboutRow(c, k, "Fonts", fmt.Sprintf("%d installed families", len(a.installedFonts())))
+	})
+}
+
+// settingsUpdatesPage offers the signed update check and the restart that
+// applies an update staged by it.
+func (a *app) settingsUpdatesPage(c *ui.Context, k *colors) {
+	a.settingsSection(c, k, "UPDATES", func() {
+		ui.Column(c).Padding(14, 16).Gap(10).Children(func() {
+			ui.Text(c, "Check the latest signed release on GitHub. Updates are verified before they are installed.").
+				FontSize(11.5).TextColor(k.TextFaint)
+			busy := a.updateChecking || a.updateInstalling
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				check := ui.Button(c, "Check for Updates").Disabled(busy || a.updateReady)
+				if check.Clicked() {
+					a.checkForUpdates()
+				}
+				if a.pendingUpdate != nil && !a.updateReady {
+					install := ui.PrimaryButton(c, "Install Update").Disabled(busy)
+					if install.Clicked() {
+						a.installAvailableUpdate()
+					}
+				}
+				restart := ui.PrimaryButton(c, "Restart to Update").Disabled(!a.updateReady)
+				if restart.Clicked() {
+					a.restartForUpdate()
+				}
+			})
+			if msg := a.updateSummary(); msg != "" {
+				ui.Text(c, msg).FontSize(11.5).TextColor(k.TextMuted)
+			}
+			if a.updateErr != "" {
+				ui.Text(c, a.updateErr).FontSize(11.5).TextColor(k.Danger)
+			}
+		})
 	})
 }
 
