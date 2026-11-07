@@ -122,7 +122,9 @@ func (a *app) projectPickerModal(c *ui.Context, k *colors) {
 	}
 	ui.DialogBase(c, &a.projectPicker, func(backdrop, panel ui.Element) {
 		backdrop.Background(k.Backdrop)
-		panel.Fill().Margin(18).Radius(radius).Background(k.Sheet).Border(1, k.PanelBorder).
+		panel.WidthPercent(58).HeightPercent(66).
+			MinWidth(520).MinHeight(360).MaxWidth(680).MaxHeight(480).
+			Radius(radius).Background(k.Sheet).Border(1, k.PanelBorder).
 			Shadow(0, 24, 70, -10, k.ShadowFocused).Clip()
 		ui.Column(c).Fill().Children(func() {
 			a.pickerHeader(c, k)

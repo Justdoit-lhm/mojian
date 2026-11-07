@@ -538,3 +538,23 @@ func TestFileTreeButtonSitsAtTheFarLeft(t *testing.T) {
 		t.Fatalf("File Tree x=%.1f is not left of the server chip x=%.1f", tree.X, server.X)
 	}
 }
+
+func TestMiddleClickClosesTab(t *testing.T) {
+	a := newProjectApp(t)
+	first := a.tab()
+	a.newTab()
+	if len(a.tabs) != 2 {
+		t.Fatalf("tabs: %d", len(a.tabs))
+	}
+	ev := ui.InputEvent{Kind: ui.InputPointerDown, Button: 2}
+	if !a.tabMiddleClick(first, ev) {
+		t.Fatal("middle click was not taken")
+	}
+	a.runPending()
+	if len(a.tabs) != 1 || a.tabs[0] == first {
+		t.Fatalf("middle click did not close the tab: %d tabs", len(a.tabs))
+	}
+	if a.tabMiddleClick(a.tabs[0], ui.InputEvent{Kind: ui.InputPointerDown}) {
+		t.Fatal("a primary click closed the tab")
+	}
+}

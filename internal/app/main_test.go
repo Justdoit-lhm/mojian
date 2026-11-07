@@ -305,11 +305,14 @@ func TestNewTabIsEmpty(t *testing.T) {
 		t.Fatalf("tabs after New Tab: %d, want %d", got, before+1)
 	}
 	tb := a.tab()
+	if name, _ := tb.label(); name != "Welcome" {
+		t.Fatalf("empty tab label: %q, want Welcome", name)
+	}
 	if len(tb.panes()) != 0 || a.currentNote() != nil {
 		t.Fatalf("the new tab copied a scene: %+v", tb)
 	}
-	if !tt.HasText("No file open") {
-		t.Fatalf("empty tab texts: %q", tt.Texts())
+	if !tt.HasText("Welcome to Mojian") {
+		t.Fatalf("welcome tab texts: %q", tt.Texts())
 	}
 }
 

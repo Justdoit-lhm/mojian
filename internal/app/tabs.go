@@ -82,6 +82,16 @@ func (a *app) tabStrip(c *ui.Context, k *colors) {
 
 // tabWidth is the room a tab takes when the title bar has it: its tiles,
 // its label, and its close button.
+// tabMiddleClick closes a tab on a middle-button press, as a browser
+// does.
+func (a *app) tabMiddleClick(t *tab, ev ui.InputEvent) bool {
+	if ev.Kind != ui.InputPointerDown || ev.Button != 2 {
+		return false
+	}
+	a.later(func() { a.closeTab(t) })
+	return true
+}
+
 func tabWidth(c *ui.Context, t *tab) float32 {
 	name, detail := t.label()
 	w, _ := c.MeasureText(0, tabLabel(name, detail, ui.Color{}, ui.Color{})...)
@@ -135,6 +145,7 @@ func (a *app) tabItem(c *ui.Context, k *colors, i int, t *tab, width float32, wh
 		a.active = i
 		a.startRename(t)
 	}
+	e.HandleInput(func(ev ui.InputEvent) bool { return a.tabMiddleClick(t, ev) })
 	e.ContextMenu(func(m *ui.Menu) { a.tabMenu(m, t) })
 	hovered := e.Hovered()
 	if whole {
@@ -152,7 +163,7 @@ func (a *app) tabItem(c *ui.Context, k *colors, i int, t *tab, width float32, wh
 			label.Children(func() {
 				ui.Row(c).Gap(5).AlignItems(ui.Center).Children(func() {
 					ui.Text(c, name).FontSize(13).FontWeight(500).TextColor(nameColor).
-						SingleLine().Shrink(0).MaxWidth(max(width-70, 24))
+						SingleLine().Shrink(0).MaxWidth(max(width-52, 24))
 					if detail != "" {
 						ui.Text(c, detail).FontSize(12).TextColor(detailColor).
 							SingleLine().Shrink(1).MinWidth(0)

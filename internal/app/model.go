@@ -117,7 +117,7 @@ func (t *tab) label() (name, detail string) {
 		name = paneName(t.Focus)
 	}
 	if name == "" {
-		name = "Untitled"
+		name = "Welcome"
 	}
 	if n := len(t.panes()); n > 1 {
 		detail = fmt.Sprintf("· %d", n)
