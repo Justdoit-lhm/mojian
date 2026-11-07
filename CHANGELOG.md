@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.3
 
 - Remote projects now edit the host's files directly, like VS Code Remote:
   the Explorer lists names and kinds, a file is read when it opens, saves
