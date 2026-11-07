@@ -159,9 +159,6 @@ func TestOverviewKeys(t *testing.T) {
 	if !a.overview || !tt.HasText("Panes") {
 		t.Fatalf("overview did not open: %q", tt.Texts())
 	}
-	if !tt.HasText("A quiet place") {
-		t.Fatalf("overview has no preview text: %q", tt.Texts())
-	}
 	tt.Key(0, ui.KeyTab)
 	tt.Frame()
 	if a.tab().Focus == before {

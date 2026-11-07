@@ -168,8 +168,8 @@ func iconButton(c *ui.Context, k *colors, name, label string, size, iconSize flo
 }
 
 // tabContent lays out the panes of a tab, or the one zoomed. The
-// viewport follows the focused pane; Option+Tab animates the same live
-// canvas into a fit-all overview.
+// viewport follows the focused pane; Option+Tab shows the same live
+// canvas scaled to fit, without an animation.
 func (a *app) tabContent(c *ui.Context, k *colors, t *tab, vw, vh float32) {
 	if t.Root == nil {
 		a.emptyState(c, k)
@@ -179,8 +179,7 @@ func (a *app) tabContent(c *ui.Context, k *colors, t *tab, vw, vh float32) {
 		a.paneCard(c, k, t, t.Zoom).Grow(1)
 		return
 	}
-	preview := a.overview || a.overviewLeave
-	if !preview {
+	if !a.overview {
 		t.followFocus(vw, vh)
 	}
 	cw, ch := t.Root.extent(vw, vh)
@@ -190,58 +189,36 @@ func (a *app) tabContent(c *ui.Context, k *colors, t *tab, vw, vh float32) {
 	if ch < vh {
 		ch = vh
 	}
-	scale, x, y := float32(1), -t.panX, -t.panY
-	anim := ui.Animation{Duration: 0}
-	if preview {
-		anim = ui.Animation{Duration: 180 * time.Millisecond, Ease: ui.EaseOut}
-	}
-	if a.overview {
-		scale = min((vw-2*gap)/cw, (vh-2*gap)/ch, 1)
-		scale = max(scale, 0.15)
-		x, y = (vw-cw*scale)/2, (vh-ch*scale)/2
-	}
-	inv := float32(1)
-	if preview {
-		inv = min(1/scale, 2.5)
-	}
 	viewport := ui.Box(c.Key("canvas-viewport:" + t.ID)).Grow(1).
 		MinWidth(0).MinHeight(0).Clip()
 	viewport.Children(func() {
 		canvas := ui.Box(c.Key("canvas:" + t.ID)).Absolute().Left(0).Top(0).
 			Width(cw).Height(ch)
 		canvas.Children(func() {
-			a.canvasNode(c, k, t, t.Root, vw, vh, preview, inv)
+			a.canvasNode(c, k, t, t.Root, vw, vh)
 		})
-		canvas.Left(-t.panX).Top(-t.panY)
-		if preview {
-			// The previews are static text, so caching them makes the
-			// whole transition a single moving bitmap.
-			canvas.Cache()
-		}
-		// Keep an identity pose in the normal view so the first
-		// overview transition has somewhere to animate from.
-		pose := ui.Pose{Scale: 1}
 		if a.overview {
-			pose = ui.Pose{X: x + t.panX, Y: y + t.panY, Scale: scale}
+			scale := min((vw-2*gap)/cw, (vh-2*gap)/ch, 1)
+			scale = max(scale, 0.15)
+			x, y := (vw-cw*scale)/2, (vh-ch*scale)/2
+			canvas.TransformOrigin(0, 0).Scale(scale, scale).Translate(x, y)
+		} else {
+			canvas.Left(-t.panX).Top(-t.panY)
 		}
-		canvas.TransformOrigin(0, 0).AnimatePose(pose, anim)
 	})
 }
 
 // canvasNode lays out a split on the canvas. Its children keep their
 // declared sizes; a shorter sibling leaves empty canvas rather than
 // being stretched.
-func (a *app) canvasNode(c *ui.Context, k *colors, t *tab, n *node, vw, vh float32, preview bool, inv float32) ui.Element {
+func (a *app) canvasNode(c *ui.Context, k *colors, t *tab, n *node, vw, vh float32) ui.Element {
 	if n == nil {
 		return ui.Box(c)
 	}
 	if n.Pane != nil {
 		p := n.Pane
-		w, h := p.width()*vw, p.height()*vh
-		if preview {
-			return a.overviewPaneCard(c, k, t, p, inv).Width(w).Height(h)
-		}
-		return a.paneCard(c, k, t, p).Width(w).Height(h)
+		return a.paneCard(c, k, t, p).
+			Width(p.width() * vw).Height(p.height() * vh)
 	}
 	aw, ah := n.A.extent(vw, vh)
 	bw, bh := n.B.extent(vw, vh)
@@ -259,45 +236,37 @@ func (a *app) canvasNode(c *ui.Context, k *colors, t *tab, n *node, vw, vh float
 		box = ui.Row(c.Key(key)).Width(width).Height(height).AlignItems(ui.Start)
 	}
 	box.Children(func() {
-		a.canvasNode(c, k, t, n.A, vw, vh, preview, inv).Width(aw).Height(ah)
-		if preview {
-			if n.Vertical {
-				ui.Box(c.Key("divider")).Width(width).Height(gap)
-			} else {
-				ui.Box(c.Key("divider")).Width(gap).Height(height)
-			}
+		a.canvasNode(c, k, t, n.A, vw, vh).Width(aw).Height(ah)
+		div := ui.Box(c.Key("divider")).Role(ui.RoleSplitter).Label("Divider")
+		if n.Vertical {
+			div.Height(gap).Width(width).Cursor(ui.CursorResizeRow)
 		} else {
-			div := ui.Box(c.Key("divider")).Role(ui.RoleSplitter).Label("Divider")
-			if n.Vertical {
-				div.Height(gap).Width(width).Cursor(ui.CursorResizeRow)
-			} else {
-				div.Width(gap).Height(height).Cursor(ui.CursorResizeColumn)
-			}
-			if dx, dy, ok := div.Dragged(); ok {
-				d := dx
-				if n.Vertical {
-					d = dy
-				}
-				n.resize(d, vw, vh)
-				a.changed()
-			}
-			if div.DoubleClicked() {
-				n.balance()
-				a.changed()
-			}
-			if div.Hovered() || div.Dragging() || div.Pressed() {
-				div.Draw(func(p *ui.Painter, r ui.Rect) {
-					if n.Vertical {
-						p.Fill(ui.Rect{X: r.X + r.W/2 - 18, Y: r.Y + r.H/2 - 1.5, W: 36, H: 3},
-							k.IconMuted.Alpha(0.6), 1.5)
-					} else {
-						p.Fill(ui.Rect{X: r.X + r.W/2 - 1.5, Y: r.Y + r.H/2 - 18, W: 3, H: 36},
-							k.IconMuted.Alpha(0.6), 1.5)
-					}
-				})
-			}
+			div.Width(gap).Height(height).Cursor(ui.CursorResizeColumn)
 		}
-		a.canvasNode(c, k, t, n.B, vw, vh, preview, inv).Width(bw).Height(bh)
+		if dx, dy, ok := div.Dragged(); ok {
+			d := dx
+			if n.Vertical {
+				d = dy
+			}
+			n.resize(d, vw, vh)
+			a.changed()
+		}
+		if div.DoubleClicked() {
+			n.balance()
+			a.changed()
+		}
+		if div.Hovered() || div.Dragging() || div.Pressed() {
+			div.Draw(func(p *ui.Painter, r ui.Rect) {
+				if n.Vertical {
+					p.Fill(ui.Rect{X: r.X + r.W/2 - 18, Y: r.Y + r.H/2 - 1.5, W: 36, H: 3},
+						k.IconMuted.Alpha(0.6), 1.5)
+				} else {
+					p.Fill(ui.Rect{X: r.X + r.W/2 - 1.5, Y: r.Y + r.H/2 - 18, W: 3, H: 36},
+						k.IconMuted.Alpha(0.6), 1.5)
+				}
+			})
+		}
+		a.canvasNode(c, k, t, n.B, vw, vh).Width(bw).Height(bh)
 	})
 	return box
 }
@@ -310,6 +279,9 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 	borderW := float32(1)
 	if focused {
 		bg, border, shadow = k.CardFocused, k.CardBorderFocused, k.ShadowFocused
+	}
+	if a.overview && focused {
+		border, borderW = k.Text, 2
 	}
 	card.Background(bg).Border(borderW, border).
 		Shadow(0, 1, 2, 0, shadow).
@@ -402,6 +374,14 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 		})
 		if overZone != dropNone {
 			a.dropIndicator(c, k, overZone)
+		}
+		if a.overview {
+			hit := ui.Box(c.Key("overview-hit")).Absolute().Fill().
+				Background(ui.Transparent).Cursor(ui.CursorPointer).
+				Role(ui.RoleButton).Label("Focus pane " + paneName(p))
+			if hit.Clicked() {
+				a.later(func() { a.selectOverviewPane(t, p) })
+			}
 		}
 	})
 	if p.dragging {
