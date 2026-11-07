@@ -1,7 +1,6 @@
 package app
 
 import (
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -132,6 +131,9 @@ func TestLayoutRoundTrip(t *testing.T) {
 	if b.tabs[0].Root.Vertical {
 		t.Error("the layout lost the side by side split")
 	}
+	if got := b.tabs[0].Root.A.Pane.W; got != 0.5 {
+		t.Errorf("the layout lost the canvas width: %v", got)
+	}
 }
 
 func TestNoteSave(t *testing.T) {
@@ -173,6 +175,7 @@ func TestNoteSave(t *testing.T) {
 func TestView(t *testing.T) {
 	a := newProjectApp(t)
 	tt := ui.NewTester(a.view, 1100, 700)
+	tt.Frame()
 	if !tt.HasText("Welcome to Mojian") {
 		t.Fatalf("texts: %q", tt.Texts())
 	}
@@ -240,21 +243,26 @@ func TestNewTabIsEmpty(t *testing.T) {
 	}
 }
 
-func TestSplitAnimatesToHalf(t *testing.T) {
+func TestSplitUsesCanvasSizes(t *testing.T) {
 	a := newProjectApp(t)
+	first := a.tab().Focus
 	a.splitWith(a.store.byRelPath("Reading notes.md"), false)
-	tt := ui.NewTester(a.view, 1100, 700)
-	tt.Frame()
 	root := a.tab().Root
-	if root == nil || !root.animating {
-		t.Fatal("a fresh split is not animating")
+	if root == nil || root.Vertical {
+		t.Fatal("a right split should be side by side")
 	}
-	if root.Ratio <= 0.9 {
-		t.Fatalf("split started at %v, want the old pane nearly full", root.Ratio)
+	if first.W != 0.5 || a.tab().Focus.W != 0.5 {
+		t.Fatalf("right split widths: %v and %v, want half a viewport",
+			first.W, a.tab().Focus.W)
 	}
-	tt.Advance(300 * time.Millisecond)
-	if root.animating || math.Abs(float64(root.Ratio-0.5)) > 0.001 {
-		t.Fatalf("split settled at %v (animating=%v)", root.Ratio, root.animating)
+	if first.H != 1 || a.tab().Focus.H != 1 {
+		t.Fatalf("right split heights: %v and %v, want a full viewport",
+			first.H, a.tab().Focus.H)
+	}
+	focus := a.tab().Focus
+	a.splitWith(a.store.byRelPath("scripts/tasks.py"), true)
+	if a.tab().Focus == focus || a.tab().Focus.H != 1 {
+		t.Fatalf("down split height: %v, want a full viewport", a.tab().Focus.H)
 	}
 }
 

@@ -153,7 +153,7 @@ func TestOverviewKeys(t *testing.T) {
 	before := a.tab().Focus
 	tt.Key(ui.Alt, ui.KeyTab)
 	tt.Frame()
-	if !a.overview || !tt.HasText("Overview") {
+	if !a.overview || !tt.HasText("Panes") {
 		t.Fatalf("overview did not open: %q", tt.Texts())
 	}
 	tt.Key(0, ui.KeyTab)
@@ -226,5 +226,70 @@ func TestMovePaneOutOfNestedSplit(t *testing.T) {
 	}
 	if t0.Root.A.A.Pane != cPane || t0.Root.A.B.Pane != aPane || t0.Root.B.Pane != bPane {
 		t.Fatal("the nested move put the panes in the wrong order")
+	}
+}
+
+func TestTerminalWithoutFileOpensAtProjectRoot(t *testing.T) {
+	a := newProjectApp(t)
+	a.shellStarter = func() (*termTab, error) { return &termTab{}, nil }
+	a.tabs = nil
+	a.active = -1
+	a.treeSel = "scripts/tasks.py"
+	if got := a.terminalDir(); got != a.store.dir {
+		t.Fatalf("terminal directory %q, want project root %q", got, a.store.dir)
+	}
+	a.toggleTerminal()
+	if len(a.tabs) != 1 {
+		t.Fatalf("tabs: %d, want a terminal tab", len(a.tabs))
+	}
+	t0 := a.tab()
+	if t0 == nil || t0.Root == nil || t0.Root.Pane == nil || t0.Root.Pane.Term == nil {
+		t.Fatalf("no terminal pane: %+v", t0)
+	}
+	if t0.Focus != t0.Root.Pane {
+		t.Fatal("the terminal pane is not focused")
+	}
+	if a.currentNote() != nil {
+		t.Fatal("opening a terminal should not open a file")
+	}
+}
+
+func TestCanvasExtendsPastTheViewport(t *testing.T) {
+	a := newProjectApp(t)
+	a.splitWith(a.store.byRelPath("Reading notes.md"), false)
+	t0 := a.tab()
+	cw, ch := t0.Root.extent(840, 600)
+	if cw <= 840 {
+		t.Fatalf("canvas width %v did not grow past the viewport", cw)
+	}
+	if ch > 600+1 {
+		t.Fatalf("a right split changed the height: %v", ch)
+	}
+	a.splitWith(a.store.byRelPath("scripts/tasks.py"), true)
+	cw, ch = t0.Root.extent(840, 600)
+	if ch <= 600 {
+		t.Fatalf("canvas height %v did not grow after a down split", ch)
+	}
+	if cw <= 840 {
+		t.Fatalf("canvas lost its width after a down split: %v", cw)
+	}
+	tt := ui.NewTester(a.view, 1100, 700)
+	tt.Frame()
+	tt.Frame()
+	if t0.scroll.MaxY <= 0 {
+		t.Fatalf("the canvas has no vertical scroll to the focused pane: %+v", t0.scroll)
+	}
+}
+
+func TestCanvasDividerResize(t *testing.T) {
+	a := newProjectApp(t)
+	a.splitWith(a.store.byRelPath("Reading notes.md"), false)
+	t0 := a.tab()
+	left := t0.Root.A.Pane
+	right := t0.Root.B.Pane
+	before := left.W
+	t0.Root.resize(40, 840, 600)
+	if left.W <= before || right.W >= 0.5 {
+		t.Fatalf("resize moved widths: left %v right %v", left.W, right.W)
 	}
 }

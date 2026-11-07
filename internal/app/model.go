@@ -6,7 +6,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
@@ -20,6 +19,12 @@ type pane struct {
 	Asset *assetFile
 	Term  *termTab
 	state *editor.State
+
+	// W and H are the pane's place on the canvas, as fractions of the
+	// viewport. A split to the right gives the new pane half a viewport;
+	// a split down gives it a full viewport height. Unlike the old tree
+	// ratios, these do not shrink the panes already there.
+	W, H float32
 
 	// Preview shows Markdown rendered rather than as source; assetView
 	// holds what a picture or a PDF viewer has loaded.
@@ -49,37 +54,17 @@ type node struct {
 	Ratio    float32
 	A, B     *node
 	Pane     *pane
-
-	// A split starts with the old pane almost filling the node, then
-	// moves Ratio to animTo over the next frames.
-	animFrom, animTo float32
-	animAt           time.Time
-	animating        bool
-}
-
-// startSplitAnim eases a fresh split from the old pane's full size to
-// the proportion the two panes share.
-func (n *node) startSplitAnim(to float32) {
-	n.startSplitAnimFrom(0.97, to)
-}
-
-// startSplitAnimFrom is startSplitAnim for a split where the pane that
-// was there first is B, as in a pane inserted to the left or above: it
-// starts with B nearly full.
-func (n *node) startSplitAnimFrom(from, to float32) {
-	n.animFrom, n.animTo = from, to
-	n.animAt, n.animating = time.Now(), true
-	n.Ratio = n.animFrom
 }
 
 // tab is a workspace: a tree of panes, the one with the focus, and the
 // one zoomed, if any.
 type tab struct {
-	ID    string
-	Name  string // a name of its own, else the focused note's title
-	Root  *node
-	Focus *pane
-	Zoom  *pane
+	ID     string
+	Name   string // a name of its own, else the focused note's title
+	Root   *node
+	Focus  *pane
+	Zoom   *pane
+	scroll ui.ScrollState // where this tab's canvas is scrolled
 }
 
 var idSeq int
@@ -90,11 +75,11 @@ func nextID(prefix string) string {
 }
 
 func newPane(n *note) *pane {
-	return &pane{ID: nextID("p"), Note: n}
+	return &pane{ID: nextID("p"), Note: n, W: 1, H: 1}
 }
 
 func newTermPane(t *termTab) *pane {
-	return &pane{ID: nextID("p"), Term: t}
+	return &pane{ID: nextID("p"), Term: t, W: 1, H: 1}
 }
 
 func newTermPaneSpec(spec termSpec, sid string) *termTab {
@@ -102,7 +87,39 @@ func newTermPaneSpec(spec termSpec, sid string) *termTab {
 }
 
 func newAssetPane(f *assetFile) *pane {
-	return &pane{ID: nextID("p"), Asset: f, assetView: &assetView{}}
+	return &pane{ID: nextID("p"), Asset: f, assetView: &assetView{}, W: 1, H: 1}
+}
+
+func (p *pane) width() float32 {
+	if p == nil || p.W <= 0 {
+		return 1
+	}
+	return p.W
+}
+
+func (p *pane) height() float32 {
+	if p == nil || p.H <= 0 {
+		return 1
+	}
+	return p.H
+}
+
+// extent is the canvas size of a tree, in DIPs for a viewport of vw and
+// vh. Splits keep their gap, and siblings larger than another leave the
+// shorter one at its own size.
+func (n *node) extent(vw, vh float32) (w, h float32) {
+	if n == nil {
+		return 0, 0
+	}
+	if n.Pane != nil {
+		return n.Pane.width() * vw, n.Pane.height() * vh
+	}
+	aw, ah := n.A.extent(vw, vh)
+	bw, bh := n.B.extent(vw, vh)
+	if n.Vertical {
+		return max(aw, bw), ah + gap + bh
+	}
+	return aw + gap + bw, max(ah, bh)
 }
 
 func newTab(n *note) *tab {
@@ -114,6 +131,12 @@ func newTab(n *note) *tab {
 func (t *tab) panes() []*pane {
 	var out []*pane
 	t.Root.walk(func(p *pane) { out = append(out, p) })
+	return out
+}
+
+func (n *node) panes() []*pane {
+	var out []*pane
+	n.walk(func(p *pane) { out = append(out, p) })
 	return out
 }
 
@@ -251,6 +274,19 @@ func (t *tab) splitSide(p, with *pane, side splitSide) bool {
 	if !t.Root.splitSide(p, with, side) {
 		return false
 	}
+	// New columns are half a viewport wide, and new rows are a full
+	// viewport high. The canvas grows around them instead of squeezing
+	// the panes that were already there.
+	const columnWidth = 0.5
+	switch side {
+	case splitRight, splitLeft:
+		if p.width() > columnWidth {
+			p.W = columnWidth
+		}
+		with.W, with.H = columnWidth, p.height()
+	case splitDown, splitUp:
+		with.W, with.H = p.width(), 1
+	}
 	t.Focus = with
 	t.Zoom = nil
 	return true
@@ -333,10 +369,8 @@ func (t *tab) wrapPane(to, from *pane, zone paneDrop) bool {
 	toLeaf, fromLeaf := &node{Pane: to}, &node{Pane: from}
 	if zone.before() {
 		split.A, split.B = fromLeaf, toLeaf
-		split.startSplitAnimFrom(0.03, 0.5)
 	} else {
 		split.A, split.B = toLeaf, fromLeaf
-		split.startSplitAnim(0.5)
 	}
 	if t.Root.Pane == to {
 		t.Root = split
@@ -452,11 +486,6 @@ func (n *node) splitSide(p, with *pane, side splitSide) bool {
 			A:        left,
 			B:        right,
 		}
-		if side.before() {
-			n.startSplitAnimFrom(0.03, 0.5)
-		} else {
-			n.startSplitAnim(0.5)
-		}
 		return true
 	}
 	if n.A != nil && n.A.splitSide(p, with, side) {
@@ -526,18 +555,119 @@ func firstPane(n *node) *pane {
 	return firstPane(n.B)
 }
 
-// equalize makes every split of the tab half and half.
+// equalize balances every split of the tab around its divider.
 func (t *tab) equalize() {
-	var walk func(*node)
-	walk = func(n *node) {
-		if n == nil || n.Pane != nil {
+	balanceAll(t.Root)
+}
+
+func balanceAll(n *node) {
+	if n == nil || n.Pane != nil {
+		return
+	}
+	n.balance()
+	balanceAll(n.A)
+	balanceAll(n.B)
+}
+
+// balance makes a split's two sides the same extent along its axis.
+func (n *node) balance() {
+	if n == nil || n.Pane != nil {
+		return
+	}
+	aw, ah := n.A.extent(1, 1)
+	bw, bh := n.B.extent(1, 1)
+	if n.Vertical {
+		total := ah + bh
+		if total <= 0 {
 			return
 		}
-		n.Ratio = 0.5
-		walk(n.A)
-		walk(n.B)
+		target := total / 2
+		scaleHeights(n.A, safeScale(target, ah))
+		scaleHeights(n.B, safeScale(target, bh))
+		return
 	}
-	walk(t.Root)
+	total := aw + bw
+	if total <= 0 {
+		return
+	}
+	target := total / 2
+	scaleWidths(n.A, safeScale(target, aw))
+	scaleWidths(n.B, safeScale(target, bw))
+}
+
+func safeScale(target, have float32) float32 {
+	if have <= 0 {
+		return 1
+	}
+	return target / have
+}
+
+func scaleWidths(n *node, factor float32) {
+	if n == nil || factor <= 0 {
+		return
+	}
+	if n.Pane != nil {
+		n.Pane.W = max(0.12, n.Pane.W*factor)
+		return
+	}
+	scaleWidths(n.A, factor)
+	scaleWidths(n.B, factor)
+}
+
+func scaleHeights(n *node, factor float32) {
+	if n == nil || factor <= 0 {
+		return
+	}
+	if n.Pane != nil {
+		n.Pane.H = max(0.12, n.Pane.H*factor)
+		return
+	}
+	scaleHeights(n.A, factor)
+	scaleHeights(n.B, factor)
+}
+
+// resize moves a split's divider by delta DIPs along its axis.
+func (n *node) resize(delta, vw, vh float32) {
+	if n == nil || n.Pane != nil || n.A == nil || n.B == nil {
+		return
+	}
+	if n.Vertical {
+		if vh <= 0 {
+			return
+		}
+		delta /= vh
+		ap, bp := n.A.panes(), n.B.panes()
+		shiftHeights(ap, delta)
+		shiftHeights(bp, -delta)
+		return
+	}
+	if vw <= 0 {
+		return
+	}
+	delta /= vw
+	ap, bp := n.A.panes(), n.B.panes()
+	shiftWidths(ap, delta)
+	shiftWidths(bp, -delta)
+}
+
+func shiftWidths(ps []*pane, delta float32) {
+	if len(ps) == 0 {
+		return
+	}
+	d := delta / float32(len(ps))
+	for _, p := range ps {
+		p.W = min(max(p.W+d, 0.12), 4)
+	}
+}
+
+func shiftHeights(ps []*pane, delta float32) {
+	if len(ps) == 0 {
+		return
+	}
+	d := delta / float32(len(ps))
+	for _, p := range ps {
+		p.H = min(max(p.H+d, 0.12), 4)
+	}
 }
 
 // layoutFile is what the app keeps of its tabs between launches.
@@ -566,6 +696,8 @@ type layoutPane struct {
 	Note     string          `json:"note,omitempty"`
 	Asset    string          `json:"asset,omitempty"`
 	Preview  bool            `json:"preview,omitempty"`
+	W        float32         `json:"w,omitempty"`
+	H        float32         `json:"h,omitempty"`
 	Terminal *layoutTerminal `json:"terminal,omitempty"`
 }
 
@@ -590,7 +722,7 @@ func layoutNodeOf(n *node) *layoutNode {
 		return nil
 	}
 	if n.Pane != nil {
-		lp := &layoutPane{ID: n.Pane.ID, Preview: n.Pane.Preview}
+		lp := &layoutPane{ID: n.Pane.ID, Preview: n.Pane.Preview, W: n.Pane.W, H: n.Pane.H}
 		switch {
 		case n.Pane.Term != nil:
 			lp.Terminal = &layoutTerminal{SID: n.Pane.Term.SID, Host: n.Pane.Term.Spec.Host}
@@ -640,6 +772,7 @@ func (a *app) restoreLayout() bool {
 		if t.Root == nil {
 			continue
 		}
+		t.assignLegacySizes()
 		if p := byID[lt.Focus]; p != nil && t.contains(p) {
 			t.Focus = p
 		} else {
@@ -662,7 +795,7 @@ func (a *app) restoreNode(ln *layoutNode, byID map[string]*pane) *node {
 		return nil
 	}
 	if ln.Pane != nil {
-		p := &pane{ID: nextID("p"), Preview: ln.Pane.Preview}
+		p := &pane{ID: nextID("p"), Preview: ln.Pane.Preview, W: ln.Pane.W, H: ln.Pane.H}
 		switch {
 		case ln.Pane.Terminal != nil:
 			p.Term = newTermPaneSpec(termSpec{Host: ln.Pane.Terminal.Host}, ln.Pane.Terminal.SID)
@@ -701,6 +834,51 @@ func (a *app) restoreNode(ln *layoutNode, byID map[string]*pane) *node {
 		ratio = 0.5
 	}
 	return &node{Vertical: ln.Vertical, Ratio: ratio, A: left, B: right}
+}
+
+// assignLegacySizes gives panes from layouts saved before the canvas
+// their old proportions: one viewport wide and tall at the root, split
+// by the saved tree ratios.
+func (t *tab) assignLegacySizes() {
+	if t.Root == nil {
+		return
+	}
+	var walk func(*node, float32, float32) bool
+	walk = func(n *node, w, h float32) bool {
+		if n == nil {
+			return false
+		}
+		if n.Pane != nil {
+			if n.Pane.W <= 0 || n.Pane.H <= 0 {
+				if n.Pane.W <= 0 {
+					n.Pane.W = w
+				}
+				if n.Pane.H <= 0 {
+					n.Pane.H = h
+				}
+				return true
+			}
+			return false
+		}
+		ratio := n.Ratio
+		if ratio <= 0 || ratio >= 1 {
+			ratio = 0.5
+		}
+		var migrated bool
+		if n.Vertical {
+			migrated = walk(n.A, w, h*ratio)
+			if walk(n.B, w, h*(1-ratio)) {
+				migrated = true
+			}
+		} else {
+			migrated = walk(n.A, w*ratio, h)
+			if walk(n.B, w*(1-ratio), h) {
+				migrated = true
+			}
+		}
+		return migrated
+	}
+	walk(t.Root, 1, 1)
 }
 
 func (t *tab) contains(p *pane) bool {

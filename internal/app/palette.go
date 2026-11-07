@@ -43,7 +43,7 @@ var (
 		run: func(a *app) { a.splitFocusedSide(splitUp) }}
 	cmdSplitDown = &command{title: "Split Down", accel: "CmdOrCtrl+Shift+E", keys: "⇧⌘E", glyph: "rows-2",
 		run: func(a *app) { a.splitFocused(true) }}
-	cmdOverview = &command{title: "Toggle Overview", accel: "Alt+Tab", keys: "⌥⇥", glyph: "layout-grid",
+	cmdOverview = &command{title: "Toggle Overview", keys: "⌥⇥", glyph: "layout-grid",
 		run: func(a *app) { a.toggleOverview() }}
 	cmdZoom = &command{title: "Zoom Pane", accel: "CmdOrCtrl+Shift+M", keys: "⇧⌘M", glyph: "maximize-2",
 		run: func(a *app) { a.toggleZoom() }}

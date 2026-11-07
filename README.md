@@ -27,14 +27,16 @@ workspaces hold panes, and every pane edits a file with syntax highlighting.
 - **Tabs and split panes.** A tab is a workspace; each pane is an editor.
   The `+` beside the tabs opens an empty workspace, not a copy of the current
   one. Split left, right, up or down and choose the file for the new pane; a
-  split never opens the same file twice. A tab tiles as many panes as you
-  split, without a four-pane limit. Drag a pane's top-left grip onto another
-  pane to swap them, or onto its edge to put the pane above, below, left or
-  right of it. Drag a divider to resize, double-click it for half and half,
-  zoom a pane, or close it.
-  Option+Tab zooms the workspace out into the niri-style pane switcher:
-  Tab, the arrow keys or a click move between panes, Return focuses the chosen
-  one, and Escape closes the switcher.
+  split never opens the same file twice. A tab holds as many panes as you
+  split, without a four-pane limit. A right split gives the new pane a
+  half-viewport column; a down or up split gives it a full viewport height.
+  The canvas grows around the panes and scrolls rather than squeezing them
+  into one window. Drag a pane's top-left grip onto another pane to swap
+  them, or onto its edge to put the pane above, below, left or right of it.
+  Drag a divider to resize, double-click it for a balanced split, zoom a
+  pane, or close it.
+  Option+Tab opens a fast pane overview: Tab, the arrow keys or a click
+  choose a pane, Return focuses it, and Escape closes the overview.
   ![The pane overview](docs/overview.png)
 - **Markdown, source or rendered.** A Markdown pane has a Preview button at
   the top right; `⇧⌘V` is not needed, and the setting opens new `.md` files
@@ -59,11 +61,10 @@ workspaces hold panes, and every pane edits a file with syntax highlighting.
   reconnects the host and restores the project, layout and sessions.
   The host model follows [Kero](https://kero.sh).
 - **A terminal inside the window.** `⇧⌘T` opens a terminal pane on the right,
-  in the selected folder. It tiles with the same split, zoom and close
-  controls as a file pane, and a pane's grip moves it like any other tile;
-  `⇧⌘T` again closes it. It is a
-  real terminal (the MyGo terminal plugin, libghostty-vt) with colors,
-  selection and clipboard.
+  even when no file is open, always in the project root. It tiles with the
+  same split, zoom and close controls as a file pane, and a pane's grip moves
+  it like any other tile; `⇧⌘T` again closes it. It is a real terminal (the
+  MyGo terminal plugin, libghostty-vt) with colors, selection and clipboard.
 - **A Git diff page.** `⇧⌘G` shows the working tree against `HEAD`: changed
   files on the left, and a line-numbered diff with tinted additions and
   deletions on the right. The header shows the branch, file count, status,
@@ -141,7 +142,7 @@ The pieces that stand on their own are packages of their own.
 | `cmd/mojian-server/` | the per-user server uploaded to SSH hosts |
 | `internal/remotebin/` | the embedded Linux server and libghostty-vt builds |
 
-| `internal/app/` | the window: shell, tabs, panes, Explorer, pickers, settings and the file operations |
+| `internal/app/` | the window: shell, tabs, the scrollable pane canvas, Explorer, pickers, settings and the file operations |
 | `internal/git/` | the working-tree page: status, diffs, parsing and its view |
 | `internal/theme/` | light and dark palettes, the window gradient and fonts |
 | `internal/icons/` | Lucide action icons and Material Icon Theme file icons |
@@ -169,7 +170,7 @@ Inside `internal/app/`:
 | `picker.go` | the in-window project folder chooser |
 | `split.go` | the split file chooser |
 | `model.go` | files, tabs, panes, the split tree and the saved layout |
-| `view.go` | the title bar, pane cards and splitters |
+| `view.go` | the title bar, the scrollable pane canvas and its splitters |
 | `tabs.go` | the tab strip and tab menu |
 | `palette.go` | the command palette |
 | `settings.go` | the Kero-inspired settings window |

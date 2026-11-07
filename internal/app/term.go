@@ -40,18 +40,12 @@ func (s termSpec) title() string {
 	return "Terminal"
 }
 
-// terminalDir is the folder a new shell starts in: the selected folder,
-// the selected file's folder, or the project root.
+// terminalDir is the project root. Terminals are about the repository,
+// not the file or folder selected in the Explorer, and one can be opened
+// before any file is.
 func (a *app) terminalDir() string {
 	if a.store == nil || a.store.memory {
 		return ""
-	}
-	rel := a.selectedDir()
-	if rel == "" {
-		return a.store.dir
-	}
-	if abs, err := a.store.absRel(rel); err == nil {
-		return abs
 	}
 	return a.store.dir
 }
@@ -61,9 +55,8 @@ func (a *app) toggleTerminal() {
 		a.fail(errors.New("terminals need the desktop app"))
 		return
 	}
-	t := a.tab()
+	t := a.terminalTab()
 	if t == nil {
-		a.fail(errors.New("open a file before starting a terminal"))
 		return
 	}
 	if t.Focus != nil && t.Focus.Term != nil {
@@ -165,9 +158,8 @@ func (a *app) newTerminalPane() {
 		a.fail(errors.New("terminals need a project on disk"))
 		return
 	}
-	t := a.tab()
+	t := a.terminalTab()
 	if t == nil {
-		a.fail(errors.New("open a file before starting a terminal"))
 		return
 	}
 	tt, err := a.startTerminal()
@@ -178,6 +170,21 @@ func (a *app) newTerminalPane() {
 	a.addTerminalPane(tt)
 }
 
+// terminalTab returns the active tab, opening an empty one when no file
+// is open yet. A terminal does not need a file to sit beside.
+func (a *app) terminalTab() *tab {
+	if t := a.tab(); t != nil {
+		return t
+	}
+	a.git.Open = false
+	t := &tab{ID: nextID("t")}
+	a.tabs = append(a.tabs, t)
+	a.active = len(a.tabs) - 1
+	a.revealTab = true
+	a.treeDraft = nil
+	return t
+}
+
 // addTerminalPane wraps the active tab so the shell sits at its right
 // edge, beside every editor.
 func (a *app) addTerminalPane(tt *termTab) *pane {
@@ -186,16 +193,17 @@ func (a *app) addTerminalPane(tt *termTab) *pane {
 		return nil
 	}
 	p := newTermPane(tt)
+	p.W = 0.5
 	if t.Root == nil {
+		p.W = 1
 		t.Root = &node{Pane: p}
 	} else {
 		t.Root = &node{
 			Vertical: false,
-			Ratio:    0.66,
+			Ratio:    0.5,
 			A:        t.Root,
 			B:        &node{Pane: p},
 		}
-		t.Root.startSplitAnim(0.66)
 	}
 	t.Zoom = nil
 	t.Focus = p

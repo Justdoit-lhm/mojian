@@ -36,10 +36,6 @@ func (a *app) view(c *ui.Context) {
 				}
 				a.workspace(c, k)
 			})
-			// Option+Tab zooms the workspace out while the panes stay
-			// live. The pose is the same element every frame, so the
-			// spring in and out is smooth.
-			content.AnimatePose(ui.Pose{Scale: a.overviewScaleValue()}, ui.Smooth)
 		})
 	if a.err != "" {
 		a.errorBanner(c, k)
@@ -61,18 +57,31 @@ func (a *app) view(c *ui.Context) {
 // and the new one in, so a switch never teleports.
 func (a *app) workspace(c *ui.Context, k *colors) {
 	key := "workspace:empty"
-	build := func() { a.emptyState(c, k) }
+	var t *tab
 	switch {
 	case a.git.Open:
 		key = "workspace:git"
-		build = func() { a.gitPage(c, k) }
 	case a.tab() != nil:
-		t := a.tab()
+		t = a.tab()
 		key = "workspace:tab:" + t.ID
-		build = func() { a.tabContent(c, k, t) }
 	}
-	ui.Box(c.Key(key)).Grow(1).MinWidth(0).MinHeight(0).Clip().
-		Transition(motion.Page).Children(build)
+	box := ui.Box(c.Key(key)).Grow(1).MinWidth(0).MinHeight(0).Clip().
+		Transition(motion.Page)
+	vw, vh := box.Bounds().W, box.Bounds().H
+	if vw <= 0 {
+		vw = 900
+	}
+	if vh <= 0 {
+		vh = 600
+	}
+	switch {
+	case a.git.Open:
+		box.Children(func() { a.gitPage(c, k) })
+	case t != nil:
+		box.Children(func() { a.tabContent(c, k, t, vw, vh) })
+	default:
+		box.Children(func() { a.emptyState(c, k) })
+	}
 }
 
 // titleBar draws the room under the window's controls: the vault, the
@@ -156,79 +165,89 @@ func iconButton(c *ui.Context, k *colors, name, label string, size, iconSize flo
 	return b
 }
 
-// tabContent lays out the panes of a tab, or the one zoomed.
-func (a *app) tabContent(c *ui.Context, k *colors, t *tab) {
+// tabContent lays out the panes of a tab, or the one zoomed. Panes keep
+// their own canvas sizes; the canvas grows and scrolls instead of
+// squeezing every pane into the viewport.
+func (a *app) tabContent(c *ui.Context, k *colors, t *tab, vw, vh float32) {
 	if t.Root == nil {
 		a.emptyState(c, k)
 		return
 	}
-	if t.Zoom != nil && !a.overview {
+	if t.Zoom != nil {
 		a.paneCard(c, k, t, t.Zoom).Grow(1)
 		return
 	}
-	a.node(c, k, t, t.Root).Grow(1)
+	cw, ch := t.Root.extent(vw, vh)
+	if cw < vw {
+		cw = vw
+	}
+	if ch < vh {
+		ch = vh
+	}
+	ui.ScrollBoth(c.Key("canvas-scroll:" + t.ID)).Grow(1).
+		TrackScroll(&t.scroll).Children(func() {
+		ui.Box(c.Key("canvas:" + t.ID)).Width(cw).Height(ch).Children(func() {
+			a.canvasNode(c, k, t, t.Root, vw, vh)
+		})
+	})
 }
 
-// node lays out a node of the tree of splits.
-func (a *app) node(c *ui.Context, k *colors, t *tab, n *node) ui.Element {
+// canvasNode lays out a split on the infinite canvas. Its children keep
+// their declared sizes; a shorter sibling leaves empty canvas rather
+// than being stretched.
+func (a *app) canvasNode(c *ui.Context, k *colors, t *tab, n *node, vw, vh float32) ui.Element {
 	if n == nil {
 		return ui.Box(c)
 	}
 	if n.Pane != nil {
-		return a.paneCard(c, k, t, n.Pane)
+		p := n.Pane
+		reveal := a.focusReq == p
+		card := a.paneCard(c, k, t, p).Width(p.width() * vw).Height(p.height() * vh)
+		if reveal {
+			card.ScrollIntoView()
+			// Panes without a keyboard control consume no focus request;
+			// clear it so the canvas does not keep scrolling back.
+			if a.focusReq == p {
+				if !(p.Note != nil && !p.Preview) && !(p.Term != nil && p.Term.Term != nil) {
+					a.focusReq = nil
+				}
+			}
+		}
+		return card
 	}
+	aw, ah := n.A.extent(vw, vh)
+	bw, bh := n.B.extent(vw, vh)
 	key := "split-"
 	if p := firstPane(n); p != nil {
 		key += p.ID
 	}
 	var box ui.Element
+	var width, height float32
 	if n.Vertical {
-		box = ui.Column(c.Key(key))
+		width, height = max(aw, bw), ah+gap+bh
+		box = ui.Column(c.Key(key)).Width(width).Height(height).AlignItems(ui.Start)
 	} else {
-		box = ui.Row(c.Key(key))
+		width, height = aw+gap+bw, max(ah, bh)
+		box = ui.Row(c.Key(key)).Width(width).Height(height).AlignItems(ui.Start)
 	}
-	box.MinWidth(0).MinHeight(0).AlignItems(ui.Stretch)
-	bounds := box.Bounds()
-	if n.animating {
-		if c.Preferences().ReduceMotion {
-			n.Ratio, n.animating = n.animTo, false
-			a.changed()
-		} else {
-			p := float32(c.Now().Sub(n.animAt)) / float32(240*time.Millisecond)
-			if p >= 1 {
-				n.Ratio, n.animating = n.animTo, false
-				a.changed()
-			} else {
-				ease := ui.CubicBezier(0.23, 1, 0.32, 1)
-				n.Ratio = n.animFrom + (n.animTo-n.animFrom)*ease(max(p, 0))
-				c.AnimationFrame()
-			}
-		}
-	}
-	first, second, ratio := n.A, n.B, n.Ratio
 	box.Children(func() {
-		a.node(c, k, t, first).Grow(ratio).Basis(0).MinWidth(0).MinHeight(0)
+		a.canvasNode(c, k, t, n.A, vw, vh).Width(aw).Height(ah)
 		div := ui.Box(c.Key("divider")).Role(ui.RoleSplitter).Label("Divider")
 		if n.Vertical {
-			div.Height(gap).Cursor(ui.CursorResizeRow)
+			div.Height(gap).Width(width).Cursor(ui.CursorResizeRow)
 		} else {
-			div.Width(gap).Cursor(ui.CursorResizeColumn)
+			div.Width(gap).Height(height).Cursor(ui.CursorResizeColumn)
 		}
 		if dx, dy, ok := div.Dragged(); ok {
-			n.animating = false
-			total := bounds.W - gap
 			d := dx
 			if n.Vertical {
-				total, d = bounds.H-gap, dy
+				d = dy
 			}
-			if total > 0 {
-				n.Ratio = min(max(n.Ratio+d/total, 0.08), 0.92)
-				a.changed()
-			}
+			n.resize(d, vw, vh)
+			a.changed()
 		}
 		if div.DoubleClicked() {
-			n.Ratio = 0.5
-			n.animating = false
+			n.balance()
 			a.changed()
 		}
 		if div.Hovered() || div.Dragging() || div.Pressed() {
@@ -242,7 +261,7 @@ func (a *app) node(c *ui.Context, k *colors, t *tab, n *node) ui.Element {
 				}
 			})
 		}
-		a.node(c, k, t, second).Grow(1 - ratio).Basis(0).MinWidth(0).MinHeight(0)
+		a.canvasNode(c, k, t, n.B, vw, vh).Width(bw).Height(bh)
 	})
 	return box
 }
@@ -353,18 +372,6 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 		if overZone != dropNone {
 			a.dropIndicator(c, k, overZone)
 		}
-		if a.overview {
-			// The editor or terminal would take a press inside its own
-			// body; this transparent surface makes the whole pane a
-			// target in the switcher. The header and its grip stay live
-			// above it.
-			hit := ui.Box(c.Key("overview-hit")).Absolute().Top(headerH).Bottom(0).
-				Left(0).Right(0).Background(ui.Transparent).Cursor(ui.CursorPointer).
-				Role(ui.RoleButton).Label("Focus pane " + paneName(p))
-			if hit.Clicked() {
-				a.later(func() { a.selectOverviewPane(t, p) })
-			}
-		}
 	})
 	if p.dragging {
 		card.Border(2, k.Text)
@@ -388,9 +395,6 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 			a.focusReq = p
 		}
 		a.changed()
-	}
-	if card.Pressed() && a.overview {
-		a.later(func() { a.selectOverviewPane(t, p) })
 	}
 	return card
 }
@@ -513,9 +517,6 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hov
 			a.focusReq = p
 		}
 		a.changed()
-		if a.overview {
-			a.later(func() { a.selectOverviewPane(t, p) })
-		}
 	}
 	h.Children(func() {
 		iconSize := float32(16)
