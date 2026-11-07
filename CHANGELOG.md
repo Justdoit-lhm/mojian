@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.4
+
+- Remote servers keep their socket in `XDG_RUNTIME_DIR/mojian-<uid>` (or
+  `/tmp/mojian-<uid>`), not under the home directory. Fedora's SELinux
+  labels the latter `data_home_t`, and sshd refuses stream-local
+  forwarding to it with `open failed`, so 0.1.3 could not reach a remote
+  server on such hosts. Verified over real SSH against Fedora 44: server
+  upload, tree listing, lazy reads, saves, file operations, remote Git, a
+  terminal's process-group kill, and transient shutdown on disconnect.
+
 ## 0.1.3
 
 - Remote projects now edit the host's files directly, like VS Code Remote:
