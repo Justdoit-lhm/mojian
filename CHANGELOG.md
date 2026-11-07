@@ -4,8 +4,8 @@
 
 First release.
 
-- A quiet plain-text editor for macOS, drawn by MyGo's native UI: no
-  webview, no cgo, one Go binary.
+- A quiet plain-text editor for macOS and Linux, drawn by MyGo's native UI:
+  no webview, no cgo, one Go binary.
 - Projects are ordinary folders. The in-window folder picker, recent
   projects and per-project layouts keep each workspace separate.
 - Tabs hold a tile of panes. Splits open an empty pane with an inline file
@@ -21,3 +21,5 @@ First release.
   terminals and Git diff there.
 - Images and PDFs in a contained viewer, Settings in their own window, light
   and dark palettes, and a command palette over every command.
+- Linux builds as per-user tar.gz archives and Debian packages for amd64
+  and arm64, beside the macOS disk images.

@@ -2,8 +2,8 @@
 
 A release is a tag. Pushing `vX.Y.Z` runs the Release workflow
 (`.github/workflows/release.yml`), which tests the tree, builds the macOS
-app for Apple Silicon and Intel, and publishes the GitHub release with both
-disk images.
+app for Apple Silicon and Intel and the Linux archives and packages for
+amd64 and arm64, and publishes the GitHub release with every installer.
 
 ## Steps
 
@@ -29,9 +29,11 @@ disk images.
    ```
 
 The workflow refuses a tag that does not match `mygo.json`, builds
-`mojian-X.Y.Z-arm64.dmg` and `mojian-X.Y.Z-amd64.dmg`, creates a draft
-release with generated notes, uploads both images, and publishes the draft
-only after every upload succeeds. If a job fails, fix it, move the tag to
+`mojian-X.Y.Z-arm64.dmg`, `mojian-X.Y.Z-amd64.dmg`,
+`mojian-X.Y.Z-linux-amd64.tar.gz`, `mojian-X.Y.Z-linux-arm64.tar.gz` and
+the matching `.deb` packages, creates a draft release with generated notes,
+uploads every installer and `SHA256SUMS`, and publishes the draft only after
+every upload succeeds. If a job fails, fix it, move the tag to
 the new commit and push the tag again; the workflow replaces the draft.
 A published release is not overwritten.
 
