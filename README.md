@@ -35,10 +35,11 @@ edits a file with syntax highlighting.
   full height. The canvas grows around the panes, and the viewport follows
   the focused pane: there is no scrollbar and the mouse wheel does not pan
   it. Option+left/right/up/down moves the selection; Option+Shift plus an
-  arrow moves the selected pane itself. In the normal view, dragging a
-  pane's grip onto another pane swaps them inside the current page. Drag
-  a divider to resize, double-click it for a balanced split, zoom a pane,
-  or close it.
+  arrow moves the selected pane itself. In the normal view, dropping a
+  pane in the middle of another swaps them; dropping on an edge halves
+  that target block and puts the dragged pane there, so the pair stays
+  inside the current page. Drag a divider to resize, double-click it for a
+  balanced split, zoom a pane, or close it.
   Option+Tab opens a fast spatial pane overview: the panes shrink in
   place, and Tab, the arrow keys or a click select one. In the overview,
   drag a pane's grip onto another pane, or onto its edge to put it above,

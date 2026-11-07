@@ -291,10 +291,8 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 	overZone, overTarget := dropNone, false
 	if over, ok := ui.DragOver[*pane](card); ok && over != nil && over != p && t.contains(over) {
 		overTarget = true
-		if a.overview {
-			if x, y, inside := card.PointerPosition(); inside {
-				overZone = dropZoneAt(x, y, width, height)
-			}
+		if x, y, inside := card.PointerPosition(); inside {
+			overZone = dropZoneAt(x, y, width, height)
 		}
 	}
 	card.Children(func() {
@@ -386,11 +384,20 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 				Role(ui.RoleButton).Label("Move pane " + paneName(p)).
 				Drag(p)
 			p.dragging = hit.Dragging()
-			if hit.Clicked() {
+			dropped := false
+			if from, ok := ui.Drop[*pane](hit); ok && from != nil && from != p && t.contains(from) {
+				dropped = true
+				zone := dropCenter
+				if x, y, inside := hit.PointerPosition(); inside {
+					zone = dropZoneAt(x, y, width, height)
+				}
+				a.later(func() { a.movePane(t, from, p, zone) })
+			}
+			if !dropped && hit.Clicked() {
 				t.Focus = p
 				a.changed()
 			}
-			if hit.DoubleClicked() {
+			if !dropped && hit.DoubleClicked() {
 				a.later(func() { a.selectOverviewPane(t, p) })
 			}
 		}
@@ -398,17 +405,14 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 	if p.dragging {
 		card.Border(2, k.Text)
 	}
-	if from, ok := ui.Drop[*pane](card); ok && from != nil && from != p && t.contains(from) {
-		zone := dropCenter
-		if a.overview {
+	if !a.overview {
+		if from, ok := ui.Drop[*pane](card); ok && from != nil && from != p && t.contains(from) {
+			zone := dropCenter
 			if x, y, inside := card.PointerPosition(); inside {
 				zone = dropZoneAt(x, y, width, height)
 			}
-			if zone == dropNone {
-				zone = dropCenter
-			}
+			a.later(func() { a.movePaneInPlace(t, from, p, zone) })
 		}
-		a.later(func() { a.movePane(t, from, p, zone) })
 	}
 	if overTarget {
 		card.Border(2, k.Text)
@@ -435,6 +439,17 @@ func (a *app) movePane(t *tab, from, to *pane, zone paneDrop) {
 	} else {
 		a.focusReq = from
 	}
+	a.changed()
+	a.invalidate()
+}
+
+// movePaneInPlace is the normal-view drag: the target's block is split
+// between the two panes instead of extending the canvas.
+func (a *app) movePaneInPlace(t *tab, from, to *pane, zone paneDrop) {
+	if t == nil || t != a.tab() || !t.movePaneInPlace(from, to, zone) {
+		return
+	}
+	a.focusReq = from
 	a.changed()
 	a.invalidate()
 }

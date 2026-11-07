@@ -424,6 +424,41 @@ func (t *tab) movePane(from, to *pane, zone paneDrop) bool {
 	return true
 }
 
+// movePaneInPlace moves from onto to and splits to's current block in
+// half. The canvas does not push the pair outside the page: the dragged
+// pane takes half of the target's old rectangle.
+func (t *tab) movePaneInPlace(from, to *pane, zone paneDrop) bool {
+	if t == nil || from == nil || to == nil || from == to || t.Root == nil {
+		return false
+	}
+	if !t.contains(from) || !t.contains(to) || zone == dropNone {
+		return false
+	}
+	if zone == dropCenter {
+		return t.movePane(from, to, dropCenter)
+	}
+	toW, toH := to.width(), to.height()
+	if t.Root.Pane == from {
+		return false
+	}
+	if !t.Root.remove(from) {
+		return false
+	}
+	if zone.vertical() {
+		to.W, to.H = toW, max(toH/2, 0.1)
+		from.W, from.H = toW, max(toH/2, 0.1)
+	} else {
+		to.W, to.H = max(toW/2, 0.1), toH
+		from.W, from.H = max(toW/2, 0.1), toH
+	}
+	if !t.wrapPane(to, from, zone) {
+		return false
+	}
+	t.Focus = from
+	t.Zoom = nil
+	return true
+}
+
 // wrapPane replaces to's leaf with a split holding from on the named
 // side. to must still be in the tree.
 func (t *tab) wrapPane(to, from *pane, zone paneDrop) bool {

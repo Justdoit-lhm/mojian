@@ -389,3 +389,24 @@ func TestOverviewDragRearranges(t *testing.T) {
 		t.Fatal("the overview drag did not rearrange the panes")
 	}
 }
+
+func TestNormalDragSplitsTargetBlockInPlace(t *testing.T) {
+	a := newProjectApp(t)
+	first := a.tab().Focus
+	a.splitWith(a.store.byRelPath("scripts/tasks.py"), false)
+	second := a.tab().Focus
+	toW, toH := second.W, second.H
+	if !a.tab().movePaneInPlace(first, second, dropAbove) {
+		t.Fatal("in-place move failed")
+	}
+	if !a.tab().Root.Vertical {
+		t.Fatal("dropping above did not stack the panes")
+	}
+	if first.W != toW || first.H != toH/2 || second.W != toW || second.H != toH/2 {
+		t.Fatalf("dragged block sizes: %v x %v and %v x %v, want %v x %v",
+			first.W, first.H, second.W, second.H, toW, toH/2)
+	}
+	if a.tab().Root.A.Pane != first || a.tab().Root.B.Pane != second {
+		t.Fatal("the dragged pane is not above the target")
+	}
+}
