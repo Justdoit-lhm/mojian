@@ -18,7 +18,6 @@ const (
 	settingsGeneral = iota
 	settingsAppearance
 	settingsEditor
-	settingsFonts
 	settingsTerminal
 	settingsShell
 	settingsNotifications
@@ -37,7 +36,6 @@ var settingsCats = []settingsCat{
 	{"General", "Startup and projects", "settings", "startup restore tabs project server"},
 	{"Appearance", "Theme and interface text", "file-text", "theme light dark appearance look color font size"},
 	{"Editor", "Type, writing and Markdown", "pencil", "editor code font line height tab wrap markdown active line indent brackets scroll"},
-	{"Fonts", "Families and previews", "file-text", "font family typeface mono installed preview"},
 	{"Terminal", "Type, input and scrollback", "square-terminal", "terminal shell font cursor blink scrollback clipboard option alt"},
 	{"Shell", "The program new terminals run", "square-terminal", "shell login command zsh bash fish"},
 	{"Notifications", "When a terminal wants attention", "bell", "notify bell exit attention sound"},
@@ -82,16 +80,6 @@ var settingsEntries = []settingsEntry{
 	{settingsEditor, "Indent guides", "indent guides levels lines"},
 	{settingsEditor, "Auto-close brackets", "brackets quotes auto close typing"},
 	{settingsEditor, "Scroll past the last line", "scroll past end air bottom line"},
-
-	{settingsFonts, "CURRENT FONTS", "fonts current editor terminal"},
-	{settingsFonts, "Editor font", "font family editor typeface monospace"},
-	{settingsFonts, "Terminal font", "font family terminal shell typeface monospace"},
-	{settingsFonts, "INSTALLED FONTS", "installed fonts families search"},
-	{settingsFonts, "Apply to", "apply editor terminal target"},
-	{settingsFonts, "Search installed fonts", "search fonts families filter"},
-	{settingsFonts, "PREVIEW", "preview fonts sample text"},
-	{settingsFonts, "Editor", "editor preview font"},
-	{settingsFonts, "Terminal", "terminal preview font"},
 
 	{settingsTerminal, "TYPE", "terminal type font"},
 	{settingsTerminal, "Terminal font", "font family terminal shell typeface monospace"},
@@ -201,6 +189,7 @@ func (a *app) settingsWindowView(c *ui.Context) {
 		})
 	})
 	a.fontPicker(c, k)
+	a.remoteBusyView(c, k)
 }
 
 func (a *app) settingsTitleBar(c *ui.Context, k *colors) {
@@ -394,8 +383,6 @@ func (a *app) settingsPage(c *ui.Context, k *colors, cat int) {
 		a.settingsAppearancePage(c, k)
 	case settingsEditor:
 		a.settingsEditorPage(c, k)
-	case settingsFonts:
-		a.settingsFontsPage(c, k)
 	case settingsTerminal:
 		a.settingsTerminalPage(c, k)
 	case settingsShell:
@@ -657,150 +644,6 @@ func (a *app) settingsEditorPage(c *ui.Context, k *colors) {
 	})
 }
 
-func (a *app) settingsFontsPage(c *ui.Context, k *colors) {
-	a.settingsSection(c, k, "CURRENT FONTS", func() {
-		a.fontRow(c, k, "Editor font", "The family used by source and prose.", 0, a.editorFontFamily)
-		a.fontRow(c, k, "Terminal font", "The family used by new shells.", 1, a.terminalFontFamily)
-	})
-	a.settingsSection(c, k, "INSTALLED FONTS", func() {
-		ui.Row(c).Padding(8, 10).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, "Apply to").FontSize(12).TextColor(k.TextMuted).Shrink(0)
-			a.settingsFontTargetChoice(c, k)
-			if w, _ := c.Size(); w >= 820 {
-				ui.Spacer(c)
-				ui.Text(c, "Click a family to use it").FontSize(11).TextColor(k.TextFaint)
-			}
-		})
-		ui.Box(c).Height(1).Shrink(0).Background(k.PanelBorder)
-		ui.Row(c).Padding(6, 8).Gap(7).AlignItems(ui.Center).Children(func() {
-			ui.Icon(c, icons.Icon("search")).Size(13, 13).TextColor(k.TextFaint)
-			in := ui.TextInputBase(c, &a.fontSearch).Grow(1).FontSize(12).
-				Placeholder("Search installed fonts…")
-			if in.Changed() {
-				a.invalidate()
-			}
-		})
-		ui.Scroll(c).Height(220).Padding(4).Children(func() {
-			a.fontsList(c, k)
-		})
-	})
-	a.settingsSection(c, k, "PREVIEW", func() {
-		a.settingRow(c, k, "Editor", "The quick brown fox jumps over the lazy dog. 0123456789", func() {
-			ui.Text(c, "The quick brown fox jumps over the lazy dog.").
-				Font(a.editorFont().Family).FontSize(float32(a.fontSize())).
-				TextColor(k.Text).MaxWidth(250)
-		})
-		a.settingRow(c, k, "Terminal", "The quick brown fox jumps over the lazy dog. 0123456789", func() {
-			fam := a.terminalFontFamily
-			if strings.TrimSpace(fam) == "" {
-				fam = "JetBrains Mono, monospace"
-			}
-			ui.Text(c, "The quick brown fox jumps over the lazy dog.").
-				Font(fam).FontSize(float32(a.termFontSize())).
-				TextColor(k.Text).MaxWidth(250)
-		})
-	})
-}
-
-func (a *app) settingsFontTargetChoice(c *ui.Context, k *colors) {
-	labels := []string{"Editor", "Terminal"}
-	current := a.fontTarget
-	ui.Row(c).Padding(3).Radius(radius).Background(k.Track).Border(1, k.TrackBorder).
-		Gap(2).Role(ui.RoleRadioGroup).Label("Apply to").Children(func() {
-		for n, label := range labels {
-			n, label := n, label
-			b := ui.Row(c).Key("font-target-"+strconv.Itoa(n)).Padding(3, 8).
-				Radius(radius).Cursor(ui.CursorPointer).Role(ui.RoleRadio).
-				Label(label).Selected(n == current)
-			switch {
-			case n == current:
-				b.Background(k.PanelSel)
-			case b.Hovered():
-				b.Background(k.Hover)
-			}
-			if b.Clicked() {
-				a.fontTarget = n
-				a.invalidate()
-			}
-			b.Children(func() {
-				col := k.TextMuted
-				if n == current {
-					col = k.Text
-				}
-				ui.Text(c, label).FontSize(11).FontWeight(550).TextColor(col)
-			})
-		}
-	})
-}
-
-func (a *app) fontsList(c *ui.Context, k *colors) {
-	q := strings.ToLower(strings.TrimSpace(a.fontSearch))
-	shown := 0
-	def := "JetBrains Mono · default"
-	if a.fontTarget == 1 {
-		def = "System monospace · default"
-	}
-	current := a.editorFontFamily
-	if a.fontTarget == 1 {
-		current = a.terminalFontFamily
-	}
-	row := ui.Row(c).Key("font-default").Height(33).Padding(0, 10).Gap(8).
-		Radius(6).Cursor(ui.CursorPointer).Role(ui.RoleButton).Label(def)
-	switch {
-	case current == "":
-		row.Background(k.PanelSel)
-	case row.Hovered():
-		row.Background(k.Pressed)
-	}
-	if row.Clicked() {
-		if a.fontTarget == 1 {
-			a.terminalFontFamily = ""
-		} else {
-			a.editorFontFamily = ""
-		}
-		a.saveSettings()
-		a.invalidate()
-	}
-	row.Children(func() { ui.Text(c, def).FontSize(12).TextColor(k.Text) })
-	shown++
-	for _, f := range a.installedFonts() {
-		if q != "" && !strings.Contains(strings.ToLower(f.Name), q) {
-			continue
-		}
-		f := f
-		shown++
-		row := ui.Row(c).Key("font-"+f.Name).Height(33).Padding(0, 10).Gap(8).
-			Radius(6).Cursor(ui.CursorPointer).Role(ui.RoleButton).Label(f.Name)
-		switch {
-		case f.Name == current:
-			row.Background(k.PanelSel)
-		case row.Hovered():
-			row.Background(k.Pressed)
-		}
-		if row.Clicked() {
-			if a.fontTarget == 1 {
-				a.terminalFontFamily = f.Name
-			} else {
-				a.editorFontFamily = f.Name
-			}
-			a.saveSettings()
-			a.invalidate()
-		}
-		row.Children(func() {
-			ui.Text(c, f.Name).Font(f.Name).FontSize(12).TextColor(k.Text).
-				SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
-			if f.Monospaced {
-				ui.Text(c, "Mono").FontSize(9).FontWeight(650).
-					TextColor(k.TextFaint).Padding(1, 4).Radius(4).
-					Background(k.Hover).Shrink(0)
-			}
-		})
-	}
-	if shown == 0 {
-		ui.Text(c, "No matching font").FontSize(12).TextColor(k.TextFaint).Padding(14)
-	}
-}
-
 func (a *app) settingsTerminalPage(c *ui.Context, k *colors) {
 	a.settingsSection(c, k, "TYPE", func() {
 		a.fontRow(c, k, "Terminal font", "The family used by new shells.", 1, a.terminalFontFamily)
@@ -862,7 +705,7 @@ func (a *app) settingsKeyboardPage(c *ui.Context, k *colors) {
 	q := strings.ToLower(strings.TrimSpace(a.settingsKeyFilter))
 	shown := 0
 	a.settingsSection(c, k, "SHORTCUTS", func() {
-		ui.Row(c).Padding(10, 0).Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).Padding(10, 16).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Row(c).Grow(1).Height(30).Padding(0, 8).Gap(6).Radius(radius).
 				Background(k.Hover).AlignItems(ui.Center).Children(func() {
 				ui.Icon(c, icons.Icon("search")).Size(13, 13).TextColor(k.TextFaint)
@@ -901,7 +744,7 @@ func (a *app) settingsKeyboardPage(c *ui.Context, k *colors) {
 		}
 		if shown == 0 {
 			ui.Text(c, "No shortcuts match.").FontSize(12).TextColor(k.TextFaint).
-				Padding(14, 0)
+				Padding(14, 16)
 		}
 	})
 	a.settingsSection(c, k, "PANE NAVIGATION", func() {
@@ -1009,7 +852,7 @@ func (a *app) shortcutRow(c *ui.Context, k *colors, cmd *command) {
 func (a *app) settingsHostsPage(c *ui.Context, k *colors) {
 	a.settingsNoticeLine(c, k)
 	a.settingsSection(c, k, "ADD HOST", func() {
-		row := ui.Column(c).Key("host-add").Padding(10, 0).Gap(6).Radius(6)
+		row := ui.Column(c).Key("host-add").Padding(10, 16).Gap(6).Radius(6)
 		if a.settingsHits["Address"] {
 			row.Background(k.PanelSel)
 		}
@@ -1020,11 +863,21 @@ func (a *app) settingsHostsPage(c *ui.Context, k *colors) {
 			ui.Text(c, "Address").FontSize(12.5).FontWeight(550).TextColor(k.Text)
 			ui.Text(c, "Anything ssh accepts: buildbox, me@devbox, or ssh://me@devbox:2222.").
 				FontSize(11.5).TextColor(k.TextFaint).LineHeight(1.35)
+			var addr, name ui.Element
 			ui.Row(c).Gap(7).AlignItems(ui.Center).Children(func() {
-				addr := ui.TextInputBase(c, &a.hostDraftAddr).Grow(1).MinWidth(0).FontSize(12).
-					Placeholder("me@devbox")
-				name := ui.TextInputBase(c, &a.hostDraftName).Width(100).FontSize(12).
-					Placeholder("Name")
+				addrField := ui.Row(c).Grow(1).MinWidth(0).Height(30).Padding(0, 9).
+					Gap(7).Radius(radius).Background(k.Hover).AlignItems(ui.Center)
+				addrField.Children(func() {
+					ui.Icon(c, icons.Icon("server")).Size(13, 13).TextColor(k.TextFaint)
+					addr = ui.TextInputBase(c, &a.hostDraftAddr).Grow(1).MinWidth(0).
+						FontSize(12).Placeholder("me@devbox")
+				})
+				nameField := ui.Row(c).Width(120).Height(30).Padding(0, 9).
+					Radius(radius).Background(k.Hover).AlignItems(ui.Center)
+				nameField.Children(func() {
+					name = ui.TextInputBase(c, &a.hostDraftName).Grow(1).FontSize(12).
+						Placeholder("Name")
+				})
 				if addr.Submitted() || name.Submitted() {
 					a.addHostChecked()
 				}
@@ -1046,7 +899,7 @@ func (a *app) settingsHostsPage(c *ui.Context, k *colors) {
 		}
 		if len(a.hosts) == 0 {
 			ui.Text(c, "No servers yet. Add an SSH host above.").
-				FontSize(12).TextColor(k.TextFaint).Padding(14, 0)
+				FontSize(12).TextColor(k.TextFaint).Padding(14, 16)
 		}
 	})
 	if len(a.remoteProjects) > 0 {
@@ -1066,9 +919,7 @@ func (a *app) settingsHostsPage(c *ui.Context, k *colors) {
 						if a.settingsWin != nil {
 							a.settingsWin.Close()
 						}
-						if err := a.openRemoteProject(p.Host, p.Path); err != nil {
-							a.fail(err)
-						}
+						a.openRemoteProjectAsync(p.Host, p.Path)
 					})
 				}
 				row.Children(func() {
@@ -1085,7 +936,7 @@ func (a *app) settingsHostsPage(c *ui.Context, k *colors) {
 	}
 	a.settingsSection(c, k, "ABOUT HOSTS", func() {
 		ui.Text(c, "Mojian uploads a small per-user server to a host over SSH on first connect. Nothing is installed system-wide and no port is opened.").
-			FontSize(12).TextColor(k.TextFaint).LineHeight(1.4).Padding(12, 0)
+			FontSize(12).TextColor(k.TextFaint).LineHeight(1.4).Padding(12, 16)
 	})
 }
 
@@ -1435,7 +1286,7 @@ func (a *app) settingsUpdatesPage(c *ui.Context, k *colors) {
 
 func (a *app) settingsAboutPage(c *ui.Context, k *colors) {
 	a.settingsSection(c, k, "MOJIAN", func() {
-		ui.Row(c).Padding(12, 0).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).Padding(12, 16).AlignItems(ui.Center).Children(func() {
 			wm := "wordmark"
 			if c.Theme().Dark {
 				wm = "wordmark-reversed"

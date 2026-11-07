@@ -35,6 +35,14 @@ type app struct {
 
 	project        string
 	projects       []string
+	workspaces     map[string]*workspace
+	activeWS       string
+	remotes        map[string]*remoteConn
+	remoteBusy     bool
+	remoteBusyMsg  string
+	remoteTaskSeq  int
+	remoteDirsSeq  int
+	remoteDirsBusy bool
 	projectOpen    bool
 	projectPicker  bool
 	serverAlias    string
@@ -139,7 +147,6 @@ type app struct {
 	shortcutKeys       map[string]string
 	fontPick           bool
 	fontPickFor        int
-	fontTarget         int
 	fontSearch         string
 	fontsOnce          sync.Once
 	fonts              []ui.FontFamily
@@ -250,6 +257,7 @@ func (a *app) open() {
 		if a.serverAlias != "" && a.remotePath != "" {
 			if err := a.openRemoteProject(a.serverAlias, a.remotePath); err == nil {
 				a.treeOpen = true
+				a.registerActiveWorkspace()
 				a.win = a.createWindow("main")
 				a.updateTitle()
 				return
@@ -295,11 +303,16 @@ func (a *app) open() {
 	a.quitting = false
 	a.saveSkipped = false
 	if a.loaded && a.serverAlias != "" && a.remotePath != "" {
-		if _, err := a.ensureRemote(a.serverAlias); err != nil {
+		if rc, err := a.ensureRemote(a.serverAlias); err != nil {
 			a.fail(err)
+		} else if a.store != nil && a.store.remote != nil {
+			// The window closed and reopened: the project kept its notes,
+			// but the control client was replaced with the new connection.
+			a.store.remote.client = rc.client
 		}
 	}
 	a.win = a.createWindow("main")
+	a.registerActiveWorkspace()
 	a.updateTitle()
 }
 
@@ -348,12 +361,13 @@ func (a *app) windowClosed() {
 	if !a.saveSkipped {
 		_ = a.saveNow()
 	}
-	a.closeTerminals()
+	a.closeWorkspaces()
+	a.workspaces = nil
+	a.activeWS = ""
 	if a.sessionClient != nil {
 		_ = a.sessionClient.Close()
 		a.sessionClient = nil
 	}
-	a.closeRemote()
 	if a.layoutTimer != nil {
 		a.layoutTimer.Stop()
 		a.layoutTimer = nil

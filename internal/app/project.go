@@ -76,7 +76,7 @@ func (a *app) recentProjects() []string {
 
 // openProject makes dir the open project, saving the one before it.
 func (a *app) openProject(dir string) {
-	if dir == "" {
+	if dir == "" || a.remoteBusy {
 		return
 	}
 	abs, err := filepath.Abs(dir)
@@ -84,53 +84,47 @@ func (a *app) openProject(dir string) {
 		a.fail(err)
 		return
 	}
+	a.initWorkspaces()
+	if ws := a.workspaces[workspaceKeyLocal(abs)]; ws != nil {
+		a.switchWorkspace(ws)
+		a.rememberProject(abs)
+		a.saveSettings()
+		return
+	}
 	if a.remotePath == "" && a.store != nil && !a.store.memory && a.store.dir == abs {
 		a.projectOpen = false
 		a.invalidate()
 		return
 	}
-	// Save while the current server is still connected: a remote note
-	// written after closeRemote would only reach the local mirror.
+	// Save while the current server is still connected, and keep its
+	// project in the workspace cache: switching back is then a restore.
 	if err := a.saveNow(); err != nil {
 		a.fail(fmt.Errorf("could not save the open project: %w", err))
 		return
 	}
-	a.closeTerminals()
-	if a.remotePath != "" {
-		a.closeRemote()
-		a.serverAlias = ""
-		a.remotePath = ""
-	}
-	a.git.Open = false
-	a.git.Reset()
-	a.fileClip = nil
-	a.fileClipRemote = false
-	a.fileCut = false
 	if a.layoutPath != "" {
 		a.saveLayout()
 	}
+	a.layoutDirty = false
+	a.dropPickerRemote()
 	s, err := openStoreAt(abs)
 	if err != nil {
 		a.fail(err)
 		return
 	}
-	a.store = s
-	a.layoutPath = a.projectLayoutPath(s.dir)
-	a.tabs = nil
-	a.active = -1
-	a.focusReq = nil
-	a.treeSel = ""
-	a.treeQuery = ""
-	a.treeSearch.CancelFocus()
-	a.treeReveal = ""
-	a.openDirs = map[string]bool{}
-	a.tabScroll = ui.ScrollState{}
-	a.treeDraft = nil
-	a.rename = nil
-	a.paletteOpen = false
-	a.projectOpen = false
-	a.err = ""
-	a.rememberProject(s.dir)
+	a.stashActiveWorkspace()
+	ws := &workspace{
+		key:        workspaceKeyLocal(abs),
+		project:    abs,
+		store:      s,
+		layoutPath: a.projectLayoutPath(abs),
+		treeOpen:   true,
+		active:     -1,
+		openDirs:   map[string]bool{},
+	}
+	a.workspaces[ws.key] = ws
+	a.activateWorkspace(ws)
+	a.rememberProject(abs)
 	if !a.restoreLayout() {
 		a.focusFirstNote()
 	}

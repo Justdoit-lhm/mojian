@@ -35,6 +35,9 @@ func TestProjectSwitch(t *testing.T) {
 	a.saveLayout()
 	a.saveSettings()
 	alphaLayout := a.layoutPath
+	alphaStore := a.store
+	alphaNote := a.currentNote()
+	alphaTabs := a.tabs
 
 	a.openProject(beta)
 	if a.store.dir != beta {
@@ -48,6 +51,9 @@ func TestProjectSwitch(t *testing.T) {
 	}
 	if got := a.projectName(); got != "Beta" {
 		t.Errorf("project name: %q", got)
+	}
+	if a.project != beta {
+		t.Errorf("saved project: %q", a.project)
 	}
 	if len(a.projects) < 2 || a.projects[0] != beta {
 		t.Errorf("recent projects: %q", a.projects)
@@ -65,8 +71,14 @@ func TestProjectSwitch(t *testing.T) {
 		t.Errorf("saved project: %q", saved.Project)
 	}
 
-	// Switching back restores the first project and its layout.
+	// Switching back restores the loaded project, not a fresh read.
 	a.openProject(alpha)
+	if a.store != alphaStore || len(a.tabs) != len(alphaTabs) || a.tabs[0] != alphaTabs[0] {
+		t.Fatal("switching back read the project again")
+	}
+	if a.currentNote() != alphaNote {
+		t.Fatal("switching back opened another note")
+	}
 	if a.store.dir != alpha {
 		t.Fatalf("store dir: %q", a.store.dir)
 	}
@@ -75,6 +87,9 @@ func TestProjectSwitch(t *testing.T) {
 	}
 	if a.currentNote() == nil || a.currentNote().Rel != "alpha.md" {
 		t.Fatalf("restored note: %+v", a.currentNote())
+	}
+	if a.project != alpha {
+		t.Errorf("project after switching back: %q", a.project)
 	}
 	if a.projects[0] != alpha || len(a.projects) != 2 {
 		t.Errorf("recent projects: %q", a.projects)
@@ -112,5 +127,49 @@ func TestProjectChip(t *testing.T) {
 	}
 	if !tt.HasText("Open Folder…") {
 		t.Fatal("the project popover has no Open Folder")
+	}
+}
+
+func TestRemoteWorkspaceSwitchUsesTheCache(t *testing.T) {
+	if !terminalsSupported() {
+		t.Skip("remote projects need terminals")
+	}
+	root := t.TempDir()
+	dir := filepath.Join(root, "App")
+	integration.WriteVault(t, dir, map[string]string{"main.go": "package main\n"})
+	a := &app{dataDir: t.TempDir(), treeOpen: true}
+	s, err := openStoreAt(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.store = s
+	a.layoutPath = a.projectLayoutPath(s.dir)
+	a.rememberProject(s.dir)
+	a.focusFirstNote()
+	a.registerActiveWorkspace()
+
+	key := workspaceKeyRemote("buildbox", "/srv/app")
+	a.workspaces[key] = &workspace{
+		key:         key,
+		project:     a.project,
+		store:       s,
+		serverAlias: "buildbox",
+		remotePath:  "/srv/app",
+		layoutPath:  a.projectLayoutPath("remote:buildbox:/srv/app"),
+		treeOpen:    true,
+		tabs:        a.tabs,
+		active:      a.active,
+		focusReq:    a.focusReq,
+	}
+	a.openRemoteProjectAsync("buildbox", "/srv/app")
+	if a.remoteBusy || a.serverAlias != "buildbox" || a.remotePath != "/srv/app" {
+		t.Fatalf("cached remote switch: busy=%v server=%q path=%q", a.remoteBusy, a.serverAlias, a.remotePath)
+	}
+	if a.store != s || len(a.tabs) == 0 {
+		t.Fatal("the cached remote workspace was read again")
+	}
+	a.openProject(dir)
+	if a.serverAlias != "" || a.remotePath != "" || a.store != s {
+		t.Fatalf("switch back: server=%q path=%q store=%p", a.serverAlias, a.remotePath, a.store)
 	}
 }

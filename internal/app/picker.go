@@ -260,8 +260,8 @@ func (a *app) pickerMain(c *ui.Context, k *colors) {
 			for i, e := range a.pickerEntries {
 				i, e := i, e
 				selected := i == a.pickerSel
-				row := ui.Row(c.Key("pick:"+e.Path)).Height(32).Padding(0, 9).Gap(9).
-					Radius(radius).AlignItems(ui.Center).Cursor(ui.CursorPointer).
+				row := ui.Row(c.Key("pick:"+e.Path)).Height(32).Padding(0, 9).MarginY(2).
+					Gap(9).Radius(radius).AlignItems(ui.Center).Cursor(ui.CursorPointer).
 					Role(ui.RoleButton).Focusable().FocusRing(false).Label(e.Name)
 				if selected {
 					row.Background(k.PanelSel)

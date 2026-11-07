@@ -18,6 +18,7 @@ import (
 	"mojian/internal/remotebin"
 	"mojian/internal/session"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -87,22 +88,65 @@ func (a *app) ensureRemote(host string) (*remoteConn, error) {
 // current server, so a failed or cancelled switch leaves the open project
 // talking to the machine it came from.
 func (a *app) connectRemote(host string) (*remoteConn, error) {
-	if a.remote != nil && a.remote.host == host {
-		if c := a.remote.client; c != nil {
-			select {
-			case <-c.Closed():
-				// The connection dropped; replace it below rather than
-				// handing back a dead client.
-			default:
-				return a.remote, nil
-			}
+	if host == "" {
+		return nil, fmt.Errorf("no server selected")
+	}
+	if rc := a.remoteForHost(host); rc != nil {
+		return rc, nil
+	}
+	rc, err := dialRemote(host)
+	if err != nil {
+		return nil, err
+	}
+	a.remotes[host] = rc
+	return rc, nil
+}
+
+// remoteForHost returns a live connection to host from the pool, the
+// active project, or a project in the background, in that order.
+func (a *app) remoteForHost(host string) *remoteConn {
+	a.initWorkspaces()
+	if rc := a.remotes[host]; rc != nil {
+		if remoteHealthy(rc) {
+			return rc
 		}
-		// A stale forward for this host would own the local socket path
-		// the new one needs.
+		delete(a.remotes, host)
+		a.closeRemoteConn(rc)
+	}
+	if a.remote != nil && a.remote.host == host {
+		if remoteHealthy(a.remote) {
+			a.remotes[host] = a.remote
+			return a.remote
+		}
 		stale := a.remote
 		a.remote = nil
 		a.closeRemoteConn(stale)
 	}
+	for _, ws := range a.workspaces {
+		if ws.serverAlias == host && remoteHealthy(ws.remote) {
+			a.remotes[host] = ws.remote
+			return ws.remote
+		}
+	}
+	return nil
+}
+
+// remoteHealthy reports whether rc still has a live control client.
+func remoteHealthy(rc *remoteConn) bool {
+	if rc == nil || rc.client == nil {
+		return false
+	}
+	select {
+	case <-rc.client.Closed():
+		return false
+	default:
+		return true
+	}
+}
+
+// dialRemote prepares a connection without touching the app's active
+// project, so a switch can run it away from the UI thread.
+func dialRemote(host string) (*remoteConn, error) {
 	if host == "" {
 		return nil, fmt.Errorf("no server selected")
 	}
@@ -291,28 +335,33 @@ func shortHash(s string) string {
 	return hex.EncodeToString(sum[:6])
 }
 
-// adoptRemote makes rc the open server and closes the one it replaces.
+// adoptRemote makes rc the open server, keeping the connections of
+// projects in the background alive.
 func (a *app) adoptRemote(rc *remoteConn) {
 	if rc == nil || a.remote == rc {
 		return
 	}
-	old := a.remote
+	a.initWorkspaces()
 	a.remote = rc
-	if old != nil {
-		a.closeRemoteConn(old)
-	}
+	a.remotes[rc.host] = rc
 }
 
 func (a *app) closeRemote() {
 	a.dropPickerRemote()
 	rc := a.remote
 	a.remote = nil
+	if rc != nil && a.remotes != nil && a.remotes[rc.host] == rc {
+		delete(a.remotes, rc.host)
+	}
 	a.closeRemoteConn(rc)
 }
 
 func (a *app) closeRemoteConn(rc *remoteConn) {
 	if rc == nil {
 		return
+	}
+	if a.remotes != nil && a.remotes[rc.host] == rc {
+		delete(a.remotes, rc.host)
 	}
 	if rc.client != nil {
 		// The remote server is transient: ending it stops its shells now
@@ -327,6 +376,105 @@ func (a *app) closeRemoteConn(rc *remoteConn) {
 	_ = os.Remove(rc.socket)
 }
 
+// openRemoteProjectAsync opens a remote project away from the UI thread,
+// with a loading state. A project already in the workspace cache switches
+// at once, without connecting again.
+func (a *app) openRemoteProjectAsync(host, remotePath string) {
+	if !terminalsSupported() {
+		a.fail(fmt.Errorf("remote projects need macOS or Linux"))
+		return
+	}
+	if host == "" || remotePath == "" {
+		a.fail(fmt.Errorf("choose a server and a project"))
+		return
+	}
+	remotePath = strings.TrimRight(remotePath, "/")
+	if a.remoteBusy {
+		return
+	}
+	a.initWorkspaces()
+	key := workspaceKeyRemote(host, remotePath)
+	if ws := a.workspaces[key]; ws != nil {
+		a.switchWorkspace(ws)
+		a.rememberRemoteProject(remoteProject{Host: host, Path: remotePath})
+		a.saveSettings()
+		return
+	}
+	if err := a.saveNow(); err != nil {
+		a.fail(fmt.Errorf("could not save the open project: %w", err))
+		return
+	}
+	if a.layoutPath != "" {
+		a.saveLayout()
+	}
+	a.layoutDirty = false
+	existing := a.remoteForHost(host)
+	seq, win := a.beginRemoteTask("Opening " + filepath.Base(remotePath) + " on " + a.hostLabel(host) + "…")
+	if seq == 0 {
+		return
+	}
+	cache := a.remoteAssetCache(host, remotePath)
+	go func() {
+		rc := existing
+		var err error
+		if rc == nil {
+			rc, err = dialRemote(host)
+		}
+		var s *store
+		if err == nil {
+			onWindow(win, func() {
+				a.setRemoteBusyMsg(seq, "Opening "+filepath.Base(remotePath)+" on "+a.hostLabel(host)+"…")
+			})
+			s, err = openRemoteStore(rc.client, remotePath, cache)
+		}
+		onWindow(win, func() {
+			if !a.endRemoteTask(seq) {
+				if rc != nil && rc != existing {
+					a.closeRemoteConn(rc)
+				}
+				return
+			}
+			if err != nil {
+				if rc != nil && rc != existing {
+					a.closeRemoteConn(rc)
+				}
+				a.fail(err)
+				return
+			}
+			if rc != nil {
+				a.remotes[host] = rc
+			}
+			a.stashActiveWorkspace()
+			ws := &workspace{
+				key:         key,
+				project:     a.project,
+				store:       s,
+				serverAlias: host,
+				remotePath:  remotePath,
+				remote:      rc,
+				layoutPath:  a.projectLayoutPath("remote:" + host + ":" + remotePath),
+				treeOpen:    true,
+				active:      -1,
+				openDirs:    map[string]bool{},
+			}
+			a.workspaces[key] = ws
+			a.activateWorkspace(ws)
+			a.rememberRemoteProject(remoteProject{Host: host, Path: remotePath})
+			if !a.restoreLayout() {
+				a.focusFirstNote()
+			}
+			if t := a.tab(); t != nil {
+				a.focusReq = t.editorPane()
+			}
+			a.revealTab = true
+			a.saveLayout()
+			a.saveSettings()
+			a.updateTitle()
+			a.invalidate()
+		})
+	}()
+}
+
 // openRemoteProject connects to host and opens path there as the project.
 // Files live on the host: the tree lists them and a file is read when it
 // opens, with no local copy of the project.
@@ -338,59 +486,46 @@ func (a *app) openRemoteProject(host, remotePath string) error {
 		return fmt.Errorf("choose a server and a project")
 	}
 	remotePath = strings.TrimRight(remotePath, "/")
+	a.initWorkspaces()
+	key := workspaceKeyRemote(host, remotePath)
+	if ws := a.workspaces[key]; ws != nil {
+		a.switchWorkspace(ws)
+		a.rememberRemoteProject(remoteProject{Host: host, Path: remotePath})
+		a.saveSettings()
+		return nil
+	}
 	if err := a.saveNow(); err != nil {
 		return fmt.Errorf("could not save the open project: %w", err)
 	}
 	if a.layoutPath != "" {
 		a.saveLayout()
 	}
+	a.layoutDirty = false
 	a.dropPickerRemote()
 	rc, err := a.connectRemote(host)
 	if err != nil {
 		return err
 	}
-	newConn := rc != a.remote
-	fail := func(err error) error {
-		if newConn {
-			a.closeRemoteConn(rc)
-		}
-		return err
-	}
 	s, err := openRemoteStore(rc.client, remotePath, a.remoteAssetCache(host, remotePath))
 	if err != nil {
-		return fail(err)
+		return err
 	}
-	// Detach the old project's terminals while their server is still up,
-	// then make the new connection the open one.
-	a.closeTerminals()
-	a.adoptRemote(rc)
-	a.git.Open = false
-	a.git.Reset()
-	a.fileClip = nil
-	a.fileClipRemote = false
-	a.fileCut = false
-	a.dropPickerRemote()
-	a.store = s
-	a.treeOpen = true
-	a.serverAlias = host
-	a.remotePath = remotePath
-	a.layoutPath = a.projectLayoutPath("remote:" + host + ":" + remotePath)
+	a.stashActiveWorkspace()
+	ws := &workspace{
+		key:         key,
+		project:     a.project,
+		store:       s,
+		serverAlias: host,
+		remotePath:  remotePath,
+		remote:      rc,
+		layoutPath:  a.projectLayoutPath("remote:" + host + ":" + remotePath),
+		treeOpen:    true,
+		active:      -1,
+		openDirs:    map[string]bool{},
+	}
+	a.workspaces[key] = ws
+	a.activateWorkspace(ws)
 	a.rememberRemoteProject(remoteProject{Host: host, Path: remotePath})
-	a.tabs = nil
-	a.active = -1
-	a.focusReq = nil
-	a.treeSel = ""
-	a.treeQuery = ""
-	a.treeSearch.CancelFocus()
-	a.treeReveal = ""
-	a.openDirs = map[string]bool{}
-	a.tabScroll = ui.ScrollState{}
-	a.treeDraft = nil
-	a.rename = nil
-	a.paletteOpen = false
-	a.projectOpen = false
-	a.remotePicker = false
-	a.err = ""
 	if !a.restoreLayout() {
 		a.focusFirstNote()
 	}
@@ -422,39 +557,149 @@ func (a *app) rememberRemoteProject(p remoteProject) {
 	a.remoteProjects = out
 }
 
+// beginRemoteTask covers the window with a loading state and returns
+// the sequence that guards its result.
+func (a *app) beginRemoteTask(msg string) (int, *mygo.Window) {
+	if a.remoteBusy {
+		return 0, nil
+	}
+	a.remoteTaskSeq++
+	a.remoteBusy = true
+	a.remoteBusyMsg = msg
+	a.invalidate()
+	if a.win != nil {
+		return a.remoteTaskSeq, a.win
+	}
+	return a.remoteTaskSeq, a.settingsWin
+}
+
+// setRemoteBusyMsg changes the line under the spinner, once the task may
+// still publish.
+func (a *app) setRemoteBusyMsg(seq int, msg string) {
+	if !a.remoteBusy || a.remoteTaskSeq != seq {
+		return
+	}
+	a.remoteBusyMsg = msg
+	a.invalidate()
+}
+
+// endRemoteTask uncovers the window; a result of an older task is
+// dropped by its sequence.
+func (a *app) endRemoteTask(seq int) bool {
+	if a.remoteTaskSeq != seq {
+		return false
+	}
+	a.remoteBusy = false
+	a.remoteBusyMsg = ""
+	a.invalidate()
+	return true
+}
+
+// onWindow runs fn on the window's thread when this build has one.
+func onWindow(win *mygo.Window, fn func()) {
+	if win != nil {
+		win.Update(fn)
+		return
+	}
+	fn()
+}
+
+// remoteBusyView covers the window while a server is reached, so the
+// first connection does not look like a freeze.
+func (a *app) remoteBusyView(c *ui.Context, k *colors) {
+	if !a.remoteBusy {
+		return
+	}
+	ui.Overlay(c, func() {
+		back := ui.Box(c).Absolute().Left(0).Top(0).Right(0).Bottom(0).
+			Center().Background(k.Backdrop).Modal()
+		back.Children(func() {
+			panel := ui.Row(c).Width(330).Padding(18, 20).Gap(14).Radius(radius).
+				Background(k.Panel).Border(1, k.PanelBorder).
+				Shadow(0, 18, 44, -8, k.ShadowFocused).AlignItems(ui.Center).
+				Focusable().Focus()
+			panel.Children(func() {
+				ui.Spinner(c).Size(18, 18).Label("Working")
+				ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
+					ui.Text(c, "Connecting to a server").FontSize(13).
+						FontWeight(600).TextColor(k.Text)
+					ui.Text(c, a.remoteBusyMsg).FontSize(11.5).TextColor(k.TextMuted).
+						LineHeight(1.35)
+				})
+			})
+		})
+	})
+}
+
 // openRemotePicker asks the selected server for its home, then shows the
 // directories to choose a project from.
 func (a *app) openRemotePicker(host string) {
+	if !terminalsSupported() {
+		a.fail(fmt.Errorf("remote projects need macOS or Linux"))
+		return
+	}
+	if a.remoteBusy {
+		return
+	}
 	if err := a.saveNow(); err != nil {
 		a.fail(fmt.Errorf("could not save the open project: %w", err))
 		return
 	}
 	a.dropPickerRemote()
-	rc, err := a.connectRemote(host)
-	if err != nil {
-		a.fail(err)
+	a.initWorkspaces()
+	existing := a.remoteForHost(host)
+	seq, win := a.beginRemoteTask("Connecting to " + a.hostLabel(host) + "…")
+	if seq == 0 {
 		return
 	}
-	if rc != a.remote {
-		a.remotePick = rc
-	}
-	homeDir, err := sshOutput(host, `printf %s "$HOME"`)
-	if err != nil {
-		a.dropPickerRemote()
-		a.fail(err)
-		return
-	}
-	a.remoteHost = host
-	a.remoteQuery = homeDir
-	a.remoteDirs, err = rc.client.ListDirs(homeDir)
-	if err != nil {
-		a.dropPickerRemote()
-		a.fail(err)
-		return
-	}
-	a.remotePicker = true
-	a.serverOpen = false
-	a.invalidate()
+	go func() {
+		rc := existing
+		var err error
+		if rc == nil {
+			rc, err = dialRemote(host)
+		}
+		var home string
+		var dirs []session.FileEntry
+		if err == nil {
+			home, err = sshOutput(host, `printf %s "$HOME"`)
+		}
+		if err == nil {
+			onWindow(win, func() { a.setRemoteBusyMsg(seq, "Reading folders on "+a.hostLabel(host)+"…") })
+			dirs, err = rc.client.ListDirs(home)
+		}
+		onWindow(win, func() {
+			if !a.endRemoteTask(seq) {
+				if rc != nil && rc != existing {
+					a.closeRemoteConn(rc)
+				}
+				return
+			}
+			if err != nil {
+				if rc != nil && rc != existing {
+					a.closeRemoteConn(rc)
+				}
+				a.fail(err)
+				return
+			}
+			if rc != nil {
+				a.remotes[host] = rc
+			}
+			if rc != a.remote {
+				a.remotePick = rc
+			} else {
+				a.remotePick = nil
+			}
+			a.remoteHost = host
+			a.remoteQuery = home
+			a.remoteDirs = dirs
+			a.remoteDirsSeq++
+			a.remoteDirsBusy = false
+			a.remoteErr = ""
+			a.remotePicker = true
+			a.serverOpen = false
+			a.invalidate()
+		})
+	}()
 }
 
 // pickerRemote is the server whose folders the project picker shows.
@@ -469,11 +714,28 @@ func (a *app) pickerRemote() *remoteConn {
 // open project's server is left alone.
 func (a *app) dropPickerRemote() {
 	a.remotePicker = false
+	a.remoteDirsBusy = false
+	a.remoteDirsSeq++
 	rc := a.remotePick
 	a.remotePick = nil
-	if rc != nil && rc != a.remote {
-		a.closeRemoteConn(rc)
+	if rc == nil || rc == a.remote || a.workspaceUsesHost(rc.host) {
+		return
 	}
+	a.closeRemoteConn(rc)
+}
+
+// workspaceUsesHost reports whether a loaded project keeps a connection
+// to host, which must outlive the picker that made it.
+func (a *app) workspaceUsesHost(host string) bool {
+	if a.serverAlias == host && a.remotePath != "" {
+		return true
+	}
+	for _, ws := range a.workspaces {
+		if ws.serverAlias == host && ws.remotePath != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *app) remotePickerModal(c *ui.Context, k *colors) {
@@ -482,51 +744,58 @@ func (a *app) remotePickerModal(c *ui.Context, k *colors) {
 	}
 	dirs := a.remoteDirs
 	q := strings.ToLower(strings.TrimSpace(a.remoteQuery))
-	a.remoteErr = ""
 	ui.DialogBase(c, &a.remotePicker, func(backdrop, panel ui.Element) {
 		backdrop.Background(k.Backdrop)
-		panel.Width(620).Height(520).Radius(radius).Background(k.Panel).
+		panel.Width(620).Height(520).Radius(radius).Background(k.Sheet).
 			Border(1, k.PanelBorder).
-			Shadow(0, 24, 60, -8, ui.RGBA(0, 0, 0, 0.28)).Clip()
-		ui.Column(c).Children(func() {
-			ui.Row(c).Height(50).Padding(0, 14, 0, 12).Gap(9).AlignItems(ui.Center).
+			Shadow(0, 24, 70, -10, k.ShadowFocused).Clip()
+		ui.Column(c).Fill().Children(func() {
+			ui.Row(c).Height(60).Padding(0, 18, 0, 12).Gap(11).AlignItems(ui.Center).
 				BorderWidth(0, 0, 1, 0).BorderColor(k.PanelBorder).Children(func() {
-				ui.Icon(c, icons.Icon("server")).Size(16, 16).TextColor(k.TextMuted)
-				ui.Text(c, "Open Project on "+a.remoteHost).FontSize(13.5).
-					FontWeight(600).TextColor(k.Text)
+				ui.Box(c).Size(34, 34).Radius(radius).Background(k.Hover).Center().Children(func() {
+					ui.Icon(c, icons.Icon("server")).Size(18, 18).TextColor(k.TextMuted)
+				})
+				ui.Column(c).Gap(1).Children(func() {
+					ui.Text(c, "Open Project on "+a.remoteHost).FontSize(15).
+						FontWeight(650).TextColor(k.Text)
+					ui.Text(c, "Choose a folder on the server").FontSize(11.5).
+						TextColor(k.TextFaint)
+				})
 				ui.Spacer(c)
-				if iconButton(c, k, "x", "Close", 24, 13).Clicked() {
+				if iconButton(c, k, "x", "Close", 28, 15).Clicked() {
 					a.remotePicker = false
 				}
 			})
-			ui.Row(c).Padding(10, 14).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Icon(c, icons.Icon("search")).Size(14, 14).TextColor(k.TextFaint)
-				in := ui.TextInputBase(c, &a.remoteQuery).Grow(1).FontSize(13).
-					Placeholder("Server project path…").AutoFocus()
-				open := func() {
-					path := strings.TrimSpace(a.remoteQuery)
-					if path == "" {
-						return
-					}
-					a.remotePicker = false
-					a.dropPickerRemote()
-					a.later(func() {
-						if err := a.openRemoteProject(a.remoteHost, path); err != nil {
-							a.fail(err)
+			ui.Row(c).Padding(12, 18).Gap(8).AlignItems(ui.Center).Children(func() {
+				ui.Row(c).Grow(1).Height(34).Padding(0, 10).Gap(7).Radius(radius).
+					Background(k.Hover).AlignItems(ui.Center).Children(func() {
+					ui.Icon(c, icons.FolderIcon()).Size(14, 14).TextColor(k.TextFaint)
+					in := ui.TextInputBase(c, &a.remoteQuery).Grow(1).FontSize(13).
+						Placeholder("Server project path…").AutoFocus()
+					if in.Submitted() {
+						path := strings.TrimSpace(a.remoteQuery)
+						if path != "" {
+							a.remotePicker = false
+							a.later(func() { a.openRemoteProjectAsync(a.remoteHost, path) })
 						}
-					})
-				}
-				if in.Submitted() {
-					open()
-				}
+					}
+				})
 				if ui.PrimaryButton(c, "Open").Clicked() {
-					open()
+					path := strings.TrimSpace(a.remoteQuery)
+					if path != "" {
+						a.remotePicker = false
+						a.later(func() { a.openRemoteProjectAsync(a.remoteHost, path) })
+					}
 				}
 			})
-			if strings.TrimSpace(q) != "" && dirs == nil {
-				a.remoteErr = "Reading folders…"
-			}
-			ui.Scroll(c).Grow(1).MinHeight(0).Padding(6).Children(func() {
+			ui.Scroll(c).Grow(1).MinHeight(0).Padding(4, 6).Children(func() {
+				if a.remoteDirsBusy {
+					ui.Row(c).Padding(10, 10).Gap(8).AlignItems(ui.Center).Children(func() {
+						ui.Spinner(c).Size(14, 14).Label("Reading folders")
+						ui.Text(c, "Reading folders…").FontSize(12).TextColor(k.TextFaint)
+					})
+					return
+				}
 				for _, d := range dirs {
 					if !d.Dir {
 						continue
@@ -535,21 +804,15 @@ func (a *app) remotePickerModal(c *ui.Context, k *colors) {
 						continue
 					}
 					d := d
-					row := ui.Row(c).Key(d.Rel).Height(34).Padding(0, 10).Gap(8).
-						Radius(radius).Cursor(ui.CursorPointer).Role(ui.RoleButton).
+					row := ui.Row(c).Key(d.Rel).Height(34).Padding(0, 10).MarginY(2).
+						Gap(8).Radius(radius).Cursor(ui.CursorPointer).Role(ui.RoleButton).
 						Label("Open " + d.Rel)
 					if row.Hovered() {
 						row.Background(k.Hover)
 					}
 					if row.Clicked() {
 						a.remoteQuery = d.Rel
-						rc := a.pickerRemote()
-						a.remoteDirs = nil
-						if rc != nil {
-							if entries, err := rc.client.ListDirs(d.Rel); err == nil {
-								a.remoteDirs = entries
-							}
-						}
+						a.loadRemoteDirs(d.Rel)
 					}
 					row.Children(func() {
 						ui.Icon(c, icons.FolderIcon()).Size(15, 15).TextColor(k.TextMuted)
@@ -566,6 +829,41 @@ func (a *app) remotePickerModal(c *ui.Context, k *colors) {
 	if !a.remotePicker {
 		a.dropPickerRemote()
 	}
+}
+
+// loadRemoteDirs reads a folder's subfolders away from the UI, with a
+// small spinner inside the picker.
+func (a *app) loadRemoteDirs(path string) {
+	rc := a.pickerRemote()
+	if rc == nil || rc.client == nil {
+		a.remoteErr = "The server is not connected."
+		a.remoteDirs = nil
+		a.invalidate()
+		return
+	}
+	a.remoteDirsSeq++
+	seq := a.remoteDirsSeq
+	a.remoteDirsBusy = true
+	a.remoteDirs = nil
+	a.remoteErr = ""
+	a.invalidate()
+	win := a.win
+	go func() {
+		entries, err := rc.client.ListDirs(path)
+		onWindow(win, func() {
+			if seq != a.remoteDirsSeq {
+				return
+			}
+			a.remoteDirsBusy = false
+			if err != nil {
+				a.remoteErr = err.Error()
+				a.remoteDirs = nil
+			} else {
+				a.remoteDirs = entries
+			}
+			a.invalidate()
+		})
+	}()
 }
 
 func (a *app) serverChip(c *ui.Context, k *colors) {
@@ -617,14 +915,6 @@ func (a *app) serverRow(c *ui.Context, k *colors, host, label string) {
 		a.serverOpen = false
 		if host == "" {
 			a.later(func() {
-				if err := a.saveNow(); err != nil {
-					a.fail(err)
-					return
-				}
-				a.closeRemote()
-				a.serverAlias = ""
-				a.remotePath = ""
-				a.saveSettings()
 				if a.project != "" {
 					a.openProject(a.project)
 				}
@@ -665,11 +955,7 @@ func (a *app) remoteProjectRows(c *ui.Context, k *colors) {
 		}
 		if row.Clicked() {
 			a.projectOpen = false
-			a.later(func() {
-				if err := a.openRemoteProject(p.Host, p.Path); err != nil {
-					a.fail(err)
-				}
-			})
+			a.later(func() { a.openRemoteProjectAsync(p.Host, p.Path) })
 		}
 		row.Children(func() {
 			ui.Icon(c, icons.FolderIcon()).Size(15, 15).TextColor(k.TextMuted)

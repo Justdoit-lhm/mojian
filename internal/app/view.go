@@ -47,7 +47,10 @@ func (a *app) view(c *ui.Context) {
 	a.sshPicker(c, k)
 	a.palette(c, k)
 	a.quickOpenModal(c, k)
-	a.shortcuts(c)
+	a.remoteBusyView(c, k)
+	if !a.remoteBusy {
+		a.shortcuts(c)
+	}
 	a.persistLayout(c)
 	a.updateTitle()
 }

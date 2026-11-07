@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+- Removed the separate Fonts settings page; editor and terminal font
+  families are still picked from their own pages, through the same
+  searchable family list.
+- Settings › Keyboard's shortcut filter now lines up with the shortcut
+  rows and their key chips.
+- The remote server's folder picker scrolls again, with room between
+  hovered rows, and uses the same opaque panel, header and row spacing as
+  the other pickers.
+- Connecting to an SSH server runs away from the UI thread behind a
+  loading card; reading a folder or opening its project no longer freezes
+  the window.
+- Opened projects stay loaded in a workspace cache: switching back
+  restores their tabs, terminals, layout and Git page instead of reading
+  the project again. SSH connections are shared by host and kept while
+  any loaded project uses them.
+- Settings › Hosts' add form now uses padded, visible address and name
+  fields aligned with the section; the empty-server and About notes no
+  longer touch the card edges.
+
 ## 0.1.5
 
 - Settings is redesigned in the app's own visual language: a searchable

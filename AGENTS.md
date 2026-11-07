@@ -2,15 +2,15 @@
 
 ## Project Overview
 
-Mojian is a quiet text editor for plain files, written in Go against [MyGo](https://mygo.egoist.dev)'s native UI. It is not a web app: there is no webview, no cgo, no JavaScript build. One Go binary draws its own window (Metal on macOS). Tabs are workspaces; each tab holds a binary split tree of panes, and each pane edits a file, previews a picture or PDF, or runs a terminal. Version `0.1.0`, bundle id `dev.mojian.app`, macOS 13+.
+Mojian is a quiet text editor for plain files, written in Go against [MyGo](https://mygo.egoist.dev)'s native UI. It is not a web app: there is no webview, no cgo, no JavaScript build. One Go binary draws its own window (Metal on macOS). Tabs are workspaces; each tab holds a binary split tree of panes, and each pane edits a file, previews a picture or PDF, or runs a terminal. Version `0.1.5`, bundle id `dev.mojian.app`, macOS 13+.
 
-A project is just a folder; it keeps its own tabs and layout. Edits stay in memory until an explicit `⌘S`. Local terminals survive quitting because they live in a detached session server; a remote project's terminal ends with its SSH connection. Remote projects are edited directly on the host: only a listing is cached, and a file's text is read when it opens.
+A project is just a folder; it keeps its own tabs and layout. Opened projects stay loaded in a workspace cache (`internal/app/workspace.go`): switching stashes the active tabs, terminals, layout and Git page and restores the next project without reading it again. Edits stay in memory until an explicit `⌘S`. Local terminals survive quitting because they live in a detached session server; a remote project's terminal ends with its SSH connection. Remote projects are edited directly on the host: only a listing is cached, and a file's text is read when it opens.
 
 Read `.agents/skills/mygo-maintenance/SKILL.md` before touching UI code; it is the authoritative source for MyGo lifetime and threading rules.
 
 ## Architecture & Data Flow
 
-**Immediate-mode UI, one state struct.** `internal/app/app.go:28` holds every piece of app state as plain fields on `*app`. There are no reducers, observables or stores. `(*app).view` (`internal/app/view.go:21`) rebuilds the whole element tree each frame from that state; MyGo calls it again after input, `Window.Update` or `Invalidate`. A second root, `(*app).settingsWindowView` (`internal/app/settings.go:185`), draws the Settings window.
+**Immediate-mode UI, one state struct.** `internal/app/app.go:28` holds every piece of app state as plain fields on `*app`. There are no reducers, observables or stores. `(*app).view` (`internal/app/view.go:21`) rebuilds the whole element tree each frame from that state; MyGo calls it again after input, `Window.Update` or `Invalidate`. A second root, `(*app).settingsWindowView` (`internal/app/settings.go:173`), draws the Settings window.
 
 Frame conventions that keep this correct:
 
@@ -23,7 +23,7 @@ Frame conventions that keep this correct:
 
 **Terminals live in a second process.** `internal/session` is a Unix-socket server (`session.Serve`, `server.go:48`) speaking JSON lines, `ProtocolVersion = 2` (`proto.go`). The app spawns it by re-executing itself with `-server` (`spawn_unix.go:19`), so quitting the app detaches local PTYs instead of killing them; reopening reattaches by session id. A remote server is started with `MOJIAN_TRANSIENT=1`: it stops shortly after the app disconnects, taking its terminals with it. Terminal panes are `terminal.Terminal` (MyGo's libghostty plugin) bound to a `session.Stream`.
 
-**Remote projects.** `internal/app/remote.go` uploads the embedded Linux server + `libghostty-vt` from `internal/remotebin`, opens an `ssh -N -L` forward to the remote socket, and opens the folder there directly: `session.Client.ListTree` lists it (names, sizes, times, text/asset kinds), a note is read when it opens, and a save or file operation writes through the same client (`remote_store.go`). There is no local mirror and no full re-upload. Git runs on the host through the server's `exec` op (`internal/app/git_bridge.go`); pictures and PDFs are fetched into `remote-assets/` under the app data for their viewers.
+**Remote projects.** `internal/app/remote.go` uploads the embedded Linux server + `libghostty-vt` from `internal/remotebin`, opens an `ssh -N -L` forward to the remote socket, and opens the folder there directly: `session.Client.ListTree` lists it (names, sizes, times, text/asset kinds), a note is read when it opens, and a save or file operation writes through the same client (`remote_store.go`). There is no local mirror and no full re-upload. Connections are pooled by host, shared by every loaded project and kept while one uses them; the first connection and project opening run off the UI thread behind a loading card (`openRemoteProjectAsync`). Git runs on the host through the server's `exec` op (`internal/app/git_bridge.go`); pictures and PDFs are fetched into `remote-assets/` under the app data for their viewers.
 
 **Cross-package contracts.** `git.Host` (`internal/git/git.go:34`) is the only interface the Git page uses to reach the window; `*app` implements it in `internal/app/git_bridge.go`. `internal/app/theme_bridge.go` exists so `app` touches `internal/theme` through one file.
 

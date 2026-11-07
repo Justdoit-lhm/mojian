@@ -138,9 +138,12 @@ Add a host in Settings › Hosts, then choose it from the server chip. Mojian
 starts a small per-user server there over `ssh` and works on the folder in
 place: the Explorer lists the host's files, a file is read when it opens,
 and saves and file operations write straight back. Git runs on the host
-too. A remote terminal ends when the SSH connection does; nothing is kept
-running after the app disconnects. No root, no listening port and no system
-service are installed.
+too. The first connection shows a loading card while the server uploads,
+and a project once opened stays loaded, so switching back restores its
+tabs and terminals without reading it again. A remote terminal ends when
+the SSH connection does; nothing is kept running after the app
+disconnects. No root, no listening port and no system service are
+installed.
 
 ### Git and the command palette
 
@@ -150,7 +153,7 @@ untracked work are all included.
 
 `Shift+Cmd+P` / `Ctrl+Shift+P` searches commands, files and tabs with fuzzy
 matching. `Cmd+,` / `Ctrl+,` opens Settings: General, Appearance, Editor,
-Fonts, Terminal, Shell, Notifications, Keyboard, Hosts, Git, Advanced and
+Terminal, Shell, Notifications, Keyboard, Hosts, Git, Advanced and
 Updates. Its search finds any preference by name or keyword, and
 `Cmd+F` focuses it. The window follows the system appearance by default;
 View › Appearance overrides it.
