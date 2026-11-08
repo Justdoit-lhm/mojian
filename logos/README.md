@@ -37,6 +37,7 @@ is in [`png/preview.png`](png/preview.png).
 | `png/mojian-app-icon-1024.png` | 1024 × 1024, paper app icon master |
 | `png/mojian-app-icon-512.png` … `-16.png` | 512, 256, 128, 64, 32, 16 |
 | `png/mojian-app-icon-reversed-1024.png` | 1024 × 1024, Finder/Dock app icon |
+| `png/mojian-tray-88.png` | 88 × 48, macOS menu bar template icon |
 | `png/mojian-logo-horizontal-1600.png` | 1600 × 382 |
 | `png/mojian-logo-horizontal-reversed-1600.png` | 1600 × 382 |
 | `png/mojian-logo-vertical-900.png` | 900 × 546 |
@@ -110,6 +111,11 @@ To restore the Finder icon or the light brand icon:
 cp logos/png/mojian-app-icon-reversed-1024.png resources/icon.png   # Finder/Dock
 cp logos/png/mojian-app-icon-1024.png resources/icon.png            # light brand
 ```
+
+The menu bar uses only the mark, as a black template image in
+`internal/assets/brand/mojian-tray.png`, so macOS tints it for a light or
+dark bar. It is exported from `svg/mojian-mark-mono.svg`; the menu bar
+never shows the app name beside it.
 
 The source icon keeps roughly a 4% transparent margin. Its shape is a
 superellipse (n = 5), not a circular rounded rectangle. The SVG is the

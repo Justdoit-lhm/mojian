@@ -5,6 +5,10 @@
 - Use the reversed ink tile as the Finder and Dock app icon, so the paper
   `m` and vermilion cursor stay legible on light and dark Finder
   backgrounds. The paper tile remains the light brand icon.
+- Add an icon-only Mojian mark to the macOS menu bar, like Docker's, with
+  Show, Settings and Quit in its menu. Closing the last window leaves the
+  menu bar item and the app running; the Dock icon is set from the same
+  embedded artwork at launch.
 
 ## 0.1.6
 

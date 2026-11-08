@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"mojian/internal/assets"
 	gitpage "mojian/internal/git"
 	"mojian/internal/session"
 
@@ -27,6 +28,7 @@ import (
 
 type app struct {
 	win   *mygo.Window
+	tray  *mygo.Tray
 	store *store
 
 	dataDir      string
@@ -244,6 +246,8 @@ func Run() {
 
 // open opens the window, with the tabs of the last launch.
 func (a *app) open() {
+	a.setDockIcon()
+	a.installTray()
 	if !a.loaded {
 		a.loaded = true
 		if dir, err := mygo.App.Path(mygo.PathUserData); err == nil {
@@ -314,6 +318,77 @@ func (a *app) open() {
 	a.win = a.createWindow("main")
 	a.registerActiveWorkspace()
 	a.updateTitle()
+}
+
+// setDockIcon gives the running app the new ink icon as soon as it starts.
+// The bundle carries the same icon, but the Dock keeps the icon a process
+// launched with until it returns; setting it here also covers a bare
+// executable run outside the .app.
+func (a *app) setDockIcon() {
+	if runtime.GOOS != "darwin" {
+		return
+	}
+	png, err := assets.Files.ReadFile("brand/mojian-app-icon.png")
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	if err := mygo.App.Dock.SetIcon(png); err != nil {
+		log.Print(err)
+	}
+}
+
+// installTray adds Mojian's mark to the macOS menu bar. It stays after the
+// last window closes, like Docker's menu bar item, and brings the window
+// back without going through the Dock.
+func (a *app) installTray() {
+	if runtime.GOOS != "darwin" || a.tray != nil {
+		return
+	}
+	icon, err := assets.Files.ReadFile("brand/mojian-tray.png")
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	menu := mygo.NewMenu([]*mygo.MenuItem{
+		{Label: "Show Mojian", Click: func(*mygo.MenuItem, *mygo.Window) {
+			a.showFromTray()
+		}},
+		{Label: "Settings…", Click: func(*mygo.MenuItem, *mygo.Window) {
+			a.openSettingsWindow()
+		}},
+		mygo.Separator(),
+		{Label: "Quit Mojian", Click: func(*mygo.MenuItem, *mygo.Window) {
+			mygo.App.Quit()
+		}},
+	})
+	tray, err := mygo.NewTray(mygo.TrayOptions{
+		ID:             "mojian",
+		Icon:           icon,
+		IconIsTemplate: true,
+		ToolTip:        "Mojian",
+		Menu:           menu,
+	})
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	a.tray = tray
+}
+
+// showFromTray brings the main window back, opening it if it was closed.
+func (a *app) showFromTray() {
+	if a.quitting {
+		return
+	}
+	if a.win == nil {
+		a.open()
+		return
+	}
+	a.win.Restore()
+	a.win.Show()
+	a.win.Focus()
+	mygo.App.Focus()
 }
 
 // createWindow opens a window for this app instance.
