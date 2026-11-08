@@ -3,9 +3,9 @@
 > Words on paper. The tool steps back.
 
 <p>
-  <a href="https://awesomemygo.dev/apps/mojian"><img src="https://awesomemygo.dev/badge.svg" alt="Listed on Awesome MyGo" height="28"></a>
-  <a href="https://github.com/ox0pine/mojian/releases"><img src="https://img.shields.io/github/v/release/ox0pine/mojian?style=flat&amp;labelColor=1F1B16&amp;color=D24A2B" alt="Latest release" height="28"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/ox0pine/mojian?style=flat&amp;labelColor=1F1B16&amp;color=1F1B16" alt="MIT license" height="28"></a>
+  <a href="https://awesomemygo.dev/apps/mojian"><img src="https://awesomemygo.dev/badge.svg" alt="Listed on Awesome MyGo" height="20"></a>
+  <a href="https://github.com/ox0pine/mojian/releases"><img src="https://img.shields.io/github/v/release/ox0pine/mojian?style=flat&amp;labelColor=1F1B16&amp;color=D24A2B" alt="Latest release" height="20"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/ox0pine/mojian?style=flat&amp;labelColor=1F1B16&amp;color=1F1B16" alt="MIT license" height="20"></a>
 </p>
 
 Mojian is a native plain-text editor for ordinary folders. Edit files, preview images and PDFs, run persistent terminals, and inspect Git diffs in tiled workspaces. No database, account, webview, or cgo.
