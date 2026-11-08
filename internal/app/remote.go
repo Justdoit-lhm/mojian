@@ -111,7 +111,7 @@ func (a *app) remoteForHost(host string) *remoteConn {
 			return rc
 		}
 		delete(a.remotes, host)
-		a.closeRemoteConn(rc)
+		a.detachRemoteConn(rc)
 	}
 	if a.remote != nil && a.remote.host == host {
 		if remoteHealthy(a.remote) {
@@ -120,7 +120,7 @@ func (a *app) remoteForHost(host string) *remoteConn {
 		}
 		stale := a.remote
 		a.remote = nil
-		a.closeRemoteConn(stale)
+		a.detachRemoteConn(stale)
 	}
 	for _, ws := range a.workspaces {
 		if ws.serverAlias == host && remoteHealthy(ws.remote) {
@@ -202,10 +202,11 @@ func dialRemote(host string) (*remoteConn, error) {
 		}
 	}
 	start := func() error {
-		// A transient server ends with the app connection, taking its
-		// terminals with it; remote shells are not kept after a drop.
+		// The server outlives the app: its terminals and files stay
+		// usable after the SSH connection drops. Stop it explicitly with
+		// `mojian-server -stop` when it is no longer wanted.
 		cmd := "MOJIAN_DIR=" + shellQuote(dir) + " MOJIAN_RUNTIME_DIR=" + shellQuote(runtimeDir) +
-			" MOJIAN_TRANSIENT=1 nohup " +
+			" nohup " +
 			shellQuote(binPath) + " >>" + shellQuote(dir+"/server.log") + " 2>&1 &"
 		if _, err := sshOutput(host, cmd); err != nil {
 			return err
@@ -320,14 +321,14 @@ func uploadRemote(host, path string, data []byte, mode string) error {
 	return nil
 }
 
-// remoteAssetCache is where pictures and PDFs of a remote project are
+// serverAssetCache is where pictures and PDFs of a server project are
 // fetched for their viewers.
-func (a *app) remoteAssetCache(host, remotePath string) string {
+func (a *app) serverAssetCache(serverID, root string) string {
 	base := a.dataDir
 	if base == "" {
 		base, _ = os.UserCacheDir()
 	}
-	return filepath.Join(base, "remote-assets", shortHash(host+"\x00"+remotePath))
+	return filepath.Join(base, "server-assets", shortHash(serverID+"\x00"+root))
 }
 
 func shortHash(s string) string {
@@ -353,10 +354,10 @@ func (a *app) closeRemote() {
 	if rc != nil && a.remotes != nil && a.remotes[rc.host] == rc {
 		delete(a.remotes, rc.host)
 	}
-	a.closeRemoteConn(rc)
+	a.detachRemoteConn(rc)
 }
 
-func (a *app) closeRemoteConn(rc *remoteConn) {
+func (a *app) detachRemoteConn(rc *remoteConn) {
 	if rc == nil {
 		return
 	}
@@ -364,9 +365,8 @@ func (a *app) closeRemoteConn(rc *remoteConn) {
 		delete(a.remotes, rc.host)
 	}
 	if rc.client != nil {
-		// The remote server is transient: ending it stops its shells now
-		// instead of after the idle grace period.
-		_ = rc.client.Shutdown()
+		// Detach only: the server and its terminals keep running for the
+		// next connection.
 		_ = rc.client.Close()
 	}
 	if rc.forward != nil && rc.forward.Process != nil {
@@ -413,7 +413,7 @@ func (a *app) openRemoteProjectAsync(host, remotePath string) {
 	if seq == 0 {
 		return
 	}
-	cache := a.remoteAssetCache(host, remotePath)
+	cache := a.serverAssetCache(host, remotePath)
 	go func() {
 		rc := existing
 		var err error
@@ -425,18 +425,18 @@ func (a *app) openRemoteProjectAsync(host, remotePath string) {
 			onWindow(win, func() {
 				a.setRemoteBusyMsg(seq, "Opening "+filepath.Base(remotePath)+" on "+a.hostLabel(host)+"…")
 			})
-			s, err = openRemoteStore(rc.client, remotePath, cache)
+			s, err = openServerStore(rc.client, remotePath, cache, false)
 		}
 		onWindow(win, func() {
 			if !a.endRemoteTask(seq) {
 				if rc != nil && rc != existing {
-					a.closeRemoteConn(rc)
+					a.detachRemoteConn(rc)
 				}
 				return
 			}
 			if err != nil {
 				if rc != nil && rc != existing {
-					a.closeRemoteConn(rc)
+					a.detachRemoteConn(rc)
 				}
 				a.fail(err)
 				return
@@ -506,7 +506,7 @@ func (a *app) openRemoteProject(host, remotePath string) error {
 	if err != nil {
 		return err
 	}
-	s, err := openRemoteStore(rc.client, remotePath, a.remoteAssetCache(host, remotePath))
+	s, err := openServerStore(rc.client, remotePath, a.serverAssetCache(host, remotePath), false)
 	if err != nil {
 		return err
 	}
@@ -670,13 +670,13 @@ func (a *app) openRemotePicker(host string) {
 		onWindow(win, func() {
 			if !a.endRemoteTask(seq) {
 				if rc != nil && rc != existing {
-					a.closeRemoteConn(rc)
+					a.detachRemoteConn(rc)
 				}
 				return
 			}
 			if err != nil {
 				if rc != nil && rc != existing {
-					a.closeRemoteConn(rc)
+					a.detachRemoteConn(rc)
 				}
 				a.fail(err)
 				return
@@ -721,7 +721,7 @@ func (a *app) dropPickerRemote() {
 	if rc == nil || rc == a.remote || a.workspaceUsesHost(rc.host) {
 		return
 	}
-	a.closeRemoteConn(rc)
+	a.detachRemoteConn(rc)
 }
 
 // workspaceUsesHost reports whether a loaded project keeps a connection

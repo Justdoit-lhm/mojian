@@ -213,8 +213,8 @@ func (a *app) registerActiveWorkspace() {
 	a.workspaces[key] = a.captureWorkspace(key)
 }
 
-// closeWorkspaces detaches every loaded project's terminals and ends its
-// remote server, as quitting the app does.
+// closeWorkspaces detaches every loaded project's terminals and remote
+// connection, as quitting the app does. The servers keep running.
 func (a *app) closeWorkspaces() {
 	a.initWorkspaces()
 	if key := a.activeWorkspaceKey(); key != "" {
@@ -225,11 +225,11 @@ func (a *app) closeWorkspaces() {
 	}
 	active := a.remote
 	for host, rc := range a.remotes {
-		a.closeRemoteConn(rc)
+		a.detachRemoteConn(rc)
 		delete(a.remotes, host)
 	}
 	if active != nil {
-		a.closeRemoteConn(active)
+		a.detachRemoteConn(active)
 	}
 	a.remotes = nil
 	a.remote = nil

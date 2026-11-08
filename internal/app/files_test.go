@@ -213,6 +213,7 @@ func TestTerminalPaneAndSharedLimit(t *testing.T) {
 }
 
 func TestPickerOpensChosenProject(t *testing.T) {
+	startLocalServerForTest(t)
 	root := t.TempDir()
 	alpha := filepath.Join(root, "Alpha")
 	beta := filepath.Join(root, "Beta")

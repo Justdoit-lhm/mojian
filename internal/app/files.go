@@ -94,8 +94,8 @@ func (s *store) remap(oldRel, newRel string, dir bool) {
 		}
 		rest := strings.TrimPrefix(n.Rel, oldRel)
 		n.Rel = filepath.Join(newRel, rest)
-		if s.remote != nil {
-			n.Path = s.remote.abs(n.Rel)
+		if s.server != nil {
+			n.Path = s.server.abs(n.Rel)
 		} else {
 			n.Path = filepath.Join(s.dir, n.Rel)
 		}
@@ -113,8 +113,8 @@ func (s *store) remap(oldRel, newRel string, dir bool) {
 		}
 		rest := strings.TrimPrefix(assetRel, oldRel)
 		f.Rel = filepath.Join(newRel, rest)
-		if s.remote != nil {
-			f.Path = s.remote.abs(f.Rel)
+		if s.server != nil {
+			f.Path = s.server.abs(f.Rel)
 		} else {
 			f.Path = filepath.Join(s.dir, f.Rel)
 		}
@@ -132,7 +132,7 @@ func (s *store) rename(oldRel, name string) (string, []*note, error) {
 	if oldRel == "" {
 		return "", nil, errors.New("the project itself cannot be renamed")
 	}
-	if s.remote != nil {
+	if s.server != nil {
 		oldRel = filepath.Clean(oldRel)
 		base := filepath.Base(oldRel)
 		newName := fileName(name, base)
@@ -229,6 +229,13 @@ func (s *store) copyInto(srcAbs, destDirRel string) (string, error) {
 	if inside(srcAbs, destDir) {
 		return "", errors.New("a folder cannot be copied into itself")
 	}
+	if s.server != nil && s.server.local {
+		destRel := uniqueCopyRel(s, destDirRel, filepath.Base(srcAbs))
+		if err := s.server.client.Copy(srcAbs, s.server.abs(destRel)); err != nil {
+			return "", err
+		}
+		return destRel, nil
+	}
 	dest := uniqueCopyPath(destDir, filepath.Base(srcAbs))
 	if err := copyPath(srcAbs, dest); err != nil {
 		return "", err
@@ -254,6 +261,26 @@ func (s *store) moveInto(srcAbs, destDirRel string) (string, error) {
 	}
 	if inside(srcAbs, destDir) {
 		return "", errors.New("a folder cannot be moved into itself")
+	}
+	if s.server != nil && s.server.local {
+		oldRel, insideProject := s.relOf(srcAbs)
+		if insideProject {
+			if filepath.Dir(srcAbs) == destDir {
+				return oldRel, nil
+			}
+			return s.moveRel(oldRel, destDirRel)
+		}
+		destRel, err := s.copyInto(srcAbs, destDirRel)
+		if err != nil {
+			return "", err
+		}
+		if err := s.server.client.Remove(srcAbs); err != nil {
+			return destRel, err
+		}
+		if err := s.refresh(); err != nil {
+			return destRel, err
+		}
+		return destRel, nil
 	}
 	oldRel, insideProject := s.relOf(srcAbs)
 	if !insideProject {
@@ -569,7 +596,7 @@ func (a *app) copySelectionTo(rel string, cut bool) {
 	if rel == "" || a.store == nil {
 		return
 	}
-	if a.store.remote != nil {
+	if a.store.server != nil && !a.store.server.local {
 		// A remote path is not a local file, so the clipboard is the
 		// app's own; paste works within the same remote project.
 		a.fileClip = []string{rel}
@@ -601,7 +628,7 @@ func (a *app) duplicate(rel string) {
 	dest := a.destinationFor(rel)
 	var newRel string
 	var err error
-	if a.store.remote != nil {
+	if a.store.server != nil {
 		newRel, err = a.store.duplicateRel(rel, dest)
 	} else {
 		var abs string
@@ -625,8 +652,12 @@ func (a *app) pasteInto(rel string) {
 		return
 	}
 	dest := a.destinationFor(rel)
-	if a.store.remote != nil {
-		a.pasteRemote(rel, dest)
+	if a.store.server != nil {
+		if a.store.server.local {
+			a.pasteLocalServer(rel, dest)
+		} else {
+			a.pasteRemote(rel, dest)
+		}
 		return
 	}
 	var paths []string
@@ -664,6 +695,75 @@ func (a *app) pasteInto(rel string) {
 		}
 	}
 	a.fileCut = false
+	if err := a.store.refresh(); err != nil {
+		a.fail(err)
+		return
+	}
+	if lastErr != nil {
+		a.fail(lastErr)
+	}
+	if first != "" {
+		a.selectRel(first)
+	}
+}
+
+// pasteLocalServer pastes local files into a project backed by the local
+// server. The files themselves are copied or moved on the server, so the
+// project content never comes through the app.
+func (a *app) pasteLocalServer(rel, dest string) {
+	move := a.fileCut && !a.fileClipRemote
+	var paths []string
+	if a.fileClipRemote {
+		// fileClip holds remote-relative paths. Keep that clipboard for
+		// the remote project and paste whatever the system clipboard has.
+		if a.win != nil && runtime.GOOS != "js" {
+			if got, err := mygo.Clipboard.ReadFiles(); err == nil && len(got) > 0 {
+				paths = got
+			}
+		}
+		if len(paths) == 0 {
+			a.fail(errors.New("the clipboard has no local files"))
+			return
+		}
+	} else {
+		if move && len(a.fileClip) > 0 {
+			paths = a.fileClip
+		} else if a.win != nil && runtime.GOOS != "js" {
+			if got, err := mygo.Clipboard.ReadFiles(); err == nil && len(got) > 0 {
+				paths = got
+			}
+		}
+		if len(paths) == 0 {
+			paths = a.fileClip
+		}
+		if len(paths) == 0 {
+			a.fail(errors.New("the clipboard has no files"))
+			return
+		}
+	}
+	var first string
+	var lastErr error
+	for _, p := range paths {
+		var newRel string
+		var err error
+		if move {
+			newRel, err = a.store.moveInto(p, dest)
+		} else {
+			newRel, err = a.store.copyInto(p, dest)
+		}
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if first == "" {
+			first = newRel
+		}
+	}
+	if move {
+		a.fileCut = false
+		a.fileClip = nil
+		a.fileClipRemote = false
+	}
 	if err := a.store.refresh(); err != nil {
 		a.fail(err)
 		return
@@ -781,7 +881,7 @@ func (a *app) reveal(rel string) {
 	if a.store == nil || runtime.GOOS == "js" {
 		return
 	}
-	if a.store.remote != nil {
+	if a.store.server != nil && !a.store.server.local {
 		a.fail(errors.New("remote projects have no Finder window"))
 		return
 	}
@@ -808,7 +908,7 @@ func (a *app) trash(rel string) {
 		a.fail(errors.New("trash needs the desktop app"))
 		return
 	}
-	if a.store.remote != nil {
+	if a.store.server != nil && !a.store.server.local {
 		a.trashRemote(rel)
 		return
 	}
@@ -828,6 +928,12 @@ func (a *app) trash(rel string) {
 		return f.Rel == rel || strings.HasPrefix(f.Rel, rel+string(filepath.Separator))
 	})
 	a.store.forget(rel)
+	if a.store.server != nil {
+		if err := a.store.refresh(); err != nil {
+			a.fail(err)
+			return
+		}
+	}
 	a.treeSel = a.destinationFor(rel)
 	a.openPath(a.treeSel)
 	a.treeReveal = a.treeSel

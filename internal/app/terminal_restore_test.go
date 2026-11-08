@@ -34,6 +34,68 @@ func startTestSessionServer(t *testing.T, dir string) (*session.Client, <-chan e
 	return c, done
 }
 
+func TestRestoredTerminalUsesItsOwnServer(t *testing.T) {
+	localDir := t.TempDir()
+	oneDir := t.TempDir()
+	twoDir := t.TempDir()
+	local, localDone := startTestSessionServer(t, localDir)
+	defer local.Close()
+	one, oneDone := startTestSessionServer(t, oneDir)
+	defer one.Close()
+	two, twoDone := startTestSessionServer(t, twoDir)
+	defer two.Close()
+
+	info, err := two.Create(session.CreateOptions{
+		Command: []string{"/bin/sh", "-c", "sleep 5"},
+		Cols:    40, Rows: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &app{
+		sessionClient: local,
+		serverAlias:   "one",
+		remotePath:    "/srv/app",
+		remote:        &remoteConn{host: "one", client: one},
+		remotes: map[string]*remoteConn{
+			"one": {host: "one", client: one},
+			"two": {host: "two", client: two},
+		},
+	}
+	p := newTermPane(newTermPaneSpec(termSpec{Server: "two"}, info.ID))
+	a.startRestoredTerminal(p)
+	if p.Term.startErr != "" {
+		t.Fatalf("restoring the terminal: %s", p.Term.startErr)
+	}
+	if p.Term.Term == nil {
+		t.Fatal("the terminal was not attached")
+	}
+	if p.Term.SID != info.ID || p.Term.Client != two {
+		t.Fatalf("terminal used %q on %p, want %q on the second server", p.Term.SID, p.Term.Client, info.ID)
+	}
+	if a.remote == nil || a.remote.host != "one" || a.serverAlias != "one" {
+		t.Fatal("restoring a terminal changed the active project's server")
+	}
+	if p.Term.stream != nil {
+		_ = p.Term.stream.Close()
+	}
+	if p.Term.Term != nil {
+		_ = p.Term.Term.Close()
+	}
+	for _, c := range []*session.Client{local, one, two} {
+		if err := c.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for name, done := range map[string]<-chan error{"local": localDone, "one": oneDone, "two": twoDone} {
+		select {
+		case <-done:
+		case <-time.After(3 * time.Second):
+			t.Fatalf("%s server did not stop", name)
+		}
+	}
+}
+
 func TestRestoredTerminalUsesTheRemoteServersSocket(t *testing.T) {
 	localDir, err := os.MkdirTemp("", "mj-local")
 	if err != nil {
@@ -62,7 +124,7 @@ func TestRestoredTerminalUsesTheRemoteServersSocket(t *testing.T) {
 		sessionClient: local,
 		remote:        &remoteConn{host: "remote", client: remote},
 	}
-	p := newTermPane(newTermPaneSpec(termSpec{}, info.ID))
+	p := newTermPane(newTermPaneSpec(termSpec{Server: "remote"}, info.ID))
 	a.startRestoredTerminal(p)
 	if p.Term.startErr != "" {
 		t.Fatalf("restoring the terminal: %s", p.Term.startErr)

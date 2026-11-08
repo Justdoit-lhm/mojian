@@ -107,7 +107,7 @@ func (a *app) openProject(dir string) {
 	}
 	a.layoutDirty = false
 	a.dropPickerRemote()
-	s, err := openStoreAt(abs)
+	s, err := a.openLocalStore(abs)
 	if err != nil {
 		a.fail(err)
 		return

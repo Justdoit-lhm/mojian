@@ -32,10 +32,6 @@ const (
 	scrollback  = 8 << 20
 	resyncDelay = 150 * time.Millisecond
 	idleTimeout = 10 * time.Minute
-	// transientIdle is how long a server started for one connection (a
-	// remote project) keeps its sessions after the app disconnects. The
-	// user does not need remote terminals to outlive the connection.
-	transientIdle = 10 * time.Second
 	// maxLine bounds one JSON request or response, and readFileLimit the
 	// bytes of a file sent in one.
 	maxLine        = 64 << 20
@@ -47,17 +43,15 @@ const (
 
 // Server owns the sessions and their pseudo-terminals.
 type Server struct {
-	mu        sync.Mutex
-	sessions  map[string]*session
-	order     []string
-	started   time.Time
-	ln        net.Listener
-	quit      chan struct{}
-	once      sync.Once
-	controls  int
-	conns     int
-	transient bool
-	idleFrom  time.Time
+	mu       sync.Mutex
+	sessions map[string]*session
+	order    []string
+	started  time.Time
+	ln       net.Listener
+	quit     chan struct{}
+	once     sync.Once
+	controls int
+	idleFrom time.Time
 }
 
 // Serve runs the session server until it is shut down.
@@ -88,7 +82,6 @@ func Serve() error {
 	s := &Server{
 		sessions: map[string]*session{}, order: nil, started: time.Now(),
 		ln: ln, quit: make(chan struct{}), idleFrom: time.Now(),
-		transient: os.Getenv("MOJIAN_TRANSIENT") != "",
 	}
 	go func() {
 		<-s.quit
@@ -120,13 +113,11 @@ func Serve() error {
 			return err
 		}
 		s.mu.Lock()
-		s.conns++
 		s.idleFrom = time.Now()
 		s.mu.Unlock()
 		go func() {
 			defer func() {
 				s.mu.Lock()
-				s.conns--
 				s.idleFrom = time.Now()
 				s.mu.Unlock()
 			}()
@@ -138,11 +129,7 @@ func Serve() error {
 func (s *Server) shutdown() { s.once.Do(func() { close(s.quit) }) }
 
 func (s *Server) watchIdle() {
-	period := 30 * time.Second
-	if s.transient {
-		period = 5 * time.Second
-	}
-	t := time.NewTicker(period)
+	t := time.NewTicker(30 * time.Second)
 	defer t.Stop()
 	for {
 		select {
@@ -153,11 +140,6 @@ func (s *Server) watchIdle() {
 		s.pruneExited()
 		s.mu.Lock()
 		idle := len(s.sessions) == 0 && s.controls == 0 && time.Since(s.idleFrom) > idleTimeout
-		if s.transient {
-			// A server started for one app connection is only useful
-			// while that app is connected: its shells go with it.
-			idle = s.conns == 0 && time.Since(s.idleFrom) > transientIdle
-		}
 		s.mu.Unlock()
 		if idle {
 			s.shutdown()
@@ -756,6 +738,15 @@ func listTree(root string) ([]FileEntry, error) {
 			if filekind.SkipDir(d.Name()) {
 				return filepath.SkipDir
 			}
+			rel, err := filepath.Rel(root, path)
+			if err != nil {
+				return nil
+			}
+			info, err := d.Info()
+			if err != nil {
+				return nil
+			}
+			out = append(out, FileEntry{Rel: filepath.ToSlash(rel), Dir: true, Mod: info.ModTime()})
 			return nil
 		}
 		rel, err := filepath.Rel(root, path)

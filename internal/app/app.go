@@ -229,12 +229,11 @@ func Run() {
 				return
 			}
 		}
-		a.closeTerminals()
+		a.closeWorkspaces()
 		if a.sessionClient != nil {
 			_ = a.sessionClient.Close()
 			a.sessionClient = nil
 		}
-		a.closeRemote()
 		if a.settingsWin != nil {
 			a.settingsWin.Close()
 		}
@@ -309,10 +308,10 @@ func (a *app) open() {
 	if a.loaded && a.serverAlias != "" && a.remotePath != "" {
 		if rc, err := a.ensureRemote(a.serverAlias); err != nil {
 			a.fail(err)
-		} else if a.store != nil && a.store.remote != nil {
+		} else if a.store != nil && a.store.server != nil {
 			// The window closed and reopened: the project kept its notes,
 			// but the control client was replaced with the new connection.
-			a.store.remote.client = rc.client
+			a.store.server.client = rc.client
 		}
 	}
 	a.win = a.createWindow("main")
@@ -439,10 +438,6 @@ func (a *app) windowClosed() {
 	a.closeWorkspaces()
 	a.workspaces = nil
 	a.activeWS = ""
-	if a.sessionClient != nil {
-		_ = a.sessionClient.Close()
-		a.sessionClient = nil
-	}
 	if a.layoutTimer != nil {
 		a.layoutTimer.Stop()
 		a.layoutTimer = nil
@@ -719,19 +714,18 @@ func (a *app) invalidate() {
 }
 
 // initialStore opens $MOJIAN_VAULT, else the project of the last launch,
-// else the default folder.
+// else the default folder. The app's own project gets a welcome note; a
+// project the user chose does not.
 func (a *app) initialStore() (*store, error) {
 	if os.Getenv("MOJIAN_VAULT") != "" {
-		return openStore()
+		return a.openDefaultStore()
 	}
 	if a.project != "" {
 		if info, err := os.Stat(a.project); err == nil && info.IsDir() {
-			if s, err := openStoreAt(a.project); err == nil {
-				return s, nil
-			}
+			return a.openLocalStore(a.project)
 		}
 	}
-	return openStore()
+	return a.openDefaultStore()
 }
 
 // rememberProject moves dir to the front of the recent projects.
@@ -945,14 +939,18 @@ func (a *app) focusFirstNote() {
 		}
 		return
 	}
-	a.tabs = []*tab{newTab(notes[0])}
+	n := notes[0]
+	if !a.loadNote(n) {
+		return
+	}
+	a.tabs = []*tab{newTab(n)}
 	if a.tabs[0].Focus != nil {
-		a.tabs[0].Focus.Preview = a.markdownPreview && isMarkdownPath(notes[0].Path)
+		a.tabs[0].Focus.Preview = a.markdownPreview && isMarkdownPath(n.Path)
 	}
 	a.active = 0
 	a.focusReq = a.tabs[0].Focus
 	a.revealTab = true
-	a.revealInTree(notes[0])
+	a.revealInTree(n)
 }
 
 // newTab adds an empty workspace to the right of the tabs. It does not

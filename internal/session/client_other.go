@@ -23,6 +23,7 @@ func (c *Client) Create(CreateOptions) (SessionInfo, error) { return SessionInfo
 func (c *Client) Kill(string) error                         { return errUnsupported }
 func (c *Client) Resize(string, int, int) error             { return errUnsupported }
 func (c *Client) Shutdown() error                           { return errUnsupported }
+func Stop() error                                           { return errUnsupported }
 func (c *Client) Close() error                              { return nil }
 func (c *Client) Closed() <-chan struct{}                   { return closedChan }
 func (c *Client) Stream(string, int, int) *Stream           { return &Stream{} }

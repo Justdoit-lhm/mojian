@@ -12,6 +12,7 @@ import (
 )
 
 func TestProjectSwitch(t *testing.T) {
+	startLocalServerForTest(t)
 	root := t.TempDir()
 	alpha := filepath.Join(root, "Alpha")
 	beta := filepath.Join(root, "Beta")
@@ -134,6 +135,7 @@ func TestRemoteWorkspaceSwitchUsesTheCache(t *testing.T) {
 	if !terminalsSupported() {
 		t.Skip("remote projects need terminals")
 	}
+	startLocalServerForTest(t)
 	root := t.TempDir()
 	dir := filepath.Join(root, "App")
 	integration.WriteVault(t, dir, map[string]string{"main.go": "package main\n"})

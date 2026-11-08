@@ -17,7 +17,7 @@ import (
 // project would through its forward.
 func newRemoteApp(t *testing.T, client *session.Client, root string) *app {
 	t.Helper()
-	s, err := openRemoteStore(client, root, t.TempDir())
+	s, err := openServerStore(client, root, t.TempDir(), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +147,7 @@ func TestRemoteGitRunsOnTheServer(t *testing.T) {
 	if _, err := client.Exec(root, []string{"git", "-C", root, "init", "-q"}, nil, 5*time.Second); err != nil {
 		t.Fatal(err)
 	}
-	runner := remoteGitRunner{client: client}
+	runner := serverGitRunner{client: client}
 	data := gitpage.ReadStatus(runner, root)
 	if data.Err != "" || len(data.Changes) != 1 || data.Changes[0].Status != "U" {
 		t.Fatalf("remote status: %+v", data)

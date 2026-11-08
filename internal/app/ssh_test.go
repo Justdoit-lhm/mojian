@@ -73,7 +73,7 @@ func TestSSHPickerListsHosts(t *testing.T) {
 func TestTerminalLayoutRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	a := &app{layoutPath: filepath.Join(dir, "layout.json"), store: &store{}}
-	p := &pane{ID: nextID("p"), Term: &termTab{SID: "sess-1", Spec: termSpec{Host: "buildbox"}}}
+	p := &pane{ID: nextID("p"), Term: &termTab{SID: "sess-1", Spec: termSpec{Host: "buildbox", Server: "buildbox"}}}
 	tb := &tab{ID: nextID("t"), Root: &node{Pane: p}, Focus: p}
 	a.tabs = []*tab{tb}
 	a.active = 0
@@ -84,7 +84,7 @@ func TestTerminalLayoutRoundTrip(t *testing.T) {
 		t.Fatal("restoreLayout failed")
 	}
 	rp := b.tabs[0].panes()[0]
-	if rp.Term == nil || rp.Term.SID != "sess-1" || rp.Term.Spec.Host != "buildbox" {
+	if rp.Term == nil || rp.Term.SID != "sess-1" || rp.Term.Spec.Host != "buildbox" || rp.Term.Spec.Server != "buildbox" {
 		t.Fatalf("restored term: %+v", rp.Term)
 	}
 }

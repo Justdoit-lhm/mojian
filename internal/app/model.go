@@ -477,8 +477,9 @@ type layoutPane struct {
 }
 
 type layoutTerminal struct {
-	SID  string `json:"sid,omitempty"`
-	Host string `json:"host,omitempty"`
+	SID    string `json:"sid,omitempty"`
+	Host   string `json:"host,omitempty"`
+	Server string `json:"server,omitempty"`
 }
 
 func layoutOf(t *tab) layoutTab {
@@ -517,7 +518,7 @@ func layoutPaneOf(p *pane) *layoutPane {
 	lp := &layoutPane{ID: p.ID, Preview: p.Preview}
 	switch {
 	case p.Term != nil:
-		lp.Terminal = &layoutTerminal{SID: p.Term.SID, Host: p.Term.Spec.Host}
+		lp.Terminal = &layoutTerminal{SID: p.Term.SID, Host: p.Term.Spec.Host, Server: p.Term.Spec.Server}
 	case p.Note != nil:
 		lp.Note = p.Note.Rel
 	case p.Asset != nil:
@@ -643,7 +644,7 @@ func (a *app) restorePane(lp layoutPane, byID map[string]*pane) *pane {
 	p := &pane{ID: nextID("p"), Preview: lp.Preview}
 	switch {
 	case lp.Terminal != nil:
-		p.Term = newTermPaneSpec(termSpec{Host: lp.Terminal.Host}, lp.Terminal.SID)
+		p.Term = newTermPaneSpec(termSpec{Host: lp.Terminal.Host, Server: lp.Terminal.Server}, lp.Terminal.SID)
 	case lp.Note != "":
 		n := a.store.byRelPath(lp.Note)
 		if n == nil || !a.loadNote(n) {

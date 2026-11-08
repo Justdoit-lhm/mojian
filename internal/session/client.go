@@ -207,6 +207,21 @@ func (c *Client) Resize(sid string, cols, rows int) error {
 func (c *Client) Shutdown() error { return c.call(Request{Op: "shutdown"}, nil) }
 func (c *Client) Close() error    { return c.conn.Close() }
 
+// Stop asks the server at the standard socket to shut down. A missing
+// socket means no server is running, which is already the wanted state.
+func Stop() error {
+	conn, err := net.DialTimeout("unix", SocketPath(), time.Second)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	defer conn.Close()
+	_, err = conn.Write([]byte(`{"id":1,"op":"shutdown"}` + "\n"))
+	return err
+}
+
 // Stream is a terminal's connection attached to a session.
 type Stream struct {
 	c   *Client

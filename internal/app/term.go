@@ -28,9 +28,11 @@ type termTab struct {
 }
 
 // termSpec is what a terminal pane opens: the login shell, or SSH to a
-// host alias from ~/.ssh/config.
+// host alias from ~/.ssh/config. Server names the session server that
+// owns the terminal, so a restored pane reattaches on the same machine.
 type termSpec struct {
-	Host string
+	Host   string
+	Server string
 }
 
 func (s termSpec) title() string {
@@ -194,6 +196,15 @@ func (a *app) startTerminal() (*termTab, error) {
 	return a.startTerminalSpec(termSpec{})
 }
 
+// defaultTerminalServer is the server a new terminal belongs to: the
+// remote project's server when one is open, else this machine.
+func (a *app) defaultTerminalServer() string {
+	if a.remotePath != "" && a.serverAlias != "" {
+		return a.serverAlias
+	}
+	return localServerID
+}
+
 // startTerminalSpec starts a login shell, or SSH to a configured host, in
 // the session server. The process outlives the app.
 func (a *app) startTerminalSpec(spec termSpec) (*termTab, error) {
@@ -202,6 +213,12 @@ func (a *app) startTerminalSpec(spec termSpec) (*termTab, error) {
 	}
 	if a.shellStarter != nil {
 		return a.shellStarter()
+	}
+	if spec.Host != "" {
+		// A direct SSH pane's ssh process lives in the local server.
+		spec.Server = localServerID
+	} else if spec.Server == "" {
+		spec.Server = a.defaultTerminalServer()
 	}
 	client, err := a.terminalClient(spec)
 	if err != nil {
@@ -212,7 +229,7 @@ func (a *app) startTerminalSpec(spec termSpec) (*termTab, error) {
 	if spec.Host != "" {
 		cmd = sshArgs(spec.Host)
 		dir = ""
-	} else if a.remote != nil {
+	} else if spec.Server != localServerID {
 		dir = a.remotePath
 	} else if strings.TrimSpace(a.shellPath) != "" {
 		cmd = []string{a.shellPath, "-l"}
@@ -226,14 +243,28 @@ func (a *app) startTerminalSpec(spec termSpec) (*termTab, error) {
 	return a.attachTerminal(client, info.ID, spec)
 }
 
-// terminalClient chooses the local session server, or the current remote
-// one for a project on a server. A direct SSH pane still starts from the
-// local server, so the SSH process lives with this machine.
+// terminalClient chooses the session server that owns a terminal. A
+// direct SSH pane still starts from the local server, so the SSH process
+// lives with this machine.
 func (a *app) terminalClient(spec termSpec) (*session.Client, error) {
-	if spec.Host == "" && a.remote != nil && a.remote.client != nil {
-		return a.remote.client, nil
+	if spec.Host != "" || spec.Server == "" || spec.Server == localServerID {
+		return a.sessions()
 	}
-	return a.sessions()
+	return a.remoteServerClient(spec.Server)
+}
+
+// remoteServerClient returns a live control connection to host without
+// changing the open project.
+func (a *app) remoteServerClient(host string) (*session.Client, error) {
+	a.initWorkspaces()
+	if rc := a.remoteForHost(host); rc != nil {
+		return rc.client, nil
+	}
+	rc, err := a.connectRemote(host)
+	if err != nil {
+		return nil, err
+	}
+	return rc.client, nil
 }
 
 // attachTerminal makes a terminal view attached to a session.
@@ -303,7 +334,12 @@ func (a *app) terminalOptions(conn *session.Stream, tt *termTab) terminal.Option
 // it when needed.
 func (a *app) sessions() (*session.Client, error) {
 	if a.sessionClient != nil {
-		return a.sessionClient, nil
+		select {
+		case <-a.sessionClient.Closed():
+			a.sessionClient = nil
+		default:
+			return a.sessionClient, nil
+		}
 	}
 	c, err := session.Connect()
 	if err != nil {
@@ -323,10 +359,22 @@ func (a *app) startRestoredTerminal(p *pane) {
 		return
 	}
 	t := p.Term
+	if t.Spec.Server == "" {
+		// Layouts written before terminals carried a server keep working:
+		// a direct SSH pane lives locally; a plain shell follows the
+		// project that was open when the layout was written.
+		switch {
+		case t.Spec.Host != "":
+			t.Spec.Server = localServerID
+		case a.remotePath != "" && a.serverAlias != "":
+			t.Spec.Server = a.serverAlias
+		default:
+			t.Spec.Server = localServerID
+		}
+	}
 	t.starting = true
 	defer func() { t.starting = false }()
-	// Use the same server that owns the saved session. A remote project's
-	// terminals live on its server, not in the local one.
+	// Use the same server that owns the saved session.
 	client, err := a.terminalClient(t.Spec)
 	if err != nil {
 		t.startErr = err.Error()

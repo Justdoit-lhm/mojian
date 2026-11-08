@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- On macOS and Linux, local projects now open through the same session
+  server as terminals: the Explorer, saves, file operations and Git all go
+  through the server, while Finder reveal and the system Trash remain
+  local OS integrations. Quitting Mojian detaches the terminals, so they
+  keep running; reopening reattaches them. Windows keeps its direct-file
+  editor.
+- Remote servers are persistent. They no longer shut down when the app or
+  SSH connection goes away, so remote terminals and files stay available
+  for the next connection. Each terminal records the server that owns it,
+  and `mojian-server -stop` is the explicit way to end a server.
 - Use the reversed ink tile as the Finder and Dock app icon, so the paper
   `m` and vermilion cursor stay legible on light and dark Finder
   backgrounds. The paper tile remains the light brand icon.

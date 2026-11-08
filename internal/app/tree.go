@@ -55,8 +55,8 @@ type treeDraft struct {
 // buildTree caches the project as a tree, so every frame reads what a
 // refresh left instead of the disk.
 func (s *store) buildTree() {
-	if s.remote != nil {
-		s.tree = s.remoteTree()
+	if s.server != nil {
+		s.tree = s.serverTree()
 		return
 	}
 	if s.memory {
@@ -122,7 +122,7 @@ func (s *store) dirPath(rel string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if s.remote != nil {
+	if s.server != nil {
 		if !s.dirExists(rel) {
 			return "", fmt.Errorf("%s is not a folder", rel)
 		}
@@ -139,7 +139,7 @@ func (s *store) dirPath(rel string) (string, error) {
 }
 
 func (s *store) dirExists(rel string) bool {
-	if s.remote != nil {
+	if s.server != nil {
 		return s.existsRel(rel) && (rel == "" || s.dirs[rel])
 	}
 	_, err := s.dirPath(rel)
@@ -149,7 +149,7 @@ func (s *store) dirExists(rel string) bool {
 // newFolder makes a folder in parent and returns its path within the
 // project. An existing name takes the next number.
 func (s *store) newFolder(parent, name string) (string, error) {
-	if s.remote != nil {
+	if s.server != nil {
 		name = folderName(name)
 		for i := 1; i < 1000; i++ {
 			candidate := name

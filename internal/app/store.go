@@ -152,14 +152,14 @@ func noteTitle(body, path string) string {
 	return stem
 }
 
-// store is a project: the text files it holds, by path. A remote
+// store is a project: the text files it holds, by path. A server-backed
 // project's bodies live on its host; the listing is cached here and a
 // note is read when it opens.
 type store struct {
 	dir    string
 	memory bool
-	remote *remoteFS
-	// entries and dirs are a remote project's last listing.
+	server *serverFS
+	// entries and dirs are a server project's last listing.
 	entries []session.FileEntry
 	dirs    map[string]bool
 	notes   []*note
@@ -170,9 +170,45 @@ type store struct {
 	assets  map[string]*assetFile
 }
 
-// openStore opens the folder at $MOJIAN_VAULT, else ~/Documents/Mojian,
-// and creates a welcome note in a folder of its own. In a browser there
-// is no file system: the files live in memory for the session.
+// defaultStoreDir is the folder of the app's own project: $MOJIAN_VAULT,
+// else ~/Documents/Mojian.
+func defaultStoreDir() (string, error) {
+	if dir := os.Getenv("MOJIAN_VAULT"); dir != "" {
+		return dir, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, "Documents", "Mojian"), nil
+}
+
+// openDefaultStore opens the app's own project. In a browser there is no
+// file system: the files live in memory for the session. A folder with no
+// notes gets the welcome note; a project the user chose stays empty.
+func (a *app) openDefaultStore() (*store, error) {
+	dir, err := defaultStoreDir()
+	if err != nil {
+		return nil, err
+	}
+	s, err := a.openLocalStore(dir)
+	if err != nil {
+		return nil, err
+	}
+	if len(s.notes) == 0 {
+		if _, err := s.newFileIn("", "Welcome.md", welcomeNote); err != nil {
+			return nil, err
+		}
+		if err := s.refresh(); err != nil {
+			return nil, err
+		}
+	}
+	return s, nil
+}
+
+// openStore opens a project directly, without the session server. It is
+// used by the browser, tests and Windows; macOS and Linux open projects
+// through openLocalStore.
 func openStore() (*store, error) {
 	if runtime.GOOS == "js" {
 		s := &store{memory: true, byPath: map[string]*note{}, byRel: map[string]*note{}, assets: map[string]*assetFile{}}
@@ -181,27 +217,11 @@ func openStore() (*store, error) {
 		s.buildTree()
 		return s, nil
 	}
-	dir := os.Getenv("MOJIAN_VAULT")
-	if dir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil, err
-		}
-		dir = filepath.Join(home, "Documents", "Mojian")
-	}
-	s, err := openStoreAt(dir)
+	dir, err := defaultStoreDir()
 	if err != nil {
 		return nil, err
 	}
-	if len(s.notes) == 0 {
-		if err := s.writeRel("Welcome.md", welcomeNote); err != nil {
-			return nil, err
-		}
-		if err := s.refresh(); err != nil {
-			return nil, err
-		}
-	}
-	return s, nil
+	return openStoreAt(dir)
 }
 
 // openStoreAt opens dir as a project, creating the folder when it is
@@ -233,8 +253,8 @@ func (s *store) refresh() error {
 		s.buildTree()
 		return nil
 	}
-	if s.remote != nil {
-		return s.refreshRemote()
+	if s.server != nil {
+		return s.refreshServer()
 	}
 	seen := make(map[string]bool, len(s.notes))
 	previousAssets := s.assets
@@ -376,14 +396,14 @@ func (s *store) newNoteIn(rel string) (*note, error) {
 // newFileIn writes a text file with the given name and body in the folder
 // rel, or at the root for an empty rel. It returns the loaded note.
 func (s *store) newFileIn(rel, name, body string) (*note, error) {
-	if s.remote != nil {
+	if s.server != nil {
 		name = fileName(name, "untitled.txt")
 		rel = uniqueRel(s, rel, name)
 		if err := s.writeRel(rel, body); err != nil {
 			return nil, err
 		}
 		n := &note{
-			Rel: rel, Path: s.remote.abs(rel), Title: noteTitle(body, rel),
+			Rel: rel, Path: s.server.abs(rel), Title: noteTitle(body, rel),
 			Saved: body, Mod: time.Now(), loaded: true,
 		}
 		s.entries = append(s.entries, session.FileEntry{

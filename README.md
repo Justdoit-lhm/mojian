@@ -45,9 +45,10 @@ writing stays yours.
 
 The Windows build is a portable, editor-focused release. Its menus,
 palettes and Settings hide the terminal, SSH and remote-project features
-that depend on the Unix session server. Those features remain available
-on macOS and Linux. CI builds the Windows target and runs its headless
-test suite on a Windows runner.
+that depend on the Unix session server; Windows opens folders directly
+without one. Those server features remain available on macOS and Linux.
+CI builds the Windows target and runs its headless test suite on a Windows
+runner.
 
 ## Install
 
@@ -130,9 +131,11 @@ such as `.git`, `node_modules`, `dist` and `build` stay out of sight.
 ### Terminals and servers (macOS and Linux)
 
 `Shift+Cmd+T` / `Ctrl+Shift+T` opens a real terminal at the project root.
-Local shells run in a detached session server, so quitting Mojian detaches
-them and reopening reattaches. `Shift+Cmd+L` / `Ctrl+Shift+L` opens an SSH
-terminal from `~/.ssh/config`.
+On macOS and Linux, local projects and their terminals run through the
+same detached session server: quitting Mojian detaches the shells and
+reopening reattaches them, and saves, file operations and Git use the same
+server. `Shift+Cmd+L` / `Ctrl+Shift+L` opens an SSH terminal from
+`~/.ssh/config`.
 
 Add a host in Settings › Hosts, then choose it from the server chip. Mojian
 starts a small per-user server there over `ssh` and works on the folder in
@@ -140,9 +143,10 @@ place: the Explorer lists the host's files, a file is read when it opens,
 and saves and file operations write straight back. Git runs on the host
 too. The first connection shows a loading card while the server uploads,
 and a project once opened stays loaded, so switching back restores its
-tabs and terminals without reading it again. A remote terminal ends when
-the SSH connection does; nothing is kept running after the app
-disconnects. No root, no listening port and no system service are
+tabs and terminals without reading it again. The remote server and its
+terminals stay alive when the SSH connection or Mojian disconnects; each
+terminal remembers the server that owns it, and `mojian-server -stop` ends
+a server explicitly. No root, no listening port and no system service are
 installed.
 
 ### Git and the command palette

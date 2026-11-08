@@ -12,25 +12,27 @@ import (
 	"mojian/internal/session"
 )
 
-// remoteFS is a project's files on an SSH host, reached through the
-// session server. The app reads and writes them directly: there is no
-// local copy of the project.
-type remoteFS struct {
+// serverFS is a project's files reached through a session server. The
+// app reads and writes them directly: there is no local copy of the
+// project. A local project and a remote one use the same path; local
+// says whether the server runs on this machine.
+type serverFS struct {
 	client *session.Client
 	root   string
 	cache  string // where pictures and PDFs are fetched for their viewers
+	local  bool   // the server runs on this machine
 }
 
-// openRemoteStore lists the project on the server and returns it as the
+// openServerStore lists the project on the server and returns it as the
 // open project. File contents are read when a file is opened, not when
 // the tree is.
-func openRemoteStore(client *session.Client, root, cache string) (*store, error) {
+func openServerStore(client *session.Client, root, cache string, local bool) (*store, error) {
 	if client == nil || root == "" {
-		return nil, fmt.Errorf("remote project needs a connection and a folder")
+		return nil, fmt.Errorf("server project needs a connection and a folder")
 	}
 	s := &store{
 		dir:    root,
-		remote: &remoteFS{client: client, root: root, cache: cache},
+		server: &serverFS{client: client, root: root, cache: cache, local: local},
 		byPath: map[string]*note{}, byRel: map[string]*note{},
 		dirs: map[string]bool{}, assets: map[string]*assetFile{},
 	}
@@ -41,19 +43,19 @@ func openRemoteStore(client *session.Client, root, cache string) (*store, error)
 }
 
 // abs is the path of rel on the server.
-func (r *remoteFS) abs(rel string) string {
+func (r *serverFS) abs(rel string) string {
 	if rel == "" || rel == "." {
 		return r.root
 	}
 	return path.Join(r.root, filepath.ToSlash(rel))
 }
 
-// refreshRemote rebuilds the project from the server's listing: names,
+// refreshServer rebuilds the project from the server's listing: names,
 // sizes and times, without carrying the files' bodies.
-func (s *store) refreshRemote() error {
-	entries, err := s.remote.client.ListTree(s.remote.root)
+func (s *store) refreshServer() error {
+	entries, err := s.server.client.ListTree(s.server.root)
 	if err != nil {
-		return fmt.Errorf("listing the remote project: %w", err)
+		return fmt.Errorf("listing the server project: %w", err)
 	}
 	s.entries = entries
 	s.dirs = map[string]bool{"": true}
@@ -74,7 +76,7 @@ func (s *store) refreshRemote() error {
 				continue
 			}
 			n := &note{
-				Rel: rel, Path: s.remote.abs(rel),
+				Rel: rel, Path: s.server.abs(rel),
 				Title: noteTitle("", rel), Mod: e.Mod,
 			}
 			s.notes = append(s.notes, n)
@@ -84,7 +86,7 @@ func (s *store) refreshRemote() error {
 			f := previousAssets[rel]
 			if f == nil || !f.Mod.Equal(e.Mod) || f.Size != e.Size {
 				f = &assetFile{
-					Rel: rel, Path: s.remote.abs(rel), Name: filepath.Base(rel),
+					Rel: rel, Path: s.server.abs(rel), Name: filepath.Base(rel),
 					Size: e.Size, Mod: e.Mod,
 				}
 			}
@@ -107,8 +109,8 @@ func (s *store) refreshRemote() error {
 	return nil
 }
 
-// remoteTree builds the cached tree from the server's listing.
-func (s *store) remoteTree() *fileNode {
+// serverTree builds the cached tree from the server's listing.
+func (s *store) serverTree() *fileNode {
 	root := &fileNode{Name: filepath.Base(s.dir), Dir: true}
 	nodes := map[string]*fileNode{"": root}
 	addDir := func(rel string) *fileNode {
@@ -174,10 +176,10 @@ func (s *store) remoteTree() *fileNode {
 // loadNote reads a remote note's text the first time it opens. Local
 // notes are already loaded.
 func (s *store) loadNote(n *note) error {
-	if n == nil || s.remote == nil || n.loaded {
+	if n == nil || s.server == nil || n.loaded {
 		return nil
 	}
-	data, err := s.remote.client.ReadFile(s.remote.abs(n.Rel))
+	data, err := s.server.client.ReadFile(s.server.abs(n.Rel))
 	if err != nil {
 		return err
 	}
@@ -192,8 +194,8 @@ func (s *store) writeRel(rel, body string) error {
 	if s.memory {
 		return nil
 	}
-	if s.remote != nil {
-		return s.remote.client.WriteFile(s.remote.abs(rel), []byte(body))
+	if s.server != nil {
+		return s.server.client.WriteFile(s.server.abs(rel), []byte(body))
 	}
 	p, err := s.absRel(rel)
 	if err != nil {
@@ -207,7 +209,7 @@ func (s *store) existsRel(rel string) bool {
 	if rel == "" || rel == "." {
 		return true
 	}
-	if s.remote == nil {
+	if s.server == nil {
 		p, err := s.absRel(rel)
 		if err != nil {
 			return false
@@ -218,14 +220,14 @@ func (s *store) existsRel(rel string) bool {
 	if s.dirs[rel] || s.byRel[rel] != nil || s.assets[rel] != nil {
 		return true
 	}
-	_, err := s.remote.client.Stat(s.remote.abs(rel))
+	_, err := s.server.client.Stat(s.server.abs(rel))
 	return err == nil
 }
 
 // mkdirRel makes a folder in the project.
 func (s *store) mkdirRel(rel string) error {
-	if s.remote != nil {
-		return s.remote.client.Mkdir(s.remote.abs(rel))
+	if s.server != nil {
+		return s.server.client.Mkdir(s.server.abs(rel))
 	}
 	p, err := s.absRel(rel)
 	if err != nil {
@@ -236,8 +238,8 @@ func (s *store) mkdirRel(rel string) error {
 
 // renameRel renames a file or folder within the project.
 func (s *store) renameRel(oldRel, newRel string) error {
-	if s.remote != nil {
-		return s.remote.client.Rename(s.remote.abs(oldRel), s.remote.abs(newRel))
+	if s.server != nil {
+		return s.server.client.Rename(s.server.abs(oldRel), s.server.abs(newRel))
 	}
 	oldAbs, err := s.absRel(oldRel)
 	if err != nil {
@@ -255,8 +257,8 @@ func (s *store) copyRel(oldRel, newRel string) error {
 	if s.dirs[oldRel] && (newRel == oldRel || strings.HasPrefix(newRel, oldRel+string(filepath.Separator))) {
 		return fmt.Errorf("a folder cannot be copied into itself")
 	}
-	if s.remote != nil {
-		return s.remote.client.Copy(s.remote.abs(oldRel), s.remote.abs(newRel))
+	if s.server != nil {
+		return s.server.client.Copy(s.server.abs(oldRel), s.server.abs(newRel))
 	}
 	oldAbs, err := s.absRel(oldRel)
 	if err != nil {
@@ -342,7 +344,7 @@ func (s *store) materializeAsset(f *assetFile) (string, error) {
 	if f == nil {
 		return "", fmt.Errorf("no file")
 	}
-	if s.remote == nil {
+	if s.server == nil {
 		return f.Path, nil
 	}
 	if f.local != "" {
@@ -350,11 +352,11 @@ func (s *store) materializeAsset(f *assetFile) (string, error) {
 			return f.local, nil
 		}
 	}
-	data, err := s.remote.client.ReadFile(s.remote.abs(f.Rel))
+	data, err := s.server.client.ReadFile(s.server.abs(f.Rel))
 	if err != nil {
 		return "", err
 	}
-	dir := filepath.Join(s.remote.cache, fmt.Sprintf("%d-%d", f.Mod.Unix(), f.Size))
+	dir := filepath.Join(s.server.cache, fmt.Sprintf("%d-%d", f.Mod.Unix(), f.Size))
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
