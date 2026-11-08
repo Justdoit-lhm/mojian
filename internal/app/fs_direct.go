@@ -75,19 +75,17 @@ func (d *directFS) List() ([]session.FileEntry, map[string]string, error) {
 }
 
 func (d *directFS) Read(rel string) ([]byte, error) {
-	p, err := d.Abs(rel)
-	if err != nil {
-		return nil, err
-	}
-	return os.ReadFile(p)
+	var data []byte
+	err := at(d, rel, func(p string) error {
+		var err error
+		data, err = os.ReadFile(p)
+		return err
+	})
+	return data, err
 }
 
 func (d *directFS) Write(rel string, data []byte) error {
-	p, err := d.Abs(rel)
-	if err != nil {
-		return err
-	}
-	return writeFileAtomic(p, data)
+	return at(d, rel, func(p string) error { return writeFileAtomic(p, data) })
 }
 
 func (d *directFS) Stat(rel string) (session.FileEntry, error) {
@@ -107,11 +105,7 @@ func (d *directFS) Stat(rel string) (session.FileEntry, error) {
 }
 
 func (d *directFS) Mkdir(rel string) error {
-	p, err := d.Abs(rel)
-	if err != nil {
-		return err
-	}
-	return os.MkdirAll(p, 0o755)
+	return at(d, rel, func(p string) error { return os.MkdirAll(p, 0o755) })
 }
 
 func (d *directFS) Rename(oldRel, newRel string) error {
@@ -149,45 +143,27 @@ func (d *directFS) Rename(oldRel, newRel string) error {
 }
 
 func (d *directFS) Copy(oldRel, newRel string) error {
-	oldAbs, err := d.Abs(oldRel)
-	if err != nil {
-		return err
-	}
-	newAbs, err := d.Abs(newRel)
-	if err != nil {
-		return err
-	}
-	return copyPath(oldAbs, newAbs)
+	return pair(d, oldRel, newRel, copyPath)
 }
 
 func (d *directFS) Remove(rel string) error {
-	p, err := d.Abs(rel)
-	if err != nil {
-		return err
-	}
-	return os.RemoveAll(p)
+	return at(d, rel, os.RemoveAll)
 }
 
 func (d *directFS) CopyFrom(srcAbs, destRel string) error {
-	dest, err := d.Abs(destRel)
-	if err != nil {
-		return err
-	}
-	return copyPath(srcAbs, dest)
+	return at(d, destRel, func(dest string) error { return copyPath(srcAbs, dest) })
 }
 
 func (d *directFS) MoveFrom(srcAbs, destRel string) error {
-	dest, err := d.Abs(destRel)
-	if err != nil {
-		return err
-	}
-	if err := os.Rename(srcAbs, dest); err == nil {
-		return nil
-	}
-	if err := copyPath(srcAbs, dest); err != nil {
-		return err
-	}
-	return os.RemoveAll(srcAbs)
+	return at(d, destRel, func(dest string) error {
+		if err := os.Rename(srcAbs, dest); err == nil {
+			return nil
+		}
+		if err := copyPath(srcAbs, dest); err != nil {
+			return err
+		}
+		return os.RemoveAll(srcAbs)
+	})
 }
 
 func (d *directFS) RemoveAbs(abs string) error { return os.RemoveAll(abs) }
@@ -223,9 +199,5 @@ func (d *directFS) Fetch(rel string, _ int64, _ time.Time, _ string) (string, er
 }
 
 func (d *directFS) Trash(rel string) error {
-	p, err := d.Abs(rel)
-	if err != nil {
-		return err
-	}
-	return trashPath(p)
+	return at(d, rel, trashPath)
 }

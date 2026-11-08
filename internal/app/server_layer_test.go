@@ -38,7 +38,7 @@ func TestLocalProjectStoreUsesSessionServer(t *testing.T) {
 	if !s.dirs["folder"] {
 		t.Fatal("the server listing lost a folder")
 	}
-	if !s.isLocalServer() {
+	if s.fs.Kind() != fsServerLocal {
 		t.Fatal("the store was not marked as local-server backed")
 	}
 	n := s.byRelPath("a.md")
@@ -91,7 +91,7 @@ func TestAppOpenProjectUsesLocalServer(t *testing.T) {
 		sessionClient: client,
 	}
 	a.openProject(project)
-	if a.store == nil || !a.store.isLocalServer() {
+	if a.store == nil || a.store.fs.Kind() != fsServerLocal {
 		t.Fatalf("project did not use the local server: %+v", a.store)
 	}
 	n := a.currentNote()

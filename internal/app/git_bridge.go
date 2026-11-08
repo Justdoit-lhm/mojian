@@ -30,7 +30,6 @@ func (a *app) gitPage(c *ui.Context, k *colors) {
 
 // The Host methods give the Git page the project, a callback into the
 // window, and the file menu.
-
 func (a *app) ProjectDir() (string, bool) {
 	if a.store == nil || a.store.isMemory() {
 		return "", false

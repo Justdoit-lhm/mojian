@@ -19,21 +19,8 @@ import (
 func newProjectApp(t *testing.T) *app {
 	t.Helper()
 	dir := t.TempDir()
-	files := map[string]string{
-		"Welcome.md":              welcomeNote,
-		"Reading notes.md":        sampleNote,
-		"Ideas/Quiet mornings.md": "# Quiet mornings\n\nCoffee, a blank page, and no notifications.\n",
-		"scripts/tasks.py":        "#!/usr/bin/env python3\n\nTASKS = [\"write\", \"read\"]\n\n\ndef open_tasks():\n    return TASKS\n",
-		"scripts/app.js":          "const tasks = [];\n\nfunction openTasks() {\n  return tasks;\n}\n",
-	}
-	for name, body := range files {
-		path := filepath.Join(dir, name)
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
+	if err := seedHarnessProject(dir); err != nil {
+		t.Fatal(err)
 	}
 	t.Setenv("MOJIAN_VAULT", dir)
 	s, err := openStore()

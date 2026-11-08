@@ -274,8 +274,6 @@ func (p *Page) state(c *ui.Context, k *theme.Colors, glyph string, col ui.Color,
 	})
 }
 
-// gitDiffLine is one parsed line of a unified diff, with the old and new
-// line numbers its hunk gives it.
 func (p *Page) diffLines(c *ui.Context, k *theme.Colors, lines []gitDiffLine) {
 	const maxLines = 2500
 	truncated := len(lines) > maxLines

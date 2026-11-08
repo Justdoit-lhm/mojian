@@ -93,7 +93,6 @@ type SessionInfo struct {
 	ExitCode int       `json:"exitCode"`
 }
 
-// Hello is the answer to "hello".
 // FileEntry describes a path in a remote project.
 type FileEntry struct {
 	Rel  string        `json:"rel"`
@@ -113,6 +112,7 @@ type ExecResult struct {
 	Code   int    `json:"code,omitempty"`
 }
 
+// Hello is the answer to "hello".
 type Hello struct {
 	Version int       `json:"version"`
 	PID     int       `json:"pid"`

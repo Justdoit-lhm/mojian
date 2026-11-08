@@ -11,19 +11,22 @@ import (
 
 var svgCache = map[string]*ui.SVG{}
 
-// Icon returns an embedded Lucide action icon by name.
-func Icon(name string) *ui.SVG {
-	if s, ok := svgCache[name]; ok {
+// cached parses an embedded SVG once and keeps it for the next frame.
+func cached(key, label string) *ui.SVG {
+	if s, ok := svgCache[key]; ok {
 		return s
 	}
-	data, err := assets.Files.ReadFile("icons/" + name + ".svg")
+	data, err := assets.Files.ReadFile(key + ".svg")
 	if err != nil {
-		panic("mojian: icon " + name + ": " + err.Error())
+		panic("mojian: " + label + ": " + err.Error())
 	}
 	s := ui.MustParseSVG(data)
-	svgCache[name] = s
+	svgCache[key] = s
 	return s
 }
+
+// Icon returns an embedded Lucide action icon by name.
+func Icon(name string) *ui.SVG { return cached("icons/"+name, "icon "+name) }
 
 // fileIconAsset names the Material Icon Theme asset for a file: by its
 // exact name for special files, else by its extension.
@@ -121,12 +124,12 @@ func fileIconAsset(name string) string {
 	}
 }
 
-// fileIcon returns the file-type icon from Material Icon Theme.
+// FileIcon returns the file-type icon from Material Icon Theme.
 func FileIcon(name string) *ui.SVG {
 	return Icon("material/" + fileIconAsset(name))
 }
 
-// folderIcon returns the Material Icon Theme folder.
+// FolderIcon returns the Material Icon Theme folder.
 func FolderIcon() *ui.SVG {
 	return Icon("material/folder-base")
 }
@@ -134,15 +137,5 @@ func FolderIcon() *ui.SVG {
 // Brand returns a Mojian logo asset: "mark", "mark-reversed",
 // "wordmark" or "wordmark-reversed". The files come from logos/svg.
 func Brand(name string) *ui.SVG {
-	key := "brand/mojian-" + name
-	if s, ok := svgCache[key]; ok {
-		return s
-	}
-	data, err := assets.Files.ReadFile(key + ".svg")
-	if err != nil {
-		panic("mojian: brand " + name + ": " + err.Error())
-	}
-	s := ui.MustParseSVG(data)
-	svgCache[key] = s
-	return s
+	return cached("brand/mojian-"+name, "brand "+name)
 }

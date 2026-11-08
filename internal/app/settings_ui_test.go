@@ -287,7 +287,7 @@ func TestSettingsTableRendersEveryGenericRow(t *testing.T) {
 				continue
 			}
 			if !tt.HasText(row.Title) {
-				t.Fatalf("page %q is missing row %q: %q", settingsCats[cat].Title, row.Title, tt.Texts())
+				t.Fatalf("page %q is missing row %q: %q", settings.Categories[cat].Title, row.Title, tt.Texts())
 			}
 		}
 	}

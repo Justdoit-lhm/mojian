@@ -18,6 +18,8 @@ import (
 	"mojian/internal/session"
 )
 
+// remoteInstall is where a host keeps the server this build needs. It is
+// probed over SSH before the binaries are compared and uploaded.
 type remoteInstall struct {
 	arch       string
 	dir        string
@@ -27,9 +29,11 @@ type remoteInstall struct {
 	sock       string
 }
 
-// probeRemote reads the host's home, architecture and runtime directory,
-// and makes sure the install and socket folders exist.
-func (i *remoteInstall) uploadBinaries(host string) (bool, error) {
+// upload puts the server and the viewer library in place, skipping a file
+// whose hash matches unless force is set: force replaces both even when
+// they match, for a server that speaks another protocol. It reports
+// whether it uploaded anything.
+func (i *remoteInstall) upload(host string, force bool) (bool, error) {
 	bin, err := remotebin.Binary(i.arch)
 	if err != nil {
 		return false, err
@@ -38,40 +42,24 @@ func (i *remoteInstall) uploadBinaries(host string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	uploaded := false
-	if !remoteHashEqual(host, i.binPath, bin) {
-		if err := uploadRemote(host, i.binPath, bin, "755"); err != nil {
-			return uploaded, fmt.Errorf("uploading the session server: %w", err)
-		}
-		uploaded = true
+	files := []struct {
+		path, mode, label string
+		data              []byte
+	}{
+		{i.binPath, "755", "the session server", bin},
+		{i.libPath, "644", "libghostty-vt", lib},
 	}
-	if !remoteHashEqual(host, i.libPath, lib) {
-		if err := uploadRemote(host, i.libPath, lib, "644"); err != nil {
-			return uploaded, fmt.Errorf("uploading libghostty-vt: %w", err)
+	uploaded := false
+	for _, f := range files {
+		if !force && remoteHashEqual(host, f.path, f.data) {
+			continue
+		}
+		if err := uploadRemote(host, f.path, f.data, f.mode); err != nil {
+			return uploaded, fmt.Errorf("uploading %s: %w", f.label, err)
 		}
 		uploaded = true
 	}
 	return uploaded, nil
-}
-
-// uploadAll replaces both files even when their hash matches, for a
-// server that speaks another protocol.
-func (i *remoteInstall) uploadAll(host string) error {
-	bin, err := remotebin.Binary(i.arch)
-	if err != nil {
-		return err
-	}
-	lib, err := remotebin.Library(i.arch)
-	if err != nil {
-		return err
-	}
-	if err := uploadRemote(host, i.binPath, bin, "755"); err != nil {
-		return fmt.Errorf("updating the session server: %w", err)
-	}
-	if err := uploadRemote(host, i.libPath, lib, "644"); err != nil {
-		return fmt.Errorf("updating libghostty-vt: %w", err)
-	}
-	return nil
 }
 
 // start launches the server if it is not already running. The server
@@ -130,20 +118,14 @@ func (i *remoteInstall) forward(host string) (*remoteConn, error) {
 	return &remoteConn{host: host, socket: local, forward: fwd, client: client}, nil
 }
 
-// dialRemote prepares a connection without touching the app's active
-// project, so a switch can run it away from the UI thread.
-
+// remoteSetup is what provisioning a host found: whether this run
+// uploaded the binaries and where the server lives.
 type remoteSetup struct {
 	Uploaded bool
 	Path     string
 	Protocol int
 }
 
-// provisionRemote installs the server and checks that it answers. The
-// connection is closed afterwards; the server keeps running for project
-// and terminal use.
-
-// sshOutput runs a command over SSH with the user's config and agent.
 // sshCommon is the non-interactive SSH base. It deliberately leaves out
 // ControlMaster: a stale master socket makes every later ssh wait on a
 // process that is gone, and the commands here are few enough that a fresh
@@ -155,6 +137,7 @@ func sshCommon() []string {
 	}
 }
 
+// sshOutput runs a command over SSH with the user's config and agent.
 func sshOutput(host, command string) (string, error) {
 	args := append(append(sshCommon(), "--"), host, command)
 	cmd := exec.Command("ssh", args...)
@@ -176,9 +159,6 @@ func shellQuote(s string) string {
 // connectRemote prepares a connection to host without replacing the
 // current server, so a failed or cancelled switch leaves the open project
 // talking to the machine it came from.
-// connectRemote prepares a connection to host without replacing the
-// current server, so a failed or cancelled switch leaves the open project
-// talking to the machine it came from.
 func (a *app) connectRemote(host string) (*remoteConn, error) {
 	if host == "" {
 		return nil, fmt.Errorf("no server selected")
@@ -196,8 +176,6 @@ func (a *app) connectRemote(host string) (*remoteConn, error) {
 
 // remoteForHost returns the live connection the pool owns for host,
 // dropping it first when it has gone stale.
-// remoteForHost returns the live connection the pool owns for host,
-// dropping it first when it has gone stale.
 func (a *app) remoteForHost(host string) *remoteConn {
 	a.initWorkspaces()
 	rc := a.remotes[host]
@@ -212,8 +190,6 @@ func (a *app) remoteForHost(host string) *remoteConn {
 	return nil
 }
 
-// activeRemote is the connection of the project on screen, if it is a
-// remote one. The pool owns it; nothing else keeps a copy.
 // activeRemote is the connection of the project on screen, if it is a
 // remote one. The pool owns it; nothing else keeps a copy.
 func (a *app) activeRemote() *remoteConn {
@@ -236,8 +212,6 @@ func remoteHealthy(rc *remoteConn) bool {
 	}
 }
 
-// remoteInstall is where a host keeps the server this build needs. It is
-// probed over SSH before the binaries are compared and uploaded.
 // probeRemote reads the host's home, architecture and runtime directory,
 // and makes sure the install and socket folders exist.
 func probeRemote(host string) (*remoteInstall, error) {
@@ -277,9 +251,6 @@ func probeRemote(host string) (*remoteInstall, error) {
 	}, nil
 }
 
-// uploadBinaries puts the server and the viewer library in place when the
-// files on the host are not already this build. It reports whether it
-// uploaded anything.
 // dialRemote prepares a connection without touching the app's active
 // project, so a switch can run it away from the UI thread.
 func dialRemote(host string) (*remoteConn, error) {
@@ -290,7 +261,7 @@ func dialRemote(host string) (*remoteConn, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err := info.uploadBinaries(host); err != nil {
+	if _, err := info.upload(host, false); err != nil {
 		return nil, err
 	}
 	if err := info.start(host); err != nil {
@@ -311,7 +282,7 @@ func dialRemote(host string) (*remoteConn, error) {
 		return nil, stopErr
 	}
 	info.waitStopped(host)
-	if err := info.uploadAll(host); err != nil {
+	if _, err := info.upload(host, true); err != nil {
 		return nil, err
 	}
 	if err := info.start(host); err != nil {
@@ -320,8 +291,6 @@ func dialRemote(host string) (*remoteConn, error) {
 	return info.forward(host)
 }
 
-// remoteSetup is what provisioning a host found: whether this run
-// uploaded the binaries and where the server lives.
 // provisionRemote installs the server and checks that it answers. The
 // connection is closed afterwards; the server keeps running for project
 // and terminal use.
@@ -339,7 +308,7 @@ func provisionRemote(host string, existing *remoteConn) (*remoteSetup, error) {
 	if err != nil {
 		return nil, err
 	}
-	uploaded, err := info.uploadBinaries(host)
+	uploaded, err := info.upload(host, false)
 	if err != nil {
 		return nil, err
 	}
@@ -424,8 +393,6 @@ func uploadRemote(host, path string, data []byte, mode string) error {
 
 // serverAssetCache is where pictures and PDFs of a server project are
 // fetched for their viewers.
-// serverAssetCache is where pictures and PDFs of a server project are
-// fetched for their viewers.
 func (a *app) serverAssetCache(serverID, root string) string {
 	base := a.dataDir
 	if base == "" {
@@ -451,8 +418,6 @@ func (a *app) detachRemoteConn(rc *remoteConn) {
 
 // closeRemoteConn closes the control client and the SSH forward without
 // stopping the server or its terminals on the host.
-// closeRemoteConn closes the control client and the SSH forward without
-// stopping the server or its terminals on the host.
 func closeRemoteConn(rc *remoteConn) {
 	if rc == nil {
 		return
@@ -469,8 +434,6 @@ func closeRemoteConn(rc *remoteConn) {
 	_ = os.Remove(rc.socket)
 }
 
-// workspaceReachable reports whether a cached remote workspace still has
-// a live connection. A local workspace always does.
 // remoteConn is this app's bridge to one remote session server: an SSH
 // forward to its Unix socket, and the control connection through it.
 type remoteConn struct {

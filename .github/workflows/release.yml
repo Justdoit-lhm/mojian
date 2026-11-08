@@ -20,14 +20,16 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - name: Check the tag against mygo.json
+      - &check-tag
+        name: Check the tag against mygo.json
         run: |
           version="$(jq -r .version mygo.json)"
           test "v$version" = "$GITHUB_REF_NAME" || {
             echo "::error::the tag $GITHUB_REF_NAME does not match mygo.json's v$version"
             exit 1
           }
-      - name: Seed the native terminal library
+      - &seed-native
+        name: Seed the native terminal library
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -97,50 +99,8 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - name: Check the tag against mygo.json
-        run: |
-          version="$(jq -r .version mygo.json)"
-          test "v$version" = "$GITHUB_REF_NAME" || {
-            echo "::error::the tag $GITHUB_REF_NAME does not match mygo.json's v$version"
-            exit 1
-          }
-      - name: Seed the native terminal library
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # go test downloads libghostty-vt from GitHub's release CDN, which
-          # answers 504 now and then; MyGo's own retries last a few seconds.
-          # Fetch it here with patience, and through the API if the CDN keeps
-          # failing, so the tests and the build find it already cached.
-          set -euo pipefail
-          go mod download github.com/egoist/mygo
-          manifest="$(go list -m -f '{{.Dir}}' github.com/egoist/mygo)/plugins/terminal/mygo-plugin.json"
-          case "$(go env GOOS)" in
-            darwin) targets="darwin-arm64 darwin-amd64"; cache="$HOME/Library/Caches" ;;
-            *) targets="linux-amd64 linux-arm64"; cache="${XDG_CACHE_HOME:-$HOME/.cache}" ;;
-          esac
-          pick() { jq -r --arg t "$1" '.libraries[] | select(.name=="libghostty-vt") | .files[$t].'"$2" "$manifest"; }
-          for target in $targets; do
-            url="$(pick "$target" url)"
-            name="$(pick "$target" name)"
-            sha="$(pick "$target" sha256)"
-            dir="$cache/mygo/natives/$sha"
-            mkdir -p "$dir"
-            if [ ! -f "$dir/$name" ]; then
-              curl -fsSL --retry 10 --retry-all-errors --retry-delay 10 --max-time 300 \
-                -o "$dir/$name" "$url" || {
-                tag="${url%/*}"; tag="${tag##*/}"
-                file="${url##*/}"
-                id="$(gh api "repos/egoist/mygo/releases/tags/$tag" \
-                  | jq -r --arg n "$file" '.assets[] | select(.name==$n) | .id')"
-                gh api -H 'Accept: application/octet-stream' \
-                  "repos/egoist/mygo/releases/assets/$id" > "$dir/$name"
-              }
-            fi
-            got="$(shasum -a 256 "$dir/$name" 2>/dev/null || sha256sum "$dir/$name")"
-            test "${got%% *}" = "$sha" || { echo "::error::$name is not the expected file"; exit 1; }
-            echo "cached $dir/$name"
-          done
+      - *check-tag
+      - *seed-native
       - name: Test
         run: go test ./...
       - name: Build

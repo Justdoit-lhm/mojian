@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Mojian is a quiet text editor for plain files, written in Go against [MyGo](https://mygo.egoist.dev)'s native UI. It is not a web app: there is no webview, no cgo, no JavaScript build. One Go binary draws its own window (Metal on macOS). Tabs are workspaces; each tab holds a binary split tree of panes, and each pane edits a file, previews a picture or PDF, or runs a terminal. Version `0.2.3`, bundle id `dev.mojian.app`, macOS 13+.
+Mojian is a quiet text editor for plain files, written in Go against [MyGo](https://mygo.egoist.dev)'s native UI. It is not a web app: there is no webview, no cgo, no JavaScript build. One Go binary draws its own window (Metal on macOS). Tabs are workspaces; each tab holds a binary split tree of panes, and each pane edits a file, previews a picture or PDF, or runs a terminal. Version `0.2.4`, bundle id `dev.mojian.app`, macOS 13+.
 
 A project is just a folder; it keeps its own tabs and layout. Opened projects stay loaded in a workspace cache (`internal/app/workspace.go`): switching stashes the active tabs, terminals, layout and Git page and restores the next project without reading it again. Edits stay in memory until an explicit `⌘S`. On macOS and Linux every local project is opened through the local session server, so its files, Git and terminals share one process; quitting the app detaches the terminals and reopening reattaches them. Remote projects are edited directly on the host: only a listing is cached, and a file's text is read when it opens. A remote server and its terminals stay alive after the app or SSH connection disconnects. Windows is not supported.
 
@@ -10,22 +10,22 @@ Read `.agents/skills/mygo-maintenance/SKILL.md` before touching UI code; it is t
 
 ## Architecture & Data Flow
 
-**Immediate-mode UI, one state struct.** `internal/app/app.go:28` holds every piece of app state as plain fields on `*app`. There are no reducers, observables or stores. `(*app).view` (`internal/app/view.go:21`) rebuilds the whole element tree each frame from that state; MyGo calls it again after input, `Window.Update` or `Invalidate`. A second root, `(*app).settingsWindowView` (`internal/app/settings.go:173`), draws the Settings window.
+**Immediate-mode UI, one state struct.** `internal/app/app.go:26` holds every piece of app state as plain fields on `*app`. There are no reducers, observables or stores. `(*app).view` (`internal/app/view.go:16`) rebuilds the whole element tree each frame from that state; MyGo calls it again after input, `Window.Update` or `Invalidate`. A second root, `(*app).settingsWindowView` (`internal/app/settings.go:68`), draws the Settings window.
 
 Frame conventions that keep this correct:
 
-- `a.later(fn)` (`app.go:675`) defers a mutation to the next frame. Use it whenever an action would change the collection being built (add/close a tab or pane).
-- `a.changed()` (`app.go:698`) marks the layout dirty and arms a 700 ms `time.AfterFunc`; `a.persistLayout` (`app.go:722`) writes once 550 ms have passed without a change.
-- `a.invalidate()` (`app.go:551`) requests a redraw of both windows after state changes made outside the view.
-- Slow work never runs in a view. Background results land through `Window.Update` and are dropped when a sequence/generation counter moved on — see `git.Page.Seq`/`DiffSeq` (`internal/git/git.go:103-118`) and `assetView.pdfGen` (`internal/app/assetview.go:78`).
+- `a.later(fn)` (`app.go:398`) defers a mutation to the next frame. Use it whenever an action would change the collection being built (add/close a tab or pane).
+- `a.changed()` (`app.go:421`) marks the layout dirty and arms a 700 ms `time.AfterFunc`; `a.persistLayout` (`app.go:445`) writes once 550 ms have passed without a change.
+- `a.invalidate()` (`app.go:183`) requests a redraw of both windows after state changes made outside the view.
+- Slow work never runs in a view. Background results land through `Window.Update` and are dropped when a sequence/generation counter moved on — see `git.Page.Seq`/`DiffSeq` (`internal/git/git.go:77-78`) and `assetView.pdfGen` (`internal/app/assetview.go:84`).
 
 **One traced path (open → edit → save).** Tree row click → `(*app).openRel` → `store.byRelPath` → `(*app).openNote` → `pane.Note`; the pane renders `note.buffer`, a single `*editor.Buffer` shared by every pane showing that file. `⌘S` → menu/palette command → `(*app).saveNow` → `store.saveAll` → `store.save` → the project's `fsBackend` (`writeFileAtomic` for a direct file, `session.Client.WriteFile` for a server-backed one) → `buf.MarkSaved()`. Edits stay in memory until an explicit save.
 
-**Terminals live in a second process.** `internal/session` is a Unix-socket server (`session.Serve`, `server.go:48`) speaking JSON lines, `ProtocolVersion = 2` (`proto.go:16`). The app spawns it by re-executing itself with `-server` (`spawn_unix.go:19`), so quitting the app detaches PTYs instead of killing them; reopening reattaches by session id. A remote server is started without a transient flag and stays alive while any terminal session exists, so a dropped SSH connection does not end its shells; `mojian-server -stop` ends it explicitly. Terminal panes are `terminal.Terminal` (MyGo's libghostty plugin) bound to a `session.Stream`. Each layout terminal records `Server` (`local` or an SSH host) so it reattaches to the server that owns it.
+**Terminals live in a second process.** `internal/session` is a Unix-socket server (`session.Serve`, `server.go:59`) speaking JSON lines, `ProtocolVersion = 3` (`proto.go:40`). The app spawns it by re-executing itself with `-server` (`spawn_unix.go:19`), so quitting the app detaches PTYs instead of killing them; reopening reattaches by session id. A remote server is started without a transient flag and stays alive while any terminal session exists, so a dropped SSH connection does not end its shells; `mojian-server -stop` ends it explicitly. Terminal panes are `terminal.Terminal` (MyGo's libghostty plugin) bound to a `session.Stream`. Each layout terminal records `Server` (`local` or an SSH host) so it reattaches to the server that owns it.
 
 **Server projects.** `internal/app/server.go` opens local projects through the local session server on macOS and Linux; the browser keeps its in-memory editor. A `store` holds an `fsBackend` (`internal/app/fs.go`): `directFS` (tests/browser neighbours), `memoryFS`, or `serverFS` (`local` distinguishes a local server from a remote one). `session.Client.ListTree` lists names, sizes, times, kinds and an asset's content hash, a note is read when it opens, and saves and file operations write through the same client. There is no local mirror. `store.refresh` reconciles the one listing into notes, assets and the tree; `fs_direct.go` keeps the eager local listing, `fs_server.go` the lazy one. For remote projects, `internal/app/remote_conn.go` uploads the embedded Linux server + `libghostty-vt` from `internal/remotebin`, opens an `ssh -N -L` forward to the remote socket, and detaches without shutting the server down. Settings › Hosts is the only host source: the app no longer scans `~/.ssh/config`, and each host has a Set Up Server action that uploads the binaries and checks the server answers over the forward. Connections are pooled by host, shared by every loaded project and kept while one uses them; the first connection and project opening run off the UI thread behind a loading card (`openRemoteProjectAsync`). Git runs through the project's server (`internal/app/git_bridge.go`); pictures and PDFs are fetched into a local viewer cache.
 
-**Cross-package contracts.** `git.Host` (`internal/git/git.go:34`) is the only interface the Git page uses to reach the window; `*app` implements it in `internal/app/git_bridge.go`. `internal/app/theme_bridge.go` exists so `app` touches `internal/theme` through one file.
+**Cross-package contracts.** `git.Host` (`internal/git/git.go:52`) is the only interface the Git page uses to reach the window; `*app` implements it in `internal/app/git_bridge.go`. `internal/app/theme_bridge.go` exists so `app` touches `internal/theme` through one file.
 
 **Persistence.** `settings.json` and `layouts/<fnv64a(projectDir)>.json` live in `mygo.App.Path(mygo.PathUserData)` (`app.go:195`, `598`). Environment overrides: `MOJIAN_VAULT` (project folder), `MOJIAN_DIR` (data/socket/log dir).
 
@@ -39,6 +39,7 @@ Frame conventions that keep this correct:
 | `internal/app/` | The window in one package: shell, tabs, panes, Explorer, pickers, palette, Settings, file operations, SSH, asset viewers. |
 | `internal/session/` | PTY server and client, wire protocol, remote file ops, spawn/lock, platform stubs. |
 | `internal/git/` | Working-tree diff page: status/diff reading, parsing, view. |
+| `internal/gitenv/` | The environment Git commands run in, without redirect variables. |
 | `internal/theme/` | Light/dark `Colors`, `Radius`, background painting, editor theme, font registration. |
 | `internal/icons/` | Lucide action icons and Material Icon Theme file icons, cached from embedded SVG. |
 | `internal/assets/` | `embed.FS` of icons, brand marks and JetBrains Mono. |
@@ -159,4 +160,3 @@ To add a fixture, register it in `cmd/harness/main.go` and add its factory besid
 - **Setup patterns:** `t.TempDir()` plus `t.Setenv` for `MOJIAN_VAULT`, `MOJIAN_DIR` and `HOME`. Terminal tests start `session.Serve` in a goroutine and poll `session.SocketPath()` with a 3 s deadline. PTY and socket tests are Unix-only via build tags. Never add `t.Parallel()` to tests that set env or bind sockets.
 - **Injection seams** exist for tests, keep them working: `app.shellStarter`, `trashPath`, `provisionRemoteFn`, `readClipboardFiles`/`writeClipboardFiles`, `remoteConn` values in the `remotes` pool, and the `dataDir`/`layoutPath`/`settingsPath` fields.
 - **Expectations:** behavior, boundaries and regressions — not wiring. Add a regression test only where the failure mode is plausible; verify features with a throwaway script, the headless harness, or the running app instead of new permanent tests.
-- **Known drift:** `README.md` claims white-box tests in `internal/theme`; none exist. `internal/app/main_test.go` contains an unused `newTestApp` helper. Do not "fix" either by inventing coverage.

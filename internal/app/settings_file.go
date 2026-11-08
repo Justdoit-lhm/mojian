@@ -8,6 +8,7 @@ import (
 	"time"
 )
 
+// settingsFile is what the app keeps between launches.
 type settingsFile struct {
 	prefs
 	Shortcuts      map[string]string `json:"shortcuts,omitempty"`
@@ -51,7 +52,6 @@ func (a *app) loadSettings() {
 // saveSettingsSoon debounces a write while a slider is dragged: the
 // value changes on every pointer frame, but the file needs to land once
 // the drag settles.
-
 func (a *app) saveSettingsSoon() {
 	if a.win == nil && a.settingsWin == nil {
 		a.saveSettings()
@@ -97,7 +97,6 @@ func (a *app) saveSettings() {
 
 // writeFileAtomic replaces path with data, so a crash leaves the old
 // file or the new one, never half of each.
-
 func writeFileAtomic(path string, data []byte) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -127,51 +126,46 @@ func writeFileAtomic(path string, data []byte) error {
 	return os.Rename(name, path)
 }
 
-// fontSize is the editor's font size, with the default when unset.
-
+// fontSize and the other getters are the effective values: what the
+// editor and terminal use when a preference is unset or zero.
 func (a *app) fontSize() float64 {
 	if a.EditorFontSize <= 0 {
-		return 12.5
+		return prefsDefaults.EditorFontSize
 	}
 	return a.EditorFontSize
 }
 
-// termFontSize is the terminal's font size, with the default when unset.
-
 func (a *app) termFontSize() float64 {
 	if a.TerminalFontSize <= 0 {
-		return 12.5
+		return prefsDefaults.TerminalFontSize
 	}
 	return a.TerminalFontSize
 }
 
-// lineHeight, tabSize and the terminal's numbers are the effective
-// values, with the defaults when unset.
-
 func (a *app) lineHeight() float64 {
 	if a.EditorLineHeight <= 0 {
-		return 1.55
+		return prefsDefaults.EditorLineHeight
 	}
 	return a.EditorLineHeight
 }
 
 func (a *app) tabSize() int {
 	if a.EditorTabSize <= 0 {
-		return 4
+		return prefsDefaults.EditorTabSize
 	}
 	return a.EditorTabSize
 }
 
 func (a *app) termLineHeight() float64 {
 	if a.TerminalLineHeight <= 0 {
-		return 1
+		return prefsDefaults.TerminalLineHeight
 	}
 	return a.TerminalLineHeight
 }
 
 func (a *app) termScrollback() int {
 	if a.TerminalScrollback <= 0 {
-		return 10
+		return prefsDefaults.TerminalScrollback
 	}
 	return a.TerminalScrollback
 }

@@ -142,14 +142,13 @@ func (a *app) windowClosed() {
 	a.rename = nil
 }
 
-// settingsFile is what the app keeps between launches.
 // openSettingsWindow shows the preferences in a window of their own, or
 // brings it forward.
 func (a *app) openSettingsWindow() {
 	if a.harness {
 		// A native window needs mygo.App's event loop, which a harness
 		// never starts; its Settings view has a fixture of its own.
-		a.fail(errors.New("Settings is the Mojian Settings fixture"))
+		a.fail(errors.New("the Settings window is the Mojian Settings fixture"))
 		return
 	}
 	if a.settingsWin != nil {
@@ -190,9 +189,6 @@ func (a *app) invalidate() {
 	}
 }
 
-// initialStore opens $MOJIAN_VAULT, else the project of the last launch,
-// else the default folder. The app's own project gets a welcome note; a
-// project the user chose does not.
 // applyTheme gives the frame the appearance the user chose.
 func (a *app) applyTheme(c *ui.Context) {
 	switch a.Appearance {

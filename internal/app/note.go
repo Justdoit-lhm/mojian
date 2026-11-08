@@ -30,8 +30,6 @@ type note struct {
 
 // assetFile is a picture or a PDF in the project: a file shown by a
 // viewer rather than edited as text.
-// assetFile is a picture or a PDF in the project: a file shown by a
-// viewer rather than edited as text.
 type assetFile struct {
 	Rel  string
 	Path string
@@ -49,8 +47,6 @@ type assetFile struct {
 	err  error
 }
 
-// localPath is the file the viewer reads: the fetched copy for a remote
-// project, the project file otherwise.
 // localPath is the file the viewer reads: the fetched copy for a remote
 // project, the project file otherwise.
 func (f *assetFile) localPath() string {
@@ -86,8 +82,6 @@ func (n *note) dirty() bool { return n.buf != nil && n.buf.Modified() }
 
 // buffer is the note's one buffer, shared by every pane showing it, so
 // an edit in one shows in the others.
-// buffer is the note's one buffer, shared by every pane showing it, so
-// an edit in one shows in the others.
 func (n *note) buffer() *editor.Buffer {
 	if n.buf == nil {
 		n.buf = editor.NewBuffer(n.Saved)
@@ -96,8 +90,6 @@ func (n *note) buffer() *editor.Buffer {
 	return n.buf
 }
 
-// newState is one pane's view of the note's buffer, with its own caret,
-// selection and scroll.
 // newState is one pane's view of the note's buffer, with its own caret,
 // selection and scroll.
 func (n *note) newState() *editor.State {
@@ -121,8 +113,6 @@ func lineNumbersFor(path string) editor.LineNumbers {
 
 // wrapFor wraps prose, and scrolls code sideways rather than folding a
 // line onto the next.
-// wrapFor wraps prose, and scrolls code sideways rather than folding a
-// line onto the next.
 func wrapFor(path string) bool {
 	if isMarkdownPath(path) {
 		return true
@@ -134,8 +124,6 @@ func wrapFor(path string) bool {
 	return false
 }
 
-// noteTitle is the first heading of the note, else its file name without
-// the extension.
 // noteTitle is the first heading of the note, else its file name without
 // the extension.
 func noteTitle(body, path string) string {
@@ -158,8 +146,6 @@ func noteTitle(body, path string) string {
 	return stem
 }
 
-// store is a project: the text files it holds, by path. Its backend is a
-// local folder, a session server, or the browser's memory.
 // isMarkdownPath reports whether a file is Markdown: prose, with soft
 // wrap, rather than source code.
 func isMarkdownPath(path string) bool {

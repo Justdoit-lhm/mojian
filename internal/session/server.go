@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"mojian/internal/filekind"
+	"mojian/internal/gitenv"
 
 	"github.com/creack/pty"
 	"github.com/egoist/mygo/plugins/terminal"
@@ -48,7 +49,6 @@ type Server struct {
 	sessions map[string]*session
 	order    []string
 	started  time.Time
-	ln       net.Listener
 	quit     chan struct{}
 	once     sync.Once
 	controls int
@@ -82,7 +82,7 @@ func Serve() error {
 	}
 	s := &Server{
 		sessions: map[string]*session{}, order: nil, started: time.Now(),
-		ln: ln, quit: make(chan struct{}), idleFrom: time.Now(),
+		quit: make(chan struct{}), idleFrom: time.Now(),
 	}
 	go func() {
 		<-s.quit
@@ -401,8 +401,6 @@ type session struct {
 	exited     bool
 	code       int
 	done       chan struct{}
-	output     uint64
-	lastOutput time.Time
 	resync     *time.Timer
 }
 
@@ -546,8 +544,6 @@ func (s *session) read() {
 			data := append([]byte(nil), buf[:n]...)
 			s.mu.Lock()
 			s.vt.Feed(data)
-			s.output += uint64(n)
-			s.lastOutput = time.Now()
 			for a := range s.clients {
 				if !a.send(data) {
 					a.finish()
@@ -881,21 +877,7 @@ func execCommand(req Request) (ExecResult, error) {
 
 // execEnv starts from the server's environment, without the Git
 // variables a launching shell may have set, then adds the command's.
-func execEnv(extra []string) []string {
-	drop := map[string]bool{
-		"GIT_DIR": true, "GIT_WORK_TREE": true, "GIT_INDEX_FILE": true,
-		"GIT_OBJECT_DIRECTORY": true, "GIT_ALTERNATE_OBJECT_DIRECTORIES": true,
-		"GIT_COMMON_DIR": true,
-	}
-	out := make([]string, 0, len(os.Environ())+len(extra))
-	for _, kv := range os.Environ() {
-		if i := strings.IndexByte(kv, '='); i > 0 && drop[kv[:i]] {
-			continue
-		}
-		out = append(out, kv)
-	}
-	return append(out, extra...)
-}
+func execEnv(extra []string) []string { return gitenv.Env(extra...) }
 
 // limitedWriter keeps the first limit bytes and drops the rest.
 type limitedWriter struct {

@@ -80,8 +80,6 @@ func (a *app) tabStrip(c *ui.Context, k *colors) {
 	})
 }
 
-// tabWidth is the room a tab takes when the title bar has it: its tiles,
-// its label, and its close button.
 // tabMiddleClick closes a tab on a middle-button press, as a browser
 // does.
 func (a *app) tabMiddleClick(t *tab, ev ui.InputEvent) bool {
@@ -92,6 +90,8 @@ func (a *app) tabMiddleClick(t *tab, ev ui.InputEvent) bool {
 	return true
 }
 
+// tabWidth is the room a tab takes when the title bar has it: its tiles,
+// its label, and its close button.
 func tabWidth(c *ui.Context, t *tab) float32 {
 	name, detail := t.label()
 	w, _ := c.MeasureText(0, tabLabel(name, detail, ui.Color{}, ui.Color{})...)

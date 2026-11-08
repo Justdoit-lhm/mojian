@@ -23,9 +23,9 @@ const (
 	colorDuration = 120 * time.Millisecond
 )
 
-// EaseOut is a strong ease-out for short fades and color changes. It
+// easeOut is a strong ease-out for short fades and color changes. It
 // starts fast, so feedback never lags behind the pointer.
-var EaseOut = ui.CubicBezier(0.23, 1, 0.32, 1)
+var easeOut = ui.CubicBezier(0.23, 1, 0.32, 1)
 
 // spring is a critically damped spring that arrives in about d.
 func spring(d time.Duration) *ui.Animation {
@@ -84,7 +84,7 @@ var (
 	// Colors makes hover faces catch up with the pointer.
 	Colors = ui.ElementTransition{
 		Duration: colorDuration,
-		Ease:     EaseOut,
+		Ease:     easeOut,
 		Colors:   true,
 	}
 
@@ -105,13 +105,13 @@ var (
 	// FadeIn brings a new pane card in, which the engine cannot enter with
 	// a Motion because its split is new too: the view animates its Opacity
 	// with AnimateTo instead.
-	FadeIn = ui.Animation{Duration: 160 * time.Millisecond, Ease: EaseOut}
+	FadeIn = ui.Animation{Duration: 160 * time.Millisecond, Ease: easeOut}
 
 	// Close fades a pane out before its split closes, moving it back
 	// toward the edge it entered from. The view removes it when the
 	// animation rests, since the split node goes with the pane and the
 	// engine cannot keep an Exit copy.
-	Close = ui.Animation{Duration: 160 * time.Millisecond, Ease: EaseOut}
+	Close = ui.Animation{Duration: 160 * time.Millisecond, Ease: easeOut}
 )
 
 // Tree is the transition of a folder's children: they unfold while the

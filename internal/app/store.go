@@ -13,6 +13,8 @@ import (
 	"mojian/internal/session"
 )
 
+// store is a project: the text files it holds, by path. Its backend is a
+// local folder, a session server, or the browser's memory.
 type store struct {
 	dir string
 	fs  fsBackend
@@ -266,7 +268,7 @@ func (s *store) sorted() []*note {
 	return out
 }
 
-// byRel returns the note at a path within the vault, if it is in it.
+// byRelPath returns the note at a path within the vault, if it is in it.
 func (s *store) byRelPath(rel string) *note {
 	if n, ok := s.byRel[rel]; ok {
 		return n

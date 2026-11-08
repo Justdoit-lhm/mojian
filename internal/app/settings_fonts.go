@@ -37,7 +37,6 @@ func (a *app) fontRow(c *ui.Context, k *colors, title, detail string, which int,
 
 // editorFont is the effective editor face: the chosen family with the
 // app's monospace fallbacks, at the chosen size.
-
 func (a *app) editorFont() ui.Font {
 	f := noteFont
 	if fam := strings.TrimSpace(a.EditorFontFamily); fam != "" {
@@ -49,7 +48,6 @@ func (a *app) editorFont() ui.Font {
 
 // installedFonts lists the families the system and the app provide,
 // loaded once when a font chooser first opens.
-
 func (a *app) installedFonts() []ui.FontFamily {
 	a.fontsOnce.Do(func() { a.fonts = ui.FontFamilies() })
 	return a.fonts
@@ -57,7 +55,6 @@ func (a *app) installedFonts() []ui.FontFamily {
 
 // fontPicker is the searchable list of installed families, opened by the
 // font rows.
-
 func (a *app) fontPicker(c *ui.Context, k *colors) {
 	if !a.fontPick {
 		return

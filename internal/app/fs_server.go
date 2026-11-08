@@ -69,19 +69,17 @@ func (r *serverFS) List() ([]session.FileEntry, map[string]string, error) {
 }
 
 func (r *serverFS) Read(rel string) ([]byte, error) {
-	p, err := r.Abs(rel)
-	if err != nil {
-		return nil, err
-	}
-	return r.client.ReadFile(p)
+	var data []byte
+	err := at(r, rel, func(p string) error {
+		var err error
+		data, err = r.client.ReadFile(p)
+		return err
+	})
+	return data, err
 }
 
 func (r *serverFS) Write(rel string, data []byte) error {
-	p, err := r.Abs(rel)
-	if err != nil {
-		return err
-	}
-	return r.client.WriteFile(p, data)
+	return at(r, rel, func(p string) error { return r.client.WriteFile(p, data) })
 }
 
 func (r *serverFS) Stat(rel string) (session.FileEntry, error) {
@@ -98,71 +96,41 @@ func (r *serverFS) Stat(rel string) (session.FileEntry, error) {
 }
 
 func (r *serverFS) Mkdir(rel string) error {
-	p, err := r.Abs(rel)
-	if err != nil {
-		return err
-	}
-	return r.client.Mkdir(p)
+	return at(r, rel, r.client.Mkdir)
 }
 
 func (r *serverFS) Rename(oldRel, newRel string) error {
-	oldAbs, err := r.Abs(oldRel)
-	if err != nil {
-		return err
-	}
-	newAbs, err := r.Abs(newRel)
-	if err != nil {
-		return err
-	}
-	return r.client.Rename(oldAbs, newAbs)
+	return pair(r, oldRel, newRel, r.client.Rename)
 }
 
 func (r *serverFS) Copy(oldRel, newRel string) error {
-	oldAbs, err := r.Abs(oldRel)
-	if err != nil {
-		return err
-	}
-	newAbs, err := r.Abs(newRel)
-	if err != nil {
-		return err
-	}
-	return r.client.Copy(oldAbs, newAbs)
+	return pair(r, oldRel, newRel, r.client.Copy)
 }
 
 func (r *serverFS) Remove(rel string) error {
-	p, err := r.Abs(rel)
-	if err != nil {
-		return err
-	}
-	return r.client.Remove(p)
+	return at(r, rel, r.client.Remove)
 }
 
 func (r *serverFS) CopyFrom(srcAbs, destRel string) error {
 	if !r.local {
 		return fmt.Errorf("a remote project cannot paste Finder files")
 	}
-	dest, err := r.Abs(destRel)
-	if err != nil {
-		return err
-	}
-	return r.client.Copy(srcAbs, dest)
+	return at(r, destRel, func(dest string) error { return r.client.Copy(srcAbs, dest) })
 }
 
 func (r *serverFS) MoveFrom(srcAbs, destRel string) error {
 	if !r.local {
 		return fmt.Errorf("a remote project cannot move Finder files")
 	}
-	dest, err := r.Abs(destRel)
-	if err != nil {
-		return err
-	}
-	if err := r.client.Rename(srcAbs, dest); err == nil {
-		return nil
-	}
-	if err := r.client.Copy(srcAbs, dest); err != nil {
-		return err
-	}
-	return r.client.Remove(srcAbs)
+	return at(r, destRel, func(dest string) error {
+		if err := r.client.Rename(srcAbs, dest); err == nil {
+			return nil
+		}
+		if err := r.client.Copy(srcAbs, dest); err != nil {
+			return err
+		}
+		return r.client.Remove(srcAbs)
+	})
 }
 
 func (r *serverFS) RemoveAbs(abs string) error { return r.client.Remove(abs) }

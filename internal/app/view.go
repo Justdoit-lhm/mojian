@@ -69,8 +69,8 @@ func (a *app) closingPanesView(c *ui.Context, k *colors) {
 	}
 }
 
-// workspace shows the Git page, the active tab or the empty state in a
-// frame keyed by what it shows: changing the key fades the old page out
+// workspaceView shows the Git page, the active tab or the empty state in
+// a frame keyed by what it shows: changing the key fades the old page out
 // and the new one in, so a switch never teleports.
 func (a *app) workspaceView(c *ui.Context, k *colors) {
 	key := "workspace:empty"

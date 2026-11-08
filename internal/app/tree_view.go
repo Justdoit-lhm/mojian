@@ -225,8 +225,6 @@ func (a *app) treeRowKeys(row ui.Element, rel string) {
 
 // treeDraftRow is the field naming a new file or folder, or renaming an
 // entry in place.
-// treeDraftRow is the field naming a new file or folder, or renaming an
-// entry in place.
 func (a *app) treeDraftRow(c *ui.Context, k *colors, depth int, dir bool) {
 	d := a.treeDraft
 	if d == nil {

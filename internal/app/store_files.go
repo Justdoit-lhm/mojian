@@ -48,8 +48,6 @@ func (s *store) newMemoryFile(name, body string) (*note, error) {
 
 // uniqueRel returns folder/name, numbered before its extension when the
 // name is taken. copyMode names a duplicate "name copy".
-// uniqueRel returns folder/name, numbered before its extension when the
-// name is taken. copyMode names a duplicate "name copy".
 func (s *store) uniqueRel(folder, name string, copyMode bool) string {
 	stem, ext := splitExt(name)
 	candidate := name

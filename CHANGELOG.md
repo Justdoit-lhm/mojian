@@ -1,17 +1,30 @@
 # Changelog
 
-## 0.2.3
+## 0.2.4
 
 - The Explorer slides in from the window's edge and fades back out when
   the file tree is hidden, and it crossfades when switching projects on
   the same spring that unfolds its folders.
+- The README header carries an Awesome MyGo listing badge beside release,
+  license and platform badges in the ink, paper and vermilion palette.
+- A headless UI harness (`cmd/harness`) serves the real window and
+  Settings views to an MCP client, so an agent can inspect, click, type
+  into and screenshot the interface without a desktop window.
+- The File menu no longer repeats Toggle Terminal, and View no longer
+  repeats New SSH Terminal: each command keeps one menu entry.
+- Settings › Advanced no longer repeats the settings file path in its
+  About section.
+- Under the hood, duplicated comments, dead fields and copied helpers
+  are gone, and the direct and server file backends share their path
+  handling.
+
+## 0.2.3
+
 - Settings › Updates reads the latest release manifest directly from the
   release download URL and retries GitHub's transient 5xx answers, so a
   rate-limited API or a brief Gateway Timeout no longer fails the check.
 - The README opens with the real window and walks through the Explorer,
   Open File, panes, terminals, remote servers and Settings.
-- The README header carries an Awesome MyGo listing badge beside release,
-  license and platform badges in the ink, paper and vermilion palette.
 
 ## 0.2.2
 

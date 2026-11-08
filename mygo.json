@@ -1,7 +1,7 @@
 {
   "name": "Mojian",
   "identifier": "dev.mojian.app",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "copyright": "Mojian, a quiet text editor built with MyGo",
   "out": "build",
   "icon": "resources/icon.png",
@@ -11,7 +11,6 @@
   "updates": {
     "publicKey": "6/RbtBScDpL9EAoKiUXWKso3/Dz4lZl9TYoC9u3VVsM=",
     "github": "ox0pine/mojian",
-    "tagPrefix": "v",
     "deltas": 0
   }
 }

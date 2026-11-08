@@ -76,7 +76,6 @@ func (a *app) settingsFixedKeys(c *ui.Context, k *colors, title, keys, detail st
 
 // shortcutRow is a command's shortcut: its keys, a reset when they are
 // not the default, and a chip that records the keys typed for it.
-
 func (a *app) shortcutRow(c *ui.Context, k *colors, cmd *command) {
 	label := strings.TrimSuffix(cmd.title, "…")
 	keys := a.commandKeys(cmd)

@@ -21,11 +21,8 @@ const (
 	settingsKeyboard      = settings.Keyboard
 	settingsHosts         = settings.Hosts
 	settingsGit           = settings.Git
-	settingsAdvanced      = settings.Advanced
 	settingsUpdates       = settings.Updates
 )
-
-var settingsCats = settings.Categories
 
 // settingsEntry is one thing Settings' search finds: the page, the label
 // its row or group shows, and words that find it besides.
@@ -128,7 +125,7 @@ func (a *app) prepareSettingsSearch() {
 		return true
 	}
 	found := map[int][]string{}
-	for i, cat := range settingsCats {
+	for i, cat := range settings.Categories {
 		if !settingsCatAvailable(i) {
 			continue
 		}
@@ -150,7 +147,7 @@ func (a *app) prepareSettingsSearch() {
 		return
 	}
 	if _, ok := found[a.settingsCat]; !ok || !settingsCatAvailable(a.settingsCat) {
-		for i := range settingsCats {
+		for i := range settings.Categories {
 			if _, ok := found[i]; ok && settingsCatAvailable(i) {
 				a.settingsCat = i
 				break
@@ -197,7 +194,7 @@ func (a *app) settingsRail(c *ui.Context, k *colors) {
 				a.invalidate()
 			}
 		})
-		for i, cat := range settingsCats {
+		for i, cat := range settings.Categories {
 			if !settingsCatAvailable(i) {
 				continue
 			}

@@ -150,7 +150,6 @@ func (a *app) hostSettingsRow(c *ui.Context, k *colors, host, label, detail stri
 }
 
 // hostSetupRow shows the server state and installs it on demand.
-
 func (a *app) hostSetupRow(c *ui.Context, k *colors, host string) {
 	busy := a.hostSetupBusy && a.hostSetupAddr == host
 	msg := "Server not set up yet"

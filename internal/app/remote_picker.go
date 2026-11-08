@@ -15,9 +15,6 @@ import (
 // provisionRemoteFn is replaceable in tests; the real flow talks SSH.
 var provisionRemoteFn = provisionRemote
 
-// setUpHost installs the server on a configured host in the background,
-// so the Settings window never waits on SSH. The status belongs to the
-// host row that started it.
 // openRemotePicker asks the selected server for its home, then shows the
 // directories to choose a project from.
 func (a *app) openRemotePicker(host string) {
@@ -349,9 +346,6 @@ func (a *app) remoteProjectRows(c *ui.Context, k *colors) {
 	}
 }
 
-// hostConfig is a server the user added in Settings › Hosts. Address is
-// anything the system ssh accepts, such as buildbox, me@devbox or
-// ssh://me@devbox:2222 (the last is passed through as ssh accepts it).
 func (a *app) hostLabel(address string) string {
 	for _, h := range a.hosts {
 		if h.Address == address {
@@ -386,7 +380,6 @@ func (a *app) addHost(name, address string) {
 	a.invalidate()
 }
 
-// provisionRemoteFn is replaceable in tests; the real flow talks SSH.
 // setUpHost installs the server on a configured host in the background,
 // so the Settings window never waits on SSH. The status belongs to the
 // host row that started it.
@@ -411,8 +404,6 @@ func (a *app) setUpHost(host string) {
 	}()
 }
 
-// finishHostSetup lands a setup result on the thread that owns the
-// Settings window.
 // finishHostSetup lands a setup result on the thread that owns the
 // Settings window.
 func (a *app) finishHostSetup(host string, setup *remoteSetup, err error) {
@@ -443,6 +434,9 @@ func (a *app) finishHostSetup(host string, setup *remoteSetup, err error) {
 	a.invalidate()
 }
 
+// hostConfig is a server the user added in Settings › Hosts. Address is
+// anything the system ssh accepts, such as buildbox, me@devbox or
+// ssh://me@devbox:2222 (the last is passed through as ssh accepts it).
 type hostConfig struct {
 	Name    string `json:"name"`
 	Address string `json:"address"`

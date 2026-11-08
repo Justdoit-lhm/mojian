@@ -133,14 +133,12 @@ func (a *app) settingsAboutPage(c *ui.Context, k *colors) {
 			project = a.store.dir
 		}
 		a.settingsInfoRow(c, k, "Project", project)
-		a.settingsInfoRow(c, k, "Settings", a.settingsPath)
 		a.settingsInfoRow(c, k, "Fonts", fmt.Sprintf("%d installed families", len(a.installedFonts())))
 	})
 }
 
 // commandAvailable hides the commands the platform does not have, as the
 // palette does.
-
 func commandAvailable(c *command) bool {
 	if !terminalsSupported() && (c == cmdTerminal || c == cmdSSH) {
 		return false

@@ -20,9 +20,6 @@ func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
 // paneCardMode draws a pane in the layout, or a copy of one that is
 // closing over its old place. The copy takes no input and does not
 // animate its place: only its fade and slide-away run.
-// paneCardMode draws a pane in the layout, or a copy of one that is
-// closing over its old place. The copy takes no input and does not
-// animate its place: only its fade and slide-away run.
 func (a *app) paneCardMode(c *ui.Context, k *colors, t *tab, p *pane, overlay bool) ui.Element {
 	focused := t.Focus == p
 	card := ui.Column(c.Key(p.ID)).Radius(radius).Clip().MinWidth(0).MinHeight(0)
@@ -257,8 +254,6 @@ func (a *app) dropIndicator(c *ui.Context, k *colors, zone paneDrop) {
 
 // emptyPaneBody is the file picker inside a blank split: type to filter,
 // Enter or a click opens the file in this pane.
-// emptyPaneBody is the file picker inside a blank split: type to filter,
-// Enter or a click opens the file in this pane.
 func (a *app) emptyPaneBody(c *ui.Context, k *colors, t *tab, p *pane) {
 	choices := a.paneChoices(p.emptyQuery)
 	p.emptySel = min(max(p.emptySel, 0), max(len(choices)-1, 0))
@@ -365,8 +360,6 @@ func paneName(p *pane) string {
 	}
 }
 
-// paneHeader draws a note's icon, title, its unsaved dot, and its
-// buttons.
 // paneHeader draws a note's icon, title, its unsaved dot, and its
 // buttons.
 func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, width float32, overlay bool) {
@@ -500,13 +493,8 @@ func (a *app) laterPane(p *pane) {
 
 // closingPane is a pane that has left the layout and is fading over the
 // place it showed while the split closes under it.
-// closingPane is a pane that has left the layout and is fading over the
-// place it showed while the split closes under it.
 type closingPane struct {
 	p    *pane
 	t    *tab
 	rect ui.Rect
 }
-
-// emptyState is the welcome page of a tab with no file open: quick
-// actions, then the files touched most recently.

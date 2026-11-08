@@ -24,8 +24,6 @@ func (a *app) terminalCreateOptions(spec termSpec) session.CreateOptions {
 
 // prepareTerminalSession reuses a saved session when it still exists, or
 // creates a new one. It may run away from the UI thread.
-// prepareTerminalSession reuses a saved session when it still exists, or
-// creates a new one. It may run away from the UI thread.
 func prepareTerminalSession(client *session.Client, sid string, opts session.CreateOptions) (string, bool, error) {
 	if sid != "" {
 		if list, err := client.List(); err == nil {
@@ -43,10 +41,6 @@ func prepareTerminalSession(client *session.Client, sid string, opts session.Cre
 	return info.ID, true, nil
 }
 
-// startRestoredTerminal attaches a terminal restored by the layout. The
-// session lookup and creation run away from the UI thread; the view is
-// built once the answer is on the window's thread. A test has no window
-// and runs the whole path synchronously.
 // startRestoredTerminal attaches a terminal restored by the layout. The
 // session lookup and creation run away from the UI thread; the view is
 // built once the answer is on the window's thread. A test has no window
@@ -128,8 +122,6 @@ func (a *app) startRestoredTerminal(p *pane) {
 
 // detachTerminalView closes the local terminal and stream without
 // ending the session on the server.
-// detachTerminalView closes the local terminal and stream without
-// ending the session on the server.
 func detachTerminalView(p *pane) {
 	if p == nil || p.Term == nil {
 		return
@@ -144,8 +136,6 @@ func detachTerminalView(p *pane) {
 	}
 }
 
-// endTerminalPane closes a pane's terminal view, ending its session on
-// the server when kill is set.
 // endTerminalPane closes a pane's terminal view, ending its session on
 // the server when kill is set.
 func (a *app) endTerminalPane(p *pane, kill bool) {

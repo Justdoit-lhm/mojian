@@ -82,14 +82,14 @@ func (a *app) menu() *mygo.Menu {
 		item(cmdCloseTab),
 	}
 	if terminalsSupported() {
-		fileItems = append(fileItems, mygo.Separator(), item(cmdTerminal), item(cmdSSH))
+		fileItems = append(fileItems, mygo.Separator(), item(cmdSSH))
 	}
 	fileItems = append(fileItems, mygo.Separator(), &mygo.MenuItem{Label: "Reveal Project", Click: func(*mygo.MenuItem, *mygo.Window) {
 		a.revealVault()
 	}})
 	viewItems := []*mygo.MenuItem{item(cmdTree)}
 	if terminalsSupported() {
-		viewItems = append(viewItems, item(cmdTerminal), item(cmdSSH))
+		viewItems = append(viewItems, item(cmdTerminal))
 	}
 	viewItems = append(viewItems, item(cmdGit), item(cmdPalette), mygo.Separator(), item(cmdSettings),
 		&mygo.MenuItem{Label: "Appearance", Submenu: []*mygo.MenuItem{

@@ -49,16 +49,12 @@ var writeClipboardFiles = func(paths ...string) error { return mygo.Clipboard.Wr
 
 // pasteSource is what a paste will copy or move: paths from the system
 // clipboard for a local project, or the app's own remote clipboard.
-// pasteSource is what a paste will copy or move: paths from the system
-// clipboard for a local project, or the app's own remote clipboard.
 type pasteSource struct {
 	paths  []string
 	move   bool
 	remote bool
 }
 
-// sameFiles reports whether two file lists name the same set, so a cut
-// remains valid only while the system clipboard still holds it.
 // sameFiles reports whether two file lists name the same set, so a cut
 // remains valid only while the system clipboard still holds it.
 func sameFiles(a, b []string) bool {
@@ -79,16 +75,8 @@ func sameFiles(a, b []string) bool {
 	return true
 }
 
-// filePasteSource decides what a paste uses. A local project follows the
-// system clipboard; the app's cut marker moves files only while the
-// clipboard still names exactly those files. A remote project can only
-// paste paths copied inside it, since the system clipboard holds local
-// paths.
-// filePasteSource decides what a paste uses. A local project follows the
-// system clipboard; the app's cut marker moves files only while the
-// clipboard still names exactly those files. A remote project can only
-// paste paths copied inside it, since the system clipboard holds local
-// paths.
+// systemClipboardFiles is the file list on the system clipboard, or nil
+// when there is none or the window is not native.
 func (a *app) systemClipboardFiles() []string {
 	if a.win == nil || runtime.GOOS == "js" {
 		return nil
@@ -100,6 +88,11 @@ func (a *app) systemClipboardFiles() []string {
 	return files
 }
 
+// filePasteSource decides what a paste uses. A local project follows the
+// system clipboard; the app's cut marker moves files only while the
+// clipboard still names exactly those files. A remote project can only
+// paste paths copied inside it, since the system clipboard holds local
+// paths.
 func (a *app) filePasteSource() (pasteSource, error) {
 	if a.store == nil {
 		return pasteSource{}, errors.New("no project")

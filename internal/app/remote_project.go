@@ -18,11 +18,6 @@ func (a *app) remoteName() string {
 	return a.hostLabel(a.serverAlias)
 }
 
-// sshOutput runs a command over SSH with the user's config and agent.
-// sshCommon is the non-interactive SSH base. It deliberately leaves out
-// ControlMaster: a stale master socket makes every later ssh wait on a
-// process that is gone, and the commands here are few enough that a fresh
-// connection is the reliable choice.
 // workspaceReachable reports whether a cached remote workspace still has
 // a live connection. A local workspace always does.
 func (a *app) workspaceReachable(ws *workspace) bool {
@@ -32,14 +27,6 @@ func (a *app) workspaceReachable(ws *workspace) bool {
 	return remoteHealthy(a.remotes[ws.serverAlias])
 }
 
-// adoptWorkspaceConn points a reconnected workspace and every other
-// workspace on the same host at the new control client. Terminals that
-// were attached through the lost connection are detached so their panes
-// reattach when they are shown again.
-// adoptWorkspaceConn points a reconnected workspace and every other
-// workspace on the same host at the new control client. Terminals that
-// were attached through the lost connection are detached so their panes
-// reattach when they are shown again.
 // installRemoteConn makes rc the pool's connection for its host and
 // points every loaded workspace on that host at its client. A new
 // connection also detaches terminal views so their panes reattach.
@@ -85,8 +72,6 @@ func detachTerminalsOn(ws *workspace, host string, client *session.Client) {
 	}
 }
 
-// reconnectActiveRemoteAsync restores the control client of the project
-// on screen after a window reopen, without blocking the new window.
 // reconnectActiveRemoteAsync restores the control client of the project
 // on screen after a window reopen, without blocking the new window.
 func (a *app) reconnectActiveRemoteAsync() {
@@ -165,9 +150,6 @@ func (a *app) reconnectWorkspaceAsync(ws *workspace, host string) {
 	}()
 }
 
-// openRemoteProjectAsync opens a remote project away from the UI thread,
-// with a loading state. A project already in the workspace cache switches
-// at once, without connecting again.
 // openRemoteProjectAsync opens a remote project away from the UI thread,
 // with a loading state. A project already in the workspace cache switches
 // at once, without connecting again.
@@ -296,8 +278,6 @@ func (a *app) rememberRemoteProject(p remoteProject) {
 
 // beginRemoteTask covers the window with a loading state and returns
 // the sequence that guards its result.
-// beginRemoteTask covers the window with a loading state and returns
-// the sequence that guards its result.
 func (a *app) beginRemoteTask(msg string) (int, *mygo.Window) {
 	if a.remoteBusy {
 		return 0, nil
@@ -314,8 +294,6 @@ func (a *app) beginRemoteTask(msg string) (int, *mygo.Window) {
 
 // setRemoteBusyMsg changes the line under the spinner, once the task may
 // still publish.
-// setRemoteBusyMsg changes the line under the spinner, once the task may
-// still publish.
 func (a *app) setRemoteBusyMsg(seq int, msg string) {
 	if !a.remoteBusy || a.remoteTaskSeq != seq {
 		return
@@ -324,8 +302,6 @@ func (a *app) setRemoteBusyMsg(seq int, msg string) {
 	a.invalidate()
 }
 
-// endRemoteTask uncovers the window; a result of an older task is
-// dropped by its sequence.
 // endRemoteTask uncovers the window; a result of an older task is
 // dropped by its sequence.
 func (a *app) endRemoteTask(seq int) bool {
@@ -347,8 +323,6 @@ func onWindow(win *mygo.Window, fn func()) {
 	fn()
 }
 
-// remoteBusyView covers the window while a server is reached, so the
-// first connection does not look like a freeze.
 // remoteBusyView covers the window while a server is reached, so the
 // first connection does not look like a freeze.
 func (a *app) remoteBusyView(c *ui.Context, k *colors) {
@@ -376,13 +350,8 @@ func (a *app) remoteBusyView(c *ui.Context, k *colors) {
 	})
 }
 
-// openRemotePicker asks the selected server for its home, then shows the
-// directories to choose a project from.
 // remoteProject is a project on an SSH host, remembered by the switcher.
 type remoteProject struct {
 	Host string `json:"host"`
 	Path string `json:"path"`
 }
-
-// remoteConn is this app's bridge to one remote session server: an SSH
-// forward to its Unix socket, and the control connection through it.

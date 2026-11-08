@@ -284,6 +284,9 @@ func (a *app) open() {
 	a.updateTitle()
 }
 
+// initialStore opens $MOJIAN_VAULT, else the project of the last launch,
+// else the default folder. The app's own project gets a welcome note; a
+// project the user chose does not.
 func (a *app) initialStore() (*store, error) {
 	if os.Getenv("MOJIAN_VAULT") != "" {
 		return a.openDefaultStore()
@@ -381,7 +384,6 @@ func (a *app) saveNow() error {
 	return first
 }
 
-// invalidate asks for a frame after a change made outside the view.
 // fail shows an error at the bottom of the window.
 func (a *app) fail(err error) {
 	if err == nil {

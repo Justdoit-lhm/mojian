@@ -46,17 +46,46 @@ type fsBackend interface {
 	Trash(rel string) error
 }
 
-func (s *store) isMemory() bool      { return s.fs.Kind() == fsMemory }
-func (s *store) isServer() bool      { k := s.fs.Kind(); return k == fsServerLocal || k == fsServerRemote }
-func (s *store) isLocalServer() bool { return s.fs.Kind() == fsServerLocal }
-func (s *store) isRemote() bool      { return s.fs.Kind() == fsServerRemote }
+func (s *store) isMemory() bool { return s.fs.Kind() == fsMemory }
+func (s *store) isServer() bool { k := s.fs.Kind(); return k == fsServerLocal || k == fsServerRemote }
+func (s *store) isRemote() bool { return s.fs.Kind() == fsServerRemote }
 func (s *store) client() *session.Client {
 	return s.fs.Client()
 }
 
-// cleanRel keeps a relative project path inside the project.
+// roError is what a project without a filesystem reports.
 func roError() error { return errors.New("files need the desktop app") }
 
+// pathOf is the one thing the path helpers need: a backend that resolves
+// project paths to absolute ones.
+type pathOf interface {
+	Abs(rel string) (string, error)
+}
+
+// at resolves rel and runs fn on the absolute path. Every backend's file
+// operation has this shape.
+func at(p pathOf, rel string, fn func(abs string) error) error {
+	abs, err := p.Abs(rel)
+	if err != nil {
+		return err
+	}
+	return fn(abs)
+}
+
+// pair resolves two project paths and runs fn on them.
+func pair(p pathOf, oldRel, newRel string, fn func(oldAbs, newAbs string) error) error {
+	oldAbs, err := p.Abs(oldRel)
+	if err != nil {
+		return err
+	}
+	newAbs, err := p.Abs(newRel)
+	if err != nil {
+		return err
+	}
+	return fn(oldAbs, newAbs)
+}
+
+// cleanRel keeps a relative project path inside the project.
 func cleanRel(rel string) (string, error) {
 	if rel == "" || rel == "." {
 		return "", nil

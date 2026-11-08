@@ -8,6 +8,10 @@ import (
 	"github.com/egoist/mygo/ui/editor"
 )
 
+// radius is the package's corner radius, shared by cards, panes, fields,
+// buttons, popovers and dialogs.
+const radius = theme.Radius
+
 // colors is the window's palette; the app's view code names the theme
 // through it so a palette change is one package's concern.
 type colors = theme.Colors

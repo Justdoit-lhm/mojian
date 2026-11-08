@@ -31,28 +31,19 @@ type prefs struct {
 	NoGitAutoRefresh    bool    `json:"noGitAutoRefresh,omitempty"`
 }
 
-func defaultPrefs() prefs {
-	return prefs{
-		EditorFontSize: 12.5, EditorLineHeight: 1.55, EditorTabSize: 4,
-		TerminalFontSize: 12.5, TerminalLineHeight: 1, TerminalScrollback: 10,
-		NotifyBell: true, NotifyExit: true,
-	}
+// prefsDefaults is the settings of a new install. defaultPrefs and the
+// effective-value getters both read it, so a default lives in one place.
+var prefsDefaults = prefs{
+	EditorFontSize: 12.5, EditorLineHeight: 1.55, EditorTabSize: 4,
+	TerminalFontSize: 12.5, TerminalLineHeight: 1, TerminalScrollback: 10,
+	NotifyBell: true, NotifyExit: true,
 }
 
-func clampFloat(v, lo, hi, def float64) float64 {
-	if v <= 0 {
-		return def
-	}
-	if v < lo {
-		return lo
-	}
-	if v > hi {
-		return hi
-	}
-	return v
-}
+func defaultPrefs() prefs { return prefsDefaults }
 
-func clampInt(v, lo, hi, def int) int {
+// clamp keeps a hand-edited number inside the range the Settings window
+// can show, and restores def when it is unset.
+func clamp(v, lo, hi, def float64) float64 {
 	if v <= 0 {
 		return def
 	}
@@ -71,13 +62,13 @@ func (p *prefs) sanitize() {
 	if p.Appearance < 0 || p.Appearance > 2 {
 		p.Appearance = 0
 	}
-	p.EditorFontSize = clampFloat(p.EditorFontSize, 9, 28, 12.5)
-	p.EditorLineHeight = clampFloat(p.EditorLineHeight, 1.1, 2.2, 1.55)
-	p.EditorTabSize = clampInt(p.EditorTabSize, 1, 8, 4)
-	p.TerminalFontSize = clampFloat(p.TerminalFontSize, 9, 28, 12.5)
-	p.TerminalLineHeight = clampFloat(p.TerminalLineHeight, 0.8, 2, 1)
+	p.EditorFontSize = clamp(p.EditorFontSize, 9, 28, prefsDefaults.EditorFontSize)
+	p.EditorLineHeight = clamp(p.EditorLineHeight, 1.1, 2.2, prefsDefaults.EditorLineHeight)
+	p.EditorTabSize = int(clamp(float64(p.EditorTabSize), 1, 8, float64(prefsDefaults.EditorTabSize)))
+	p.TerminalFontSize = clamp(p.TerminalFontSize, 9, 28, prefsDefaults.TerminalFontSize)
+	p.TerminalLineHeight = clamp(p.TerminalLineHeight, 0.8, 2, prefsDefaults.TerminalLineHeight)
 	if p.TerminalCursor < 0 || p.TerminalCursor > 2 {
 		p.TerminalCursor = 0
 	}
-	p.TerminalScrollback = clampInt(p.TerminalScrollback, 1, 100, 10)
+	p.TerminalScrollback = int(clamp(float64(p.TerminalScrollback), 1, 100, float64(prefsDefaults.TerminalScrollback)))
 }

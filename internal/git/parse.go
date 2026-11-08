@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -13,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"mojian/internal/gitenv"
 )
 
 // ReadStatus reads the repository's branch and changed files under
@@ -123,8 +124,6 @@ func statusLetter(code string) string {
 
 // ReadDiff reads one file's diff against HEAD, including staged and
 // unstaged work. Untracked files are shown as additions.
-// ReadDiff reads one file's diff against HEAD, including staged and
-// unstaged work. Untracked files are shown as additions.
 func ReadDiff(r Runner, root string, c Change) (string, error) {
 	if r == nil {
 		r = LocalRunner{}
@@ -213,23 +212,7 @@ func runGit(dir string, args ...string) (string, error) {
 
 // gitEnv is the inherited environment without the variables a shell
 // could set to point Git at another repository.
-// gitEnv is the inherited environment without the variables a shell
-// could set to point Git at another repository.
-func gitEnv() []string {
-	drop := map[string]bool{
-		"GIT_DIR": true, "GIT_WORK_TREE": true, "GIT_INDEX_FILE": true,
-		"GIT_OBJECT_DIRECTORY": true, "GIT_ALTERNATE_OBJECT_DIRECTORIES": true,
-		"GIT_COMMON_DIR": true,
-	}
-	out := make([]string, 0, len(os.Environ()))
-	for _, kv := range os.Environ() {
-		if i := strings.IndexByte(kv, '='); i > 0 && drop[kv[:i]] {
-			continue
-		}
-		out = append(out, kv)
-	}
-	return out
-}
+func gitEnv() []string { return gitenv.Env() }
 
 type cappedBuffer struct {
 	bytes.Buffer
@@ -244,12 +227,10 @@ func (b *cappedBuffer) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// View draws the working-tree diff in the editor area: changes on
-// the left, the selected file's unified diff on the right.
-// gitDiffLine is one parsed line of a unified diff, with the old and new
-// line numbers its hunk gives it.
 var gitHunkPattern = regexp.MustCompile(`^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@`)
 
+// gitDiffLine is one parsed line of a unified diff, with the old and new
+// line numbers its hunk gives it.
 type gitDiffLine struct {
 	text string
 	old  int
