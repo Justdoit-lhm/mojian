@@ -92,6 +92,9 @@ type app struct {
 
 	shellStarter  func() (*termTab, error) // tests replace this
 	sessionClient *session.Client
+	// harness marks the headless fixtures of cmd/harness: no native
+	// windows or session servers, only the fixture's disposable project.
+	harness bool
 
 	paletteOpen  bool
 	paletteQuery string

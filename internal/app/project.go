@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -78,6 +79,12 @@ func (a *app) recentProjects() []string {
 // openProject makes dir the open project, saving the one before it.
 func (a *app) openProject(dir string) {
 	if dir == "" || a.remoteBusy {
+		return
+	}
+	if a.harness {
+		// Other projects open through the session server, which this
+		// binary does not run: keep the endpoint on its fixture.
+		a.fail(errors.New("the UI harness keeps its disposable project"))
 		return
 	}
 	abs, err := filepath.Abs(dir)

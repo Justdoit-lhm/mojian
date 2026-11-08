@@ -172,6 +172,22 @@ go tool mygo vet .      # go vet plus MyGo's UI lifetime checks
 
 Use `go tool mygo dev -web` to open the interface in a browser with files kept in memory.
 
+### Headless UI harness
+
+`cmd/harness` serves the real window and Settings views to an MCP client
+through [mygo-mcp](https://github.com/auron-labs/mygo-mcp), so an agent can
+inspect, click, type into and screenshot the interface without a desktop
+window:
+
+```sh
+go run ./cmd/harness                 # http://127.0.0.1:8080/mcp
+go run ./cmd/harness -addr 127.0.0.1:8090
+```
+
+Each run seeds a disposable project in the temp directory, and the fixtures
+never open native windows, start terminals or touch your projects and
+settings. The endpoint has no authentication, so keep it on loopback.
+
 ### Release builds
 
 ```sh

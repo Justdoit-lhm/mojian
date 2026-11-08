@@ -249,9 +249,10 @@ func (a *app) filteredNotes() []*note {
 }
 
 // shortcuts gives the browser the keys the menus give a native window,
-// where it has no menu bar.
+// where it has no menu bar. The harness has no menu either, so it binds
+// the same commands in the view.
 func (a *app) shortcuts(c *ui.Context) {
-	if runtime.GOOS != "js" || a.paletteOpen {
+	if (runtime.GOOS != "js" && !a.harness) || a.paletteOpen {
 		return
 	}
 	for _, cmd := range paletteCommands {

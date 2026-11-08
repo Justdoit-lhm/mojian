@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"log"
 	"runtime"
 
@@ -145,6 +146,12 @@ func (a *app) windowClosed() {
 // openSettingsWindow shows the preferences in a window of their own, or
 // brings it forward.
 func (a *app) openSettingsWindow() {
+	if a.harness {
+		// A native window needs mygo.App's event loop, which a harness
+		// never starts; its Settings view has a fixture of its own.
+		a.fail(errors.New("Settings is the Mojian Settings fixture"))
+		return
+	}
 	if a.settingsWin != nil {
 		a.settingsWin.Focus()
 		return
