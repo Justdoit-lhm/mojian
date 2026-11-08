@@ -36,6 +36,7 @@ jobs:
           # Fetch it here with patience, and through the API if the CDN keeps
           # failing, so the tests and the build find it already cached.
           set -euo pipefail
+          go mod download github.com/egoist/mygo
           manifest="$(go list -m -f '{{.Dir}}' github.com/egoist/mygo)/plugins/terminal/mygo-plugin.json"
           target="$(go env GOOS)-$(go env GOARCH)"
           pick() { jq -r --arg t "$target" '.libraries[] | select(.name=="libghostty-vt") | .files[$t].'"$1" "$manifest"; }
@@ -111,6 +112,7 @@ jobs:
           # Fetch it here with patience, and through the API if the CDN keeps
           # failing, so the tests and the build find it already cached.
           set -euo pipefail
+          go mod download github.com/egoist/mygo
           manifest="$(go list -m -f '{{.Dir}}' github.com/egoist/mygo)/plugins/terminal/mygo-plugin.json"
           target="$(go env GOOS)-$(go env GOARCH)"
           pick() { jq -r --arg t "$target" '.libraries[] | select(.name=="libghostty-vt") | .files[$t].'"$1" "$manifest"; }
