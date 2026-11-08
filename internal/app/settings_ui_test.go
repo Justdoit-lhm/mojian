@@ -292,3 +292,15 @@ func TestSettingsTableRendersEveryGenericRow(t *testing.T) {
 		}
 	}
 }
+
+func TestSettingsHostsHidesRecentRemoteProjects(t *testing.T) {
+	registerFonts()
+	a := newProjectApp(t)
+	a.remoteProjects = []remoteProject{{Host: "buildbox", Path: "/srv/app"}}
+	a.settingsCat = settingsHosts
+	tt := ui.NewTester(a.settingsWindowView, 900, 900)
+	tt.Frame()
+	if tt.HasText("RECENT REMOTE PROJECTS") {
+		t.Fatalf("the hosts page still lists recent remote projects: %q", tt.Texts())
+	}
+}

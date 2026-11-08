@@ -197,8 +197,6 @@ var Rows = []Row{
 		Words: "servers hosts ssh local remote", Kind: Custom},
 	{ID: "setup-server", Cat: Hosts, Section: "SERVERS", Title: "Set Up Server",
 		Words: "server setup install upload binaries", Kind: Custom},
-	{ID: "recent-remote", Cat: Hosts, Section: "RECENT REMOTE PROJECTS", Title: "RECENT REMOTE PROJECTS",
-		Words: "recent remote projects ssh", Kind: Custom},
 	{ID: "about-hosts", Cat: Hosts, Section: "ABOUT HOSTS", Title: "ABOUT HOSTS",
 		Words: "hosts remote server upload ssh", Kind: Custom},
 

@@ -152,7 +152,7 @@ func (a *app) tabItem(c *ui.Context, k *colors, i int, t *tab, width float32, wh
 		e.Children(func() {
 			a.tiles(c, k, t)
 			if a.rename == t {
-				a.renameField(c, t, name)
+				a.renameField(c, k, t, name)
 				return
 			}
 			nameColor, detailColor := k.Text, k.TextFaint
@@ -188,9 +188,11 @@ func (a *app) tabItem(c *ui.Context, k *colors, i int, t *tab, width float32, wh
 // renameField edits the name of a tab in place: Enter or moving the focus
 // away keeps it, Escape goes back, and an empty name follows the file
 // again.
-func (a *app) renameField(c *ui.Context, t *tab, name string) {
-	in := ui.TextInput(c, &a.renameText).Placeholder(name).Grow(1).MinWidth(0).Height(22).
-		FontSize(13).AutoFocus()
+func (a *app) renameField(c *ui.Context, k *colors, t *tab, name string) {
+	// The unstyled input has no field padding to push its text down; the
+	// small bottom margin centers its caret on the tab label's baseline.
+	in := ui.TextInputBase(c, &a.renameText).Placeholder(name).Grow(1).MinWidth(0).Height(18).
+		Margin(0, 0, 2.5, 0).FontSize(13).FontWeight(500).TextColor(k.Text).AutoFocus()
 	done := func(keep bool) {
 		if keep {
 			t.Name = a.renameText

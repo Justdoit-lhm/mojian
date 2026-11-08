@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Double-clicking a tab's name and typing a new one keeps the text on the
+  original label's baseline instead of dropping a few pixels.
+- Settings › Hosts no longer repeats the recent remote projects list; the
+  project switcher still offers them.
+
 ## 0.2.1
 
 - Windows is no longer a supported target. The app builds and runs on

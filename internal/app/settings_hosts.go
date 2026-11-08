@@ -1,7 +1,6 @@
 package app
 
 import (
-	"path/filepath"
 	"strings"
 
 	"mojian/internal/icons"
@@ -62,38 +61,6 @@ func (a *app) settingsHostsPage(c *ui.Context, k *colors) {
 				FontSize(12).TextColor(k.TextFaint).Padding(14, 16)
 		}
 	})
-	if len(a.remoteProjects) > 0 {
-		a.settingsSection(c, k, "RECENT REMOTE PROJECTS", func() {
-			for i, p := range a.remoteProjects {
-				i, p := i, p
-				if i > 0 {
-					ui.Box(c).Height(1).Shrink(0).Background(k.PanelBorder)
-				}
-				row := ui.Row(c).Height(44).Padding(0, 4).Gap(9).
-					Cursor(ui.CursorPointer).Role(ui.RoleButton).Label(p.Path)
-				if row.Hovered() {
-					row.Background(k.Pressed)
-				}
-				if row.Clicked() {
-					a.later(func() {
-						if a.settingsWin != nil {
-							a.settingsWin.Close()
-						}
-						a.openRemoteProjectAsync(p.Host, p.Path)
-					})
-				}
-				row.Children(func() {
-					ui.Icon(c, icons.FolderIcon()).Size(15, 15).TextColor(k.TextMuted)
-					ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-						ui.Text(c, filepath.Base(p.Path)).FontSize(12.5).TextColor(k.Text).
-							SingleLine().Ellipsis("…")
-						ui.Text(c, a.hostLabel(p.Host)+":"+p.Path).FontSize(10.5).
-							TextColor(k.TextFaint).SingleLine().Ellipsis("…")
-					})
-				})
-			}
-		})
-	}
 	a.settingsSection(c, k, "ABOUT HOSTS", func() {
 		ui.Text(c, "Set Up Server uploads mojian-server and libghostty-vt to ~/.local/share/mojian on the host, using your SSH key. No root, no service and no open port: the app reaches it through an SSH forward.").
 			FontSize(12).TextColor(k.TextFaint).LineHeight(1.4).Padding(12, 16)
