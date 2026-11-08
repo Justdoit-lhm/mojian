@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Use the reversed ink tile as the Finder and Dock app icon, so the paper
+  `m` and vermilion cursor stay legible on light and dark Finder
+  backgrounds. The paper tile remains the light brand icon.
+
 ## 0.1.6
 
 - Removed the separate Fonts settings page; editor and terminal font

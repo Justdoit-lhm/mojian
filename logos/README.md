@@ -34,8 +34,9 @@ is in [`png/preview.png`](png/preview.png).
 
 | File | Size |
 |---|---|
-| `png/mojian-app-icon-1024.png` | 1024 × 1024, app icon master |
+| `png/mojian-app-icon-1024.png` | 1024 × 1024, paper app icon master |
 | `png/mojian-app-icon-512.png` … `-16.png` | 512, 256, 128, 64, 32, 16 |
+| `png/mojian-app-icon-reversed-1024.png` | 1024 × 1024, Finder/Dock app icon |
 | `png/mojian-logo-horizontal-1600.png` | 1600 × 382 |
 | `png/mojian-logo-horizontal-reversed-1600.png` | 1600 × 382 |
 | `png/mojian-logo-vertical-900.png` | 900 × 546 |
@@ -92,22 +93,27 @@ image edges inside that space.
 
 ## App icon
 
-The app's icon source, `resources/icon.png`, now uses
-`logos/png/mojian-app-icon-1024.png`. A rebuild embeds it:
+The app's Finder and Dock icon uses the reversed ink tile:
+`resources/icon.png` is a copy of
+`logos/png/mojian-app-icon-reversed-1024.png`. The paper tile remains the
+primary brand icon for light backgrounds; the ink tile keeps the `m` and
+vermilion cursor legible on both light and dark Finder backgrounds. A
+rebuild embeds it:
 
 ```sh
 mygo build
 ```
 
-To restore or copy it elsewhere:
+To restore the Finder icon or the light brand icon:
 
 ```sh
-cp logos/png/mojian-app-icon-1024.png resources/icon.png
+cp logos/png/mojian-app-icon-reversed-1024.png resources/icon.png   # Finder/Dock
+cp logos/png/mojian-app-icon-1024.png resources/icon.png            # light brand
 ```
 
-The source icon keeps roughly a 4% transparent margin to match the previous
-asset. Its shape is a superellipse (n = 5), not a circular rounded
-rectangle. The SVG is the master; the PNGs are exports.
+The source icon keeps roughly a 4% transparent margin. Its shape is a
+superellipse (n = 5), not a circular rounded rectangle. The SVG is the
+master; the PNGs are exports.
 
 ## Exporting
 

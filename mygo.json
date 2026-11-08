@@ -4,6 +4,7 @@
   "version": "0.1.6",
   "copyright": "Mojian, a quiet text editor built with MyGo",
   "out": "build",
+  "icon": "resources/icon.png",
   "macos": {
     "minimumSystemVersion": "13.0"
   },

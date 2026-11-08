@@ -99,7 +99,7 @@ sh tools/build-remote.sh  # rebuild embedded Linux servers (needed after server/
 - No linter or formatter config exists; `gofmt` and `go vet` are the standard. `go tool mygo vet .` additionally rejects stored UI build values and goroutine captures.
 - Build output is `build/<os>-<arch>/`; `/build/`, `/.mygo/` and the root `mojian` binary are gitignored. Do not commit them.
 - `internal/remotebin/*.so` and `internal/remotebin/mojian-server-linux-*` are build artifacts embedded by `go:embed`; regenerate with `tools/build-remote.sh`, never hand-edit.
-- `resources/icon.png` is a copy of `logos/png/mojian-app-icon-1024.png`; logo rules (palette, clear space, no recoloring the cursor) are in `logos/README.md`.
+- `resources/icon.png` is a copy of `logos/png/mojian-app-icon-reversed-1024.png` for Finder/Dock; logo rules (palette, clear space, no recoloring the cursor) are in `logos/README.md`.
 - No CI: verification is local. Run before yielding: `go test ./...`, `go tool mygo vet .`, and `go tool mygo dev` when the change is visible (a screenshot or the running app, not just a green test).
 
 ## Testing & QA
