@@ -2,46 +2,13 @@ package app
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
+	"mojian/internal/update"
+
 	"github.com/egoist/mygo"
 )
-
-// updateRelease is a newer version the updater found. It keeps MyGo's
-// Update, which installs the signed archive.
-type updateRelease struct {
-	Version string
-	update  *mygo.Update
-}
-
-// checkMygoUpdate asks the release feed configured in mygo.json for a
-// version newer than the running app.
-func checkMygoUpdate(ctx context.Context) (*updateRelease, error) {
-	up, err := mygo.Updater.Check(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if up == nil {
-		return nil, nil
-	}
-	return &updateRelease{Version: up.Version, update: up}, nil
-}
-
-// installMygoUpdate downloads and verifies the update. It returns when the
-// new version is staged, or installed in place on Linux; the app keeps
-// running the old version until App.Relaunch.
-func installMygoUpdate(ctx context.Context, up *updateRelease) error {
-	if up == nil || up.update == nil {
-		return errNoUpdate
-	}
-	return up.update.Install(ctx, nil)
-}
-
-// errNoUpdate is reported when Install is asked for a release the checker
-// did not keep.
-var errNoUpdate = errors.New("no update was found")
 
 // checkForUpdates checks the feed in the background, so the settings window
 // never waits on the network. The buttons and the state change on the UI
@@ -59,7 +26,7 @@ func (a *app) checkForUpdates() {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 		defer cancel()
-		up, err := checkMygoUpdate(ctx)
+		up, err := update.Check(ctx)
 		a.onUpdateUI(func() {
 			a.applyUpdateCheck(up, err)
 			a.invalidate()
@@ -82,7 +49,7 @@ func (a *app) installAvailableUpdate() {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
-		err := installMygoUpdate(ctx, up)
+		err := update.Install(ctx, up)
 		a.onUpdateUI(func() {
 			a.applyUpdateInstall(err)
 			a.invalidate()
@@ -92,11 +59,11 @@ func (a *app) installAvailableUpdate() {
 
 // applyUpdateCheck lands a check result: a failed check is not a claim
 // that the app is current.
-func (a *app) applyUpdateCheck(up *updateRelease, err error) {
+func (a *app) applyUpdateCheck(up *update.Release, err error) {
 	a.updateChecking = false
 	a.updateChecked = err == nil
 	if err != nil {
-		a.updateErr = updateErrorMessage(err)
+		a.updateErr = update.ErrorMessage(err)
 		return
 	}
 	a.pendingUpdate = up
@@ -106,7 +73,7 @@ func (a *app) applyUpdateCheck(up *updateRelease, err error) {
 func (a *app) applyUpdateInstall(err error) {
 	a.updateInstalling = false
 	if err != nil {
-		a.updateErr = updateErrorMessage(err)
+		a.updateErr = update.ErrorMessage(err)
 		return
 	}
 	a.updateErr = ""
@@ -124,13 +91,6 @@ func (a *app) restartForUpdate() {
 		relaunch = func() { mygo.App.Relaunch() }
 	}
 	relaunch()
-}
-
-func updateErrorMessage(err error) string {
-	if errors.Is(err, mygo.ErrUpdatesDisabled) {
-		return "This build cannot update itself. Install the app in a folder you can write, or update it with its package manager."
-	}
-	return err.Error()
 }
 
 // updateSummary is the line under the update buttons.

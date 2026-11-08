@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"mojian/internal/remote"
 	"mojian/internal/session"
 
 	"github.com/egoist/mygo/ui"
@@ -60,11 +61,9 @@ func TestRestoredTerminalUsesItsOwnServer(t *testing.T) {
 			remotePath:  "/srv/app",
 		},
 		sessionClient: local,
-		remotes: map[string]*remoteConn{
-			"one": {host: "one", client: one},
-			"two": {host: "two", client: two},
-		},
 	}
+	a.setRemoteConn(&remote.Conn{Host: "one", Client: one})
+	a.setRemoteConn(&remote.Conn{Host: "two", Client: two})
 	p := newTermPane(newTermPaneSpec(termSpec{Server: "two"}, info.ID))
 	a.startRestoredTerminal(p)
 	if p.Term.startErr != "" {
@@ -76,7 +75,7 @@ func TestRestoredTerminalUsesItsOwnServer(t *testing.T) {
 	if p.Term.SID != info.ID || p.Term.Client != two {
 		t.Fatalf("terminal used %q on %p, want %q on the second server", p.Term.SID, p.Term.Client, info.ID)
 	}
-	if rc := a.activeRemote(); rc == nil || rc.host != "one" || a.serverAlias != "one" {
+	if rc := a.activeRemote(); rc == nil || rc.Host != "one" || a.serverAlias != "one" {
 		t.Fatal("restoring a terminal changed the active project's server")
 	}
 	if p.Term.stream != nil {
@@ -113,10 +112,10 @@ func TestRestoredTerminalUsesTheRemoteServersSocket(t *testing.T) {
 
 	local, localDone := startTestSessionServer(t, localDir)
 	defer local.Close()
-	remote, remoteDone := startTestSessionServer(t, remoteDir)
-	defer remote.Close()
+	remoteClient, remoteDone := startTestSessionServer(t, remoteDir)
+	defer remoteClient.Close()
 
-	info, err := remote.Create(session.CreateOptions{
+	info, err := remoteClient.Create(session.CreateOptions{
 		Command: []string{"/bin/sh", "-c", "sleep 5"},
 		Cols:    40, Rows: 10,
 	})
@@ -126,8 +125,8 @@ func TestRestoredTerminalUsesTheRemoteServersSocket(t *testing.T) {
 	a := &app{
 		workspace:     &workspace{serverAlias: "remote", remotePath: "/srv/app"},
 		sessionClient: local,
-		remotes:       map[string]*remoteConn{"remote": {host: "remote", client: remote}},
 	}
+	a.setRemoteConn(&remote.Conn{Host: "remote", Client: remoteClient})
 	p := newTermPane(newTermPaneSpec(termSpec{Server: "remote"}, info.ID))
 	a.startRestoredTerminal(p)
 	if p.Term.startErr != "" {
@@ -139,7 +138,7 @@ func TestRestoredTerminalUsesTheRemoteServersSocket(t *testing.T) {
 	if p.Term.SID != info.ID {
 		t.Fatalf("restored a new session %q instead of %q", p.Term.SID, info.ID)
 	}
-	if p.Term.Client != remote {
+	if p.Term.Client != remoteClient {
 		t.Fatal("the terminal attached through the wrong client")
 	}
 	if p.Term.stream != nil {
@@ -149,7 +148,7 @@ func TestRestoredTerminalUsesTheRemoteServersSocket(t *testing.T) {
 		_ = p.Term.Term.Close()
 	}
 
-	if err := remote.Shutdown(); err != nil {
+	if err := remoteClient.Shutdown(); err != nil {
 		t.Fatal(err)
 	}
 	if err := local.Shutdown(); err != nil {

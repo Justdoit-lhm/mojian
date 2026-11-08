@@ -166,7 +166,7 @@ func (t *tab) terminalPane() *pane {
 // dirty reports whether any note of the tab has unsaved edits.
 func (t *tab) dirty() bool {
 	for _, p := range t.panes() {
-		if p.Note != nil && p.Note.dirty() {
+		if p.Note != nil && p.Note.Dirty() {
 			return true
 		}
 	}

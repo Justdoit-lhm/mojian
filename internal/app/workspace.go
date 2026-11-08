@@ -54,9 +54,6 @@ func (a *app) initWorkspaces() {
 	if a.workspaces == nil {
 		a.workspaces = map[string]*workspace{}
 	}
-	if a.remotes == nil {
-		a.remotes = map[string]*remoteConn{}
-	}
 }
 
 // activeWorkspaceKey names the project that holds the window now. The
@@ -70,7 +67,7 @@ func (a *app) activeWorkspaceKey() string {
 		return workspaceKeyRemote(a.serverAlias, a.remotePath)
 	}
 	if a.store != nil {
-		return workspaceKeyLocal(a.store.dir)
+		return workspaceKeyLocal(a.store.Dir)
 	}
 	return ""
 }
@@ -197,11 +194,7 @@ func (a *app) closeWorkspaces() {
 	for _, ws := range a.workspaces {
 		closeWorkspaceTerminals(ws)
 	}
-	for host, rc := range a.remotes {
-		closeRemoteConn(rc)
-		delete(a.remotes, host)
-	}
-	a.remotes = nil
+	a.hostService().CloseAll()
 	a.remotePickHost = ""
 	a.remoteOpening = false
 }

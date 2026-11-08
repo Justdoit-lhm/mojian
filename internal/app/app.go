@@ -13,10 +13,16 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sync"
 	"time"
 
+	"mojian/internal/app/commands"
+	"mojian/internal/app/explorer"
+	"mojian/internal/app/settingsui"
+	"mojian/internal/fs"
+	"mojian/internal/prefs"
+	"mojian/internal/remotehost"
 	"mojian/internal/session"
+	"mojian/internal/update"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -28,7 +34,7 @@ type app struct {
 	// switching stores and restores the same object instead of copying
 	// its fields into the app.
 	*workspace
-	prefs
+	prefs.Prefs
 
 	win  *mygo.Window
 	tray *mygo.Tray
@@ -38,7 +44,7 @@ type app struct {
 
 	projects       []string
 	workspaces     map[string]*workspace
-	remotes        map[string]*remoteConn
+	remoteHosts    *remotehost.Service
 	remoteBusy     bool
 	remoteBusyMsg  string
 	remoteTaskSeq  int
@@ -48,7 +54,6 @@ type app struct {
 	projectPicker  bool
 	remotePickHost string // the host a picker connection was made for
 	remoteOpening  bool   // a picked project is about to open
-	remoteProjects []remoteProject
 	// fileClip is the app's own clipboard: absolute local paths, or paths
 	// relative to a remote project (fileClipRemote). A cut is a one-shot
 	// intent and is cleared when the project changes.
@@ -57,7 +62,6 @@ type app struct {
 	fileClipRemote bool
 	fileClipHost   string
 	fileClipRoot   string
-	hosts          []hostConfig
 	hostDraftName  string
 	hostDraftAddr  string
 	serverOpen     bool
@@ -87,7 +91,7 @@ type app struct {
 	updateInstalling bool
 	updateReady      bool
 	updateChecked    bool
-	pendingUpdate    *updateRelease
+	pendingUpdate    *update.Release
 	updateErr        string
 
 	shellStarter  func() (*termTab, error) // tests replace this
@@ -110,44 +114,20 @@ type app struct {
 
 	appearanceItems [3]*mygo.MenuItem
 
-	settingsWin *mygo.Window
-	settingsCat int
-	// Settings' search and layout: what the query finds, the rows it
-	// highlights on the page shown, and the page's scroll.
-	settingsFound      map[int]bool
-	settingsHits       map[string]bool
-	settingsReveal     string
-	settingsRevealed   string
-	settingsScroll     ui.ScrollState
-	settingsScrollTop  bool
-	settingsRows       int
-	settingsIndexCache []settingsEntry
-	settingsIndexDirty bool
-	settingsSearch     ui.Handle
-	settingsNotice     string
-	// settingsRecording is the command whose shortcut is being typed.
-	settingsRecording  string
-	settingsRecordRef  ui.Handle
-	settingsRecordSeen bool
-	settingsKeyFilter  string
-	settingsResetAsk   bool
-	hostEditAddr       string
-	hostEditName       string
-	hostEditAddress    string
-	hostRemoveAddr     string
-	hostSetupAddr      string
-	hostSetupBusy      bool
-	hostSetupMsg       string
-	hostSetupErr       string
-	hostReady          map[string]bool
-	shortcutKeys       map[string]string
-	fontPick           bool
-	fontPickFor        int
-	fontSearch         string
-	fontsOnce          sync.Once
-	fonts              []ui.FontFamily
-
-	settingsQuery string
+	settingsWin     *mygo.Window
+	settings        settingsui.UI
+	explorer        explorer.UI
+	hostEditAddr    string
+	hostEditName    string
+	hostEditAddress string
+	hostRemoveAddr  string
+	hostSetupAddr   string
+	hostSetupBusy   bool
+	hostSetupMsg    string
+	hostSetupErr    string
+	hostReady       map[string]bool
+	shortcutKeys    map[string]string
+	commands        *commands.Registry
 
 	err   string
 	title string
@@ -169,10 +149,10 @@ func Run() {
 	registerFonts()
 	a := &app{
 		workspace: &workspace{},
-		prefs:     defaultPrefs(),
+		Prefs:     prefs.Default(),
 	}
 	go warmSessionServer()
-	useGitHubUpdates()
+	update.UseGitHub()
 	mygo.App.SetMenu(a.menu())
 	mygo.App.WhenReady(a.open)
 	mygo.App.OnActivate(func(hasVisibleWindows bool) {
@@ -251,11 +231,11 @@ func (a *app) open() {
 		}
 		a.store = s
 		a.treeOpen = true
-		a.layoutPath = a.projectLayoutPath(s.dir)
-		if firstProject && !s.isMemory() {
-			a.migrateLayout(s.dir)
+		a.layoutPath = a.projectLayoutPath(s.Dir)
+		if firstProject && !s.IsMemory() {
+			a.migrateLayout(s.Dir)
 		}
-		a.rememberProject(s.dir)
+		a.rememberProject(s.Dir)
 		a.saveSettings()
 		if a.NoRestoreLayout || !a.restoreLayout() {
 			a.focusFirstNote()
@@ -344,7 +324,7 @@ func (a *app) migrateLayout(dir string) {
 	if err != nil {
 		return
 	}
-	if err := writeFileAtomic(a.layoutPath, data); err != nil {
+	if err := fs.WriteFileAtomic(a.layoutPath, data); err != nil {
 		log.Print(err)
 	}
 }
@@ -371,7 +351,7 @@ func (a *app) askQuit(err error, proceed func()) {
 func (a *app) saveNow() error {
 	var first error
 	if a.store != nil {
-		if err := a.store.saveAll(); err != nil {
+		if err := a.store.SaveAll(); err != nil {
 			log.Print(err)
 			first = err
 		}

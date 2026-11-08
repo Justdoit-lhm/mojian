@@ -4,13 +4,15 @@ import (
 	"encoding/json"
 	"log"
 	"os"
-	"path/filepath"
 	"time"
+
+	"mojian/internal/fs"
+	"mojian/internal/prefs"
 )
 
 // settingsFile is what the app keeps between launches.
 type settingsFile struct {
-	prefs
+	prefs.Prefs
 	Shortcuts      map[string]string `json:"shortcuts,omitempty"`
 	Project        string            `json:"project,omitempty"`
 	Projects       []string          `json:"projects,omitempty"`
@@ -31,22 +33,22 @@ func (a *app) loadSettings() {
 	if err != nil {
 		return
 	}
-	s := settingsFile{prefs: defaultPrefs()}
+	s := settingsFile{Prefs: prefs.Default()}
 	if json.Unmarshal(data, &s) != nil {
 		return
 	}
-	a.prefs = s.prefs
-	a.prefs.sanitize()
+	a.Prefs = s.Prefs
+	a.Prefs.Sanitize()
 	a.syncAppearance()
 	a.shortcutKeys = s.Shortcuts
-	a.settingsIndexCache = nil
-	a.settingsIndexDirty = true
+	a.settings.IndexCache = nil
+	a.settings.IndexDirty = true
 	a.project = s.Project
 	a.projects = s.Projects
 	a.serverAlias = s.Server
 	a.remotePath = s.RemotePath
-	a.remoteProjects = s.RemoteProjects
-	a.hosts = s.Hosts
+	a.hostService().SetProjects(s.RemoteProjects)
+	a.hostService().SetHosts(s.Hosts)
 }
 
 // saveSettingsSoon debounces a write while a slider is dragged: the
@@ -74,98 +76,67 @@ func (a *app) saveSettings() {
 		return
 	}
 	project := a.project
-	if a.remotePath == "" && a.store != nil && !a.store.isMemory() {
-		project = a.store.dir
+	if a.remotePath == "" && a.store != nil && !a.store.IsMemory() {
+		project = a.store.Dir
 	}
-	p := a.prefs
-	p.sanitize()
+	p := a.Prefs
+	p.Sanitize()
 	data, _ := json.MarshalIndent(settingsFile{
-		prefs:          p,
+		Prefs:          p,
 		Shortcuts:      a.shortcutKeys,
 		Project:        project,
 		Projects:       a.projects,
 		Server:         a.serverAlias,
 		RemotePath:     a.remotePath,
-		RemoteProjects: a.remoteProjects,
-		Hosts:          a.hosts,
+		RemoteProjects: a.remoteProjects(),
+		Hosts:          a.hosts(),
 	}, "", "  ")
-	a.settingsIndexDirty = true
-	if err := writeFileAtomic(a.settingsPath, data); err != nil {
+	a.settings.IndexDirty = true
+	if err := fs.WriteFileAtomic(a.settingsPath, data); err != nil {
 		log.Print(err)
 	}
-}
-
-// writeFileAtomic replaces path with data, so a crash leaves the old
-// file or the new one, never half of each.
-func writeFileAtomic(path string, data []byte) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	f, err := os.CreateTemp(dir, filepath.Base(path)+".tmp-*")
-	if err != nil {
-		return err
-	}
-	name := f.Name()
-	defer os.Remove(name)
-	if err := f.Chmod(0o644); err != nil {
-		_ = f.Close()
-		return err
-	}
-	if _, err := f.Write(data); err != nil {
-		_ = f.Close()
-		return err
-	}
-	if err := f.Sync(); err != nil {
-		_ = f.Close()
-		return err
-	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-	return os.Rename(name, path)
 }
 
 // fontSize and the other getters are the effective values: what the
 // editor and terminal use when a preference is unset or zero.
 func (a *app) fontSize() float64 {
 	if a.EditorFontSize <= 0 {
-		return prefsDefaults.EditorFontSize
+		return prefs.Default().EditorFontSize
 	}
 	return a.EditorFontSize
 }
 
 func (a *app) termFontSize() float64 {
 	if a.TerminalFontSize <= 0 {
-		return prefsDefaults.TerminalFontSize
+		return prefs.Default().TerminalFontSize
 	}
 	return a.TerminalFontSize
 }
 
 func (a *app) lineHeight() float64 {
 	if a.EditorLineHeight <= 0 {
-		return prefsDefaults.EditorLineHeight
+		return prefs.Default().EditorLineHeight
 	}
 	return a.EditorLineHeight
 }
 
 func (a *app) tabSize() int {
 	if a.EditorTabSize <= 0 {
-		return prefsDefaults.EditorTabSize
+		return prefs.Default().EditorTabSize
 	}
 	return a.EditorTabSize
 }
 
 func (a *app) termLineHeight() float64 {
 	if a.TerminalLineHeight <= 0 {
-		return prefsDefaults.TerminalLineHeight
+		return prefs.Default().TerminalLineHeight
 	}
 	return a.TerminalLineHeight
 }
 
 func (a *app) termScrollback() int {
 	if a.TerminalScrollback <= 0 {
-		return prefsDefaults.TerminalScrollback
+		return prefs.Default().TerminalScrollback
 	}
 	return a.TerminalScrollback
 }

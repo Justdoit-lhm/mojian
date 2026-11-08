@@ -2,6 +2,7 @@ package app
 
 import (
 	"github.com/egoist/mygo"
+	"mojian/internal/app/commands"
 )
 
 func (a *app) updateTitle() {
@@ -24,10 +25,10 @@ func (a *app) updateTitle() {
 
 // revealVault shows the vault in the file manager.
 func (a *app) revealVault() {
-	if a.store == nil || a.store.isMemory() {
+	if a.store == nil || a.store.IsMemory() {
 		return
 	}
-	if err := mygo.Shell.OpenPath(a.store.dir); err != nil {
+	if err := mygo.Shell.OpenPath(a.store.Dir); err != nil {
 		a.fail(err)
 	}
 }
@@ -35,9 +36,9 @@ func (a *app) revealVault() {
 // menu builds the application menu. Its accelerators are the app's
 // shortcuts on every platform.
 func (a *app) menu() *mygo.Menu {
-	item := func(c *command) *mygo.MenuItem {
+	item := func(c *commands.Command) *mygo.MenuItem {
 		return &mygo.MenuItem{
-			Label:       c.title,
+			Label:       c.Title,
 			Accelerator: a.menuAccel(c),
 			Click: func(*mygo.MenuItem, *mygo.Window) {
 				a.run(c)
@@ -132,7 +133,7 @@ func (a *app) menu() *mygo.Menu {
 }
 
 // run runs a command from a menu or the palette.
-func (a *app) run(c *command) {
+func (a *app) run(c *commands.Command) {
 	if c == nil {
 		return
 	}
@@ -140,7 +141,7 @@ func (a *app) run(c *command) {
 		a.settingsWin.Close()
 		return
 	}
-	c.run(a)
+	a.commandRegistry().Run(c.ID)
 	a.updateTitle()
 	a.invalidate()
 }

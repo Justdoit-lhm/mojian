@@ -3,28 +3,28 @@ package app
 import (
 	"testing"
 
+	"mojian/internal/fs"
+	"mojian/internal/remote"
 	"mojian/internal/session"
 )
 
 func poolApp() *app {
-	return &app{
-		workspace:  &workspace{},
-		workspaces: map[string]*workspace{},
-		remotes:    map[string]*remoteConn{"box": {host: "box"}},
-	}
+	a := &app{workspace: &workspace{}, workspaces: map[string]*workspace{}}
+	a.setRemoteConn(&remote.Conn{Host: "box"})
+	return a
 }
 
 func TestRemotePoolReleasesTheLastUser(t *testing.T) {
 	a := poolApp()
 	a.reapRemotes()
-	if _, ok := a.remotes["box"]; ok {
+	if a.remoteConn("box") != nil {
 		t.Fatal("an unused connection stayed in the pool")
 	}
 
 	a.workspaces["project"] = &workspace{serverAlias: "box", remotePath: "/srv/app"}
-	a.remotes["box"] = &remoteConn{host: "box"}
+	a.setRemoteConn(&remote.Conn{Host: "box"})
 	a.reapRemotes()
-	if _, ok := a.remotes["box"]; !ok {
+	if a.remoteConn("box") == nil {
 		t.Fatal("a project's connection was released")
 	}
 
@@ -34,7 +34,7 @@ func TestRemotePoolReleasesTheLastUser(t *testing.T) {
 		"terminal": {tabs: []*tab{{ID: nextID("t"), Root: &node{Pane: p}, Focus: p}}},
 	}
 	a.reapRemotes()
-	if _, ok := a.remotes["box"]; !ok {
+	if a.remoteConn("box") == nil {
 		t.Fatal("a terminal's connection was released")
 	}
 
@@ -42,23 +42,23 @@ func TestRemotePoolReleasesTheLastUser(t *testing.T) {
 	a.workspaces = map[string]*workspace{}
 	a.remotePickHost = "box"
 	a.reapRemotes()
-	if _, ok := a.remotes["box"]; !ok {
+	if a.remoteConn("box") == nil {
 		t.Fatal("the picker's connection was released")
 	}
 	a.remotePickHost = ""
 	a.reapRemotes()
-	if _, ok := a.remotes["box"]; ok {
+	if a.remoteConn("box") != nil {
 		t.Fatal("the last-user release did not close the connection")
 	}
 }
 
 func TestPickerConnectionSurvivesPendingOpen(t *testing.T) {
 	a := poolApp()
-	a.remotes["box"] = &remoteConn{host: "box"}
+	a.setRemoteConn(&remote.Conn{Host: "box"})
 	a.remotePickHost = "box"
 	a.remoteOpening = true
 	a.dropPickerRemote()
-	if _, ok := a.remotes["box"]; !ok {
+	if a.remoteConn("box") == nil {
 		t.Fatal("the picker connection was dropped while a project was opening")
 	}
 	if a.remotePickHost != "box" {
@@ -66,14 +66,14 @@ func TestPickerConnectionSurvivesPendingOpen(t *testing.T) {
 	}
 	a.remoteOpening = false
 	a.dropPickerRemote()
-	if _, ok := a.remotes["box"]; ok {
+	if a.remoteConn("box") != nil {
 		t.Fatal("the picker connection stayed after the pending open ended")
 	}
 }
 
 func TestInstallRemoteConnPatchesCachedStores(t *testing.T) {
 	oldClient, newClient := &session.Client{}, &session.Client{}
-	s := &store{fs: &serverFS{client: oldClient, root: "/srv/app", local: false}}
+	s := &store{FS: fs.NewServer(oldClient, "/srv/app", "", false)}
 	p := newTermPane(newTermPaneSpec(termSpec{Server: "box"}, "sid"))
 	p.Term.Client = oldClient
 	p.Term.startErr = "lost"
@@ -84,17 +84,16 @@ func TestInstallRemoteConnPatchesCachedStores(t *testing.T) {
 	a := &app{
 		workspace:  &workspace{},
 		workspaces: map[string]*workspace{"box": ws},
-		remotes:    map[string]*remoteConn{},
 	}
-	rc := &remoteConn{host: "box", client: newClient}
+	rc := &remote.Conn{Host: "box", Client: newClient}
 	a.installRemoteConn(rc)
-	if s.client() != newClient {
+	if s.Client() != newClient {
 		t.Fatal("the cached store kept its old client")
 	}
 	if p.Term.Client != newClient || p.Term.startErr != "" {
 		t.Fatal("the cached terminal kept its old client")
 	}
-	if a.remotes["box"] != rc {
+	if a.remoteConn("box") != rc {
 		t.Fatal("the connection was not pooled")
 	}
 }

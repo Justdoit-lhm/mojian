@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"mojian/internal/fs"
+
 	integration "mojian/test"
 
 	"github.com/egoist/mygo/ui"
@@ -13,9 +15,9 @@ import (
 
 func TestRenameFileUpdatesOpenNote(t *testing.T) {
 	a := newProjectApp(t)
-	n := a.store.byRelPath(filepath.Join("scripts", "tasks.py"))
+	n := a.store.ByRelPath(filepath.Join("scripts", "tasks.py"))
 	a.openNote(n)
-	rel, changed, err := a.store.rename(filepath.Join("scripts", "tasks.py"), "worker.py")
+	rel, changed, err := a.store.Rename(filepath.Join("scripts", "tasks.py"), "worker.py")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +34,7 @@ func TestRenameFileUpdatesOpenNote(t *testing.T) {
 	if a.currentNote() != n {
 		t.Fatal("the open editor lost its note")
 	}
-	if a.store.byRelPath(want) != n {
+	if a.store.ByRelPath(want) != n {
 		t.Fatal("the store still has the old path")
 	}
 }
@@ -40,10 +42,10 @@ func TestRenameFileUpdatesOpenNote(t *testing.T) {
 func TestRenameFolderRemapsNotesAndOpenFolders(t *testing.T) {
 	a := newProjectApp(t)
 	a.openDirs = map[string]bool{"scripts": true}
-	py := a.store.byRelPath(filepath.Join("scripts", "tasks.py"))
-	js := a.store.byRelPath(filepath.Join("scripts", "app.js"))
+	py := a.store.ByRelPath(filepath.Join("scripts", "tasks.py"))
+	js := a.store.ByRelPath(filepath.Join("scripts", "app.js"))
 	a.openNote(py)
-	rel, _, err := a.store.rename("scripts", "src")
+	rel, _, err := a.store.Rename("scripts", "src")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +55,7 @@ func TestRenameFolderRemapsNotesAndOpenFolders(t *testing.T) {
 	if py.Rel != filepath.Join("src", "tasks.py") || js.Rel != filepath.Join("src", "app.js") {
 		t.Fatalf("notes: %q %q", py.Rel, js.Rel)
 	}
-	if _, ok := a.store.byRel[py.Rel]; !ok {
+	if _, ok := a.store.ByRel[py.Rel]; !ok {
 		t.Fatal("the note map was not rebuilt")
 	}
 }
@@ -61,12 +63,12 @@ func TestRenameFolderRemapsNotesAndOpenFolders(t *testing.T) {
 func TestRenameThroughTreeDraft(t *testing.T) {
 	a := newProjectApp(t)
 	a.treeSel = filepath.Join("scripts", "tasks.py")
-	a.openNote(a.store.byRelPath(a.treeSel))
+	a.openNote(a.store.ByRelPath(a.treeSel))
 	a.startRenameNode(a.treeSel)
-	if a.treeDraft == nil || a.treeDraft.kind != draftRename {
+	if a.treeDraft == nil || a.treeDraft.Kind != draftRename {
 		t.Fatalf("draft: %+v", a.treeDraft)
 	}
-	a.treeDraft.name = "worker.py"
+	a.treeDraft.Name = "worker.py"
 	a.submitTreeDraft()
 	want := filepath.Join("scripts", "worker.py")
 	if a.treeSel != want {
@@ -82,19 +84,19 @@ func TestRenameThroughTreeDraft(t *testing.T) {
 
 func TestCopyPasteAndCut(t *testing.T) {
 	a := newProjectApp(t)
-	py := a.store.byRelPath(filepath.Join("scripts", "tasks.py"))
+	py := a.store.ByRelPath(filepath.Join("scripts", "tasks.py"))
 	a.openNote(py)
 	a.copySelectionTo(py.Rel, false)
 	a.pasteInto("Ideas")
 	want := filepath.Join("Ideas", "tasks copy.py")
-	if a.store.byRelPath(want) == nil {
+	if a.store.ByRelPath(want) == nil {
 		t.Fatalf("copy not found (err=%q)", a.err)
 	}
 	if py.Rel != filepath.Join("scripts", "tasks.py") {
 		t.Fatal("copying moved the source note")
 	}
 
-	js := a.store.byRelPath(filepath.Join("scripts", "app.js"))
+	js := a.store.ByRelPath(filepath.Join("scripts", "app.js"))
 	a.openNote(js)
 	a.copySelectionTo(js.Rel, true)
 	a.pasteInto("Ideas")
@@ -102,24 +104,24 @@ func TestCopyPasteAndCut(t *testing.T) {
 	if js.Rel != moved {
 		t.Fatalf("cut note rel: %q", js.Rel)
 	}
-	if _, err := os.Stat(filepath.Join(a.store.dir, filepath.Join("scripts", "app.js"))); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(a.store.Dir, filepath.Join("scripts", "app.js"))); !os.IsNotExist(err) {
 		t.Fatal("the cut source still exists")
 	}
-	if a.store.byRelPath(moved) != js {
+	if a.store.ByRelPath(moved) != js {
 		t.Fatal("the store lost the moved note")
 	}
 }
 
 func TestTrashClosesOpenTabs(t *testing.T) {
-	old := trashPath
-	trashPath = func(p string) error { return os.RemoveAll(p) }
-	t.Cleanup(func() { trashPath = old })
+	old := fs.TrashPath
+	fs.TrashPath = func(p string) error { return os.RemoveAll(p) }
+	t.Cleanup(func() { fs.TrashPath = old })
 
 	a := newProjectApp(t)
-	py := a.store.byRelPath(filepath.Join("scripts", "tasks.py"))
+	py := a.store.ByRelPath(filepath.Join("scripts", "tasks.py"))
 	a.openNote(py)
 	a.trash("scripts")
-	if a.store.byRelPath(py.Rel) != nil {
+	if a.store.ByRelPath(py.Rel) != nil {
 		t.Fatal("the trashed note is still in the store")
 	}
 	if a.currentNote() != nil {
@@ -132,19 +134,19 @@ func TestTrashClosesOpenTabs(t *testing.T) {
 
 func TestRefreshForgetsDeletedFile(t *testing.T) {
 	a := newProjectApp(t)
-	path := filepath.Join(a.store.dir, "gone.py")
+	path := filepath.Join(a.store.Dir, "gone.py")
 	if err := os.WriteFile(path, []byte("x = 1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	a.refreshProject()
-	if a.store.byRelPath("gone.py") == nil {
+	if a.store.ByRelPath("gone.py") == nil {
 		t.Fatal("the new file was not loaded")
 	}
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
 	a.refreshProject()
-	if a.store.byRelPath("gone.py") != nil {
+	if a.store.ByRelPath("gone.py") != nil {
 		t.Fatal("the deleted file stayed in the store")
 	}
 }
@@ -225,8 +227,8 @@ func TestPickerOpensChosenProject(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.store = s
-	a.layoutPath = a.projectLayoutPath(s.dir)
-	a.rememberProject(s.dir)
+	a.layoutPath = a.projectLayoutPath(s.Dir)
+	a.rememberProject(s.Dir)
 	a.focusFirstNote()
 	a.openProjectPicker()
 	a.setPickerPath(root)
@@ -242,16 +244,16 @@ func TestPickerOpensChosenProject(t *testing.T) {
 	if a.projectPicker {
 		t.Fatal("the picker stayed open")
 	}
-	if a.store.dir != beta {
-		t.Fatalf("project: %q", a.store.dir)
+	if a.store.Dir != beta {
+		t.Fatalf("project: %q", a.store.Dir)
 	}
 }
 
 func TestOpenFileInNewTab(t *testing.T) {
 	a := newProjectApp(t)
-	n := a.store.byRelPath("README.md")
+	n := a.store.ByRelPath("README.md")
 	if n == nil {
-		n = a.store.sorted()[0]
+		n = a.store.Sorted()[0]
 	}
 	a.openNote(n)
 	before := len(a.tabs)
@@ -268,7 +270,7 @@ func TestDuplicateFile(t *testing.T) {
 	a := newProjectApp(t)
 	a.duplicate("Welcome.md")
 	want := "Welcome copy.md"
-	if _, err := os.Stat(filepath.Join(a.store.dir, want)); err != nil {
+	if _, err := os.Stat(filepath.Join(a.store.Dir, want)); err != nil {
 		t.Fatalf("duplicate: %v (err=%q)", err, a.err)
 	}
 	if a.treeSel != want {
@@ -278,7 +280,7 @@ func TestDuplicateFile(t *testing.T) {
 
 func TestRenameCaseOnlySpelling(t *testing.T) {
 	a := newProjectApp(t)
-	rel, changed, err := a.store.rename(filepath.Join("scripts", "tasks.py"), "TASKS.py")
+	rel, changed, err := a.store.Rename(filepath.Join("scripts", "tasks.py"), "TASKS.py")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -288,7 +290,7 @@ func TestRenameCaseOnlySpelling(t *testing.T) {
 	if len(changed) != 1 || changed[0].Rel != rel {
 		t.Fatalf("changed notes: %+v", changed)
 	}
-	if a.store.byRelPath(rel) == nil {
+	if a.store.ByRelPath(rel) == nil {
 		t.Fatal("the renamed note is missing")
 	}
 }

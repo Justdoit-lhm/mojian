@@ -1,6 +1,7 @@
 package app
 
 import (
+	"mojian/internal/app/commands"
 	"runtime"
 
 	"mojian/internal/icons"
@@ -83,7 +84,7 @@ func (a *app) emptyState(c *ui.Context, k *colors, vw, vh float32) {
 	})
 }
 
-func (a *app) welcomeAction(c *ui.Context, k *colors, glyph, title string, cmd *command, run func()) {
+func (a *app) welcomeAction(c *ui.Context, k *colors, glyph, title string, cmd *commands.Command, run func()) {
 	row := ui.Row(c).Height(42).Padding(0, 14).Gap(10).AlignItems(ui.Center).
 		Cursor(ui.CursorPointer).Role(ui.RoleButton).Label(title)
 	if row.Hovered() {
@@ -105,7 +106,7 @@ func (a *app) welcomeNotes() []*note {
 	if a.store == nil {
 		return nil
 	}
-	notes := a.store.sorted()
+	notes := a.store.Sorted()
 	if len(notes) > 5 {
 		notes = notes[:5]
 	}

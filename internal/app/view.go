@@ -2,6 +2,7 @@ package app
 
 import (
 	"github.com/egoist/mygo/ui"
+	"mojian/internal/app/commands"
 
 	"mojian/internal/icons"
 	"mojian/internal/motion"
@@ -156,7 +157,7 @@ func (a *app) titleBar(c *ui.Context, k *colors) {
 
 // tip is the tooltip of a button that runs a command: its label and its
 // keys.
-func (a *app) tip(label string, cmd *command) string {
+func (a *app) tip(label string, cmd *commands.Command) string {
 	keys := a.commandKeys(cmd)
 	if keys == "" || keys == "None" {
 		return label

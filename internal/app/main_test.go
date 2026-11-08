@@ -15,8 +15,8 @@ func TestSplitAndClose(t *testing.T) {
 	a := newProjectApp(t)
 	t0 := a.tab()
 	first := t0.Focus.Note
-	second := a.store.byRelPath("Reading notes.md")
-	third := a.store.byRelPath(filepath.Join("scripts", "tasks.py"))
+	second := a.store.ByRelPath("Reading notes.md")
+	third := a.store.ByRelPath(filepath.Join("scripts", "tasks.py"))
 
 	a.splitWith(second)
 	if got := len(t0.panes()); got != 2 {
@@ -54,7 +54,7 @@ func TestSplitAndClose(t *testing.T) {
 func TestSplitsPastFourPanes(t *testing.T) {
 	a := newProjectApp(t)
 	t0 := a.tab()
-	notes := a.store.sorted()
+	notes := a.store.Sorted()
 	for i, n := range notes {
 		if i == 0 {
 			continue
@@ -84,7 +84,7 @@ func TestLayoutRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	notes := s.sorted()
+	notes := s.Sorted()
 	if len(notes) < 2 {
 		t.Fatalf("notes: %d", len(notes))
 	}
@@ -126,7 +126,7 @@ func TestRestoreFillsALonePane(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	n := s.sorted()[0]
+	n := s.Sorted()[0]
 	a := &app{workspace: &workspace{store: s, layoutPath: filepath.Join(dir, "layout.json")}}
 	p := newPane(n)
 	a.tabs = []*tab{{ID: nextID("t"), Root: &node{Pane: p}, Focus: p}}
@@ -197,18 +197,18 @@ func TestNoteSave(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	n, err := s.newFileIn("", "Untitled.md", "# Untitled\n\n")
+	n, err := s.NewFileIn("", "Untitled.md", "# Untitled\n\n")
 	if err != nil {
 		t.Fatal(err)
 	}
 	body := "# Edited\n\nThe new text.\n"
 	buf := editor.NewBuffer(n.Saved)
 	buf.Set(body)
-	n.buf = buf
-	if !n.dirty() {
+	n.Buf = buf
+	if !n.Dirty() {
 		t.Fatal("a new buffer should be dirty")
 	}
-	if err := s.save(n); err != nil {
+	if err := s.Save(n); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(n.Path)
@@ -221,7 +221,7 @@ func TestNoteSave(t *testing.T) {
 	if n.Title != "Edited" {
 		t.Errorf("title: %q", n.Title)
 	}
-	if n.dirty() {
+	if n.Dirty() {
 		t.Error("note still dirty after save")
 	}
 }
@@ -243,7 +243,7 @@ func TestView(t *testing.T) {
 	if !tt.HasText("Open a file in this pane") {
 		t.Fatalf("Split Right did not open the file search: %q", tt.Texts())
 	}
-	a.openNote(a.store.byRelPath("Reading notes.md"))
+	a.openNote(a.store.ByRelPath("Reading notes.md"))
 	tt.Frame()
 	if got := a.tab().Focus.Note; got == nil || got.Title != "Reading notes" {
 		t.Fatal("the file did not open in the new pane")
@@ -256,7 +256,7 @@ func TestView(t *testing.T) {
 	if got := len(a.tab().panes()); got != 3 {
 		t.Fatalf("panes after Split Left: %d", got)
 	}
-	a.openNote(a.store.byRelPath(filepath.Join("scripts", "tasks.py")))
+	a.openNote(a.store.ByRelPath(filepath.Join("scripts", "tasks.py")))
 	tt.Frame()
 	if err := tt.Click("New File"); err != nil {
 		t.Fatal(err)
@@ -303,11 +303,11 @@ func TestNewTabIsEmpty(t *testing.T) {
 func TestSplitAddsAColumn(t *testing.T) {
 	a := newProjectApp(t)
 	first := a.tab().Focus
-	a.splitWith(a.store.byRelPath("Reading notes.md"))
+	a.splitWith(a.store.ByRelPath("Reading notes.md"))
 	if got := a.tab().panes(); len(got) != 2 || got[0] != first || got[1] != a.tab().Focus {
 		t.Fatalf("panes after a right split: %v", got)
 	}
-	third := a.store.byRelPath("scripts/tasks.py")
+	third := a.store.ByRelPath("scripts/tasks.py")
 	a.splitWith(third)
 	if got := len(a.tab().panes()); got != 3 {
 		t.Fatalf("panes after a third file: %d", got)
@@ -320,7 +320,7 @@ func TestSplitAddsAColumn(t *testing.T) {
 func TestSplitLeftPutsTheNewPaneFirst(t *testing.T) {
 	a := newProjectApp(t)
 	first := a.tab().Focus
-	a.splitWithSide(a.store.byRelPath("Reading notes.md"), splitLeft)
+	a.splitWithSide(a.store.ByRelPath("Reading notes.md"), splitLeft)
 	got := a.tab().panes()
 	if len(got) != 2 || got[0] == first || got[1] != first {
 		t.Fatalf("a left split did not put the new pane first: %v", got)
@@ -333,9 +333,9 @@ func TestSplitLeftPutsTheNewPaneFirst(t *testing.T) {
 func TestArrowKeysMoveInFourDirections(t *testing.T) {
 	a := newProjectApp(t)
 	first := a.tab().Focus
-	a.splitWith(a.store.byRelPath("Reading notes.md"))
+	a.splitWith(a.store.ByRelPath("Reading notes.md"))
 	second := a.tab().Focus
-	a.splitWithSide(a.store.byRelPath("scripts/tasks.py"), splitDown)
+	a.splitWithSide(a.store.ByRelPath("scripts/tasks.py"), splitDown)
 	third := a.tab().Focus
 
 	a.focusPaneDirection(paneUp)

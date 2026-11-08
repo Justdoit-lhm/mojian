@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+
+	"mojian/internal/fs"
 )
 
 // layoutFile is what the app keeps of its tabs between launches.
@@ -208,13 +210,13 @@ func (a *app) restorePane(lp layoutPane, byID map[string]*pane) *pane {
 	case lp.Terminal != nil:
 		p.Term = newTermPaneSpec(termSpec{Host: lp.Terminal.Host, Server: lp.Terminal.Server}, lp.Terminal.SID)
 	case lp.Note != "":
-		n := a.store.byRelPath(lp.Note)
+		n := a.store.ByRelPath(lp.Note)
 		if n == nil || !a.loadNote(n) {
 			return nil
 		}
 		p.Note = n
 	case lp.Asset != "":
-		f := a.store.assetByRel(lp.Asset)
+		f := a.store.AssetByRel(lp.Asset)
 		if f == nil || !a.loadAsset(f) {
 			return nil
 		}
@@ -237,7 +239,7 @@ func (a *app) saveLayout() {
 	if err != nil {
 		return
 	}
-	if err := writeFileAtomic(a.layoutPath, data); err != nil {
+	if err := fs.WriteFileAtomic(a.layoutPath, data); err != nil {
 		log.Print(err)
 	}
 }

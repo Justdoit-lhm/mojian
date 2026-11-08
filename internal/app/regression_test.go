@@ -40,12 +40,12 @@ func writeTestPNG(t *testing.T, path string) []byte {
 
 func TestRefreshKeepsAssetPane(t *testing.T) {
 	a := newProjectApp(t)
-	path := filepath.Join(a.store.dir, "cover.png")
+	path := filepath.Join(a.store.Dir, "cover.png")
 	first := writeTestPNG(t, path)
-	if err := a.store.refresh(); err != nil {
+	if err := a.store.Refresh(); err != nil {
 		t.Fatal(err)
 	}
-	asset := a.store.assetByRel("cover.png")
+	asset := a.store.AssetByRel("cover.png")
 	if asset == nil {
 		t.Fatal("the image was not indexed")
 	}
@@ -85,12 +85,12 @@ func TestRefreshKeepsAssetPane(t *testing.T) {
 
 func TestOpeningAssetKeepsTerminalPane(t *testing.T) {
 	a := newProjectApp(t)
-	path := filepath.Join(a.store.dir, "cover.png")
+	path := filepath.Join(a.store.Dir, "cover.png")
 	writeTestPNG(t, path)
-	if err := a.store.refresh(); err != nil {
+	if err := a.store.Refresh(); err != nil {
 		t.Fatal(err)
 	}
-	asset := a.store.assetByRel("cover.png")
+	asset := a.store.AssetByRel("cover.png")
 	if asset == nil {
 		t.Fatal("the image was not indexed")
 	}
@@ -117,7 +117,7 @@ func TestOpeningAssetKeepsTerminalPane(t *testing.T) {
 
 func TestOpeningNoteKeepsUnfocusedTerminalPane(t *testing.T) {
 	a := newProjectApp(t)
-	n := a.store.sorted()[0]
+	n := a.store.Sorted()[0]
 	a.newTab()
 	terminalTab := a.tab()
 	a.addTerminalPane(&termTab{})

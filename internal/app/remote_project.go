@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"mojian/internal/remote"
 	"mojian/internal/session"
 
 	"github.com/egoist/mygo"
@@ -24,26 +25,25 @@ func (a *app) workspaceReachable(ws *workspace) bool {
 	if ws == nil || ws.remotePath == "" {
 		return true
 	}
-	return remoteHealthy(a.remotes[ws.serverAlias])
+	return a.remoteConn(ws.serverAlias).Healthy()
 }
 
 // installRemoteConn makes rc the pool's connection for its host and
 // points every loaded workspace on that host at its client. A new
 // connection also detaches terminal views so their panes reattach.
-func (a *app) installRemoteConn(rc *remoteConn) {
+func (a *app) installRemoteConn(rc *remote.Conn) {
 	if rc == nil {
 		return
 	}
 	a.initWorkspaces()
-	same := a.remotes[rc.host] == rc
-	a.remotes[rc.host] = rc
+	same := a.setRemoteConn(rc)
 	patch := func(w *workspace) {
-		if w == nil || w.store == nil || !w.store.isServer() || w.serverAlias != rc.host {
+		if w == nil || w.store == nil || !w.store.IsServer() || w.serverAlias != rc.Host {
 			return
 		}
-		w.store.setClient(rc.client)
+		w.store.SetClient(rc.Client)
 		if !same {
-			detachTerminalsOn(w, rc.host, rc.client)
+			detachTerminalsOn(w, rc.Host, rc.Client)
 		}
 	}
 	patch(a.workspace)
@@ -79,7 +79,7 @@ func (a *app) reconnectActiveRemoteAsync() {
 	if host == "" || a.remoteBusy {
 		return
 	}
-	if existing := a.remoteForHost(host); existing != nil && remoteHealthy(existing) {
+	if existing := a.remoteForHost(host); existing != nil && existing.Healthy() {
 		a.installRemoteConn(existing)
 		a.invalidate()
 		return
@@ -89,7 +89,7 @@ func (a *app) reconnectActiveRemoteAsync() {
 		return
 	}
 	go func() {
-		rc, err := dialRemote(host)
+		rc, err := remote.Dial(host)
 		onWindow(win, func() {
 			if !a.endRemoteTask(seq) {
 				if rc != nil {
@@ -115,7 +115,7 @@ func (a *app) reconnectWorkspaceAsync(ws *workspace, host string) {
 		return
 	}
 	existing := a.remoteForHost(host)
-	if existing != nil && remoteHealthy(existing) {
+	if existing != nil && existing.Healthy() {
 		a.installRemoteConn(existing)
 		a.switchWorkspace(ws)
 		return
@@ -130,7 +130,7 @@ func (a *app) reconnectWorkspaceAsync(ws *workspace, host string) {
 		return
 	}
 	go func() {
-		rc, err := dialRemote(host)
+		rc, err := remote.Dial(host)
 		onWindow(win, func() {
 			if !a.endRemoteTask(seq) {
 				if rc != nil {
@@ -202,14 +202,14 @@ func (a *app) openRemoteProjectAsync(host, remotePath string) {
 		rc := existing
 		var err error
 		if rc == nil {
-			rc, err = dialRemote(host)
+			rc, err = remote.Dial(host)
 		}
 		var s *store
 		if err == nil {
 			onWindow(win, func() {
 				a.setRemoteBusyMsg(seq, "Opening "+filepath.Base(remotePath)+" on "+a.hostLabel(host)+"…")
 			})
-			s, err = openServerStore(rc.client, remotePath, cache, false)
+			s, err = openServerStore(rc.Client, remotePath, cache, false)
 		}
 		onWindow(win, func() {
 			if !a.endRemoteTask(seq) {
@@ -264,7 +264,7 @@ func (a *app) rememberRemoteProject(p remoteProject) {
 		return
 	}
 	out := []remoteProject{p}
-	for _, q := range a.remoteProjects {
+	for _, q := range a.remoteProjects() {
 		if q.Host == p.Host && q.Path == p.Path {
 			continue
 		}
@@ -273,7 +273,7 @@ func (a *app) rememberRemoteProject(p remoteProject) {
 	if len(out) > 12 {
 		out = out[:12]
 	}
-	a.remoteProjects = out
+	a.hostService().SetProjects(out)
 }
 
 // beginRemoteTask covers the window with a loading state and returns
@@ -351,7 +351,3 @@ func (a *app) remoteBusyView(c *ui.Context, k *colors) {
 }
 
 // remoteProject is a project on an SSH host, remembered by the switcher.
-type remoteProject struct {
-	Host string `json:"host"`
-	Path string `json:"path"`
-}

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.5
+
+- The project model (`Store`, `Note`, `Asset` and the file tree) moved to
+  `internal/project`, and the welcome/sample notes to `internal/welcome`,
+  so `internal/app` is the window's composition root rather than the home
+  of every domain package.
+- The Explorer, Settings window, shared widgets, command registry and
+  remote-host pool are separate layers: `internal/app/explorer`,
+  `internal/app/settingsui`, `internal/app/widgets`,
+  `internal/app/commands` and `internal/remotehost`.
+- The headless harness owns its fixtures in `cmd/harness` and shares the
+  welcome project files with the app tests; the extra test-only fixture
+  shim is gone.
+- No user-facing behavior changes; tests, vet and the web build pass.
+
 ## 0.2.4
 
 - The Explorer slides in from the window's edge and fades back out when

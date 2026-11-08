@@ -24,9 +24,9 @@ func (a *app) focusFirstNote() {
 	if a.store == nil {
 		return
 	}
-	notes := a.store.sorted()
+	notes := a.store.Sorted()
 	if len(notes) == 0 {
-		for _, f := range a.store.assets {
+		for _, f := range a.store.Assets {
 			t := &tab{ID: nextID("t")}
 			p := newAssetPane(f)
 			t.Root = &node{Pane: p}
@@ -75,7 +75,7 @@ func (a *app) loadNote(n *note) bool {
 		return false
 	}
 	if a.store != nil {
-		if err := a.store.loadNote(n); err != nil {
+		if err := a.store.LoadNote(n); err != nil {
 			a.fail(fmt.Errorf("reading %s: %w", n.Rel, err))
 			return false
 		}
@@ -90,7 +90,7 @@ func (a *app) loadAsset(f *assetFile) bool {
 		return false
 	}
 	if a.store != nil {
-		if _, err := a.store.materializeAsset(f); err != nil {
+		if _, err := a.store.MaterializeAsset(f); err != nil {
 			a.fail(fmt.Errorf("reading %s: %w", f.Rel, err))
 			return false
 		}
@@ -189,11 +189,11 @@ func (a *app) openRel(rel string) {
 	if a.store == nil {
 		return
 	}
-	if n := a.store.byRelPath(rel); n != nil {
+	if n := a.store.ByRelPath(rel); n != nil {
 		a.openNote(n)
 		return
 	}
-	if f := a.store.assetByRel(rel); f != nil {
+	if f := a.store.AssetByRel(rel); f != nil {
 		a.openAsset(f)
 	}
 }

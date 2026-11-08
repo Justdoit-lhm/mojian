@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"mojian/internal/remote"
 	"mojian/internal/settings"
 
 	"github.com/egoist/mygo/ui"
@@ -18,28 +19,28 @@ func TestSettingsSearchFindsRowsAndSwitchesPages(t *testing.T) {
 	a := newProjectApp(t)
 	tt := ui.NewTester(a.settingsWindowView, 900, 640)
 	tt.Frame()
-	a.settingsQuery = "line numbers"
+	a.settings.Query = "line numbers"
 	tt.Frame()
 	tt.Frame()
-	if a.settingsCat != settingsEditor {
-		t.Fatalf("page after searching line numbers: %d", a.settingsCat)
+	if a.settings.Cat != settingsEditor {
+		t.Fatalf("page after searching line numbers: %d", a.settings.Cat)
 	}
-	if !a.settingsHits["Line numbers"] {
-		t.Fatalf("the row was not found: %v", a.settingsHits)
+	if !a.settings.Hits["Line numbers"] {
+		t.Fatalf("the row was not found: %v", a.settings.Hits)
 	}
 	if !tt.HasText("Line numbers") {
 		t.Fatalf("editor texts: %q", tt.Texts())
 	}
-	a.settingsQuery = "no such setting"
+	a.settings.Query = "no such setting"
 	tt.Frame()
 	tt.Frame()
 	if !tt.HasText("No settings match") {
 		t.Fatalf("empty search texts: %q", tt.Texts())
 	}
-	a.settingsQuery = ""
+	a.settings.Query = ""
 	tt.Frame()
 	tt.Frame()
-	if a.settingsFound != nil || a.settingsHits != nil {
+	if a.settings.Found != nil || a.settings.Hits != nil {
 		t.Fatal("clearing the query kept the results")
 	}
 }
@@ -47,7 +48,7 @@ func TestSettingsSearchFindsRowsAndSwitchesPages(t *testing.T) {
 func TestSettingsTogglesWriteTheSettingBack(t *testing.T) {
 	registerFonts()
 	a := newProjectApp(t)
-	a.settingsCat = settingsEditor
+	a.settings.Cat = settingsEditor
 	tt := ui.NewTester(a.settingsWindowView, 900, 640)
 	tt.Frame()
 	before := a.HideLineNumbers
@@ -76,7 +77,7 @@ func TestSettingsTogglesWriteTheSettingBack(t *testing.T) {
 	if !a.EditorSoftWrap {
 		t.Fatal("Soft wrap code did not turn on")
 	}
-	a.settingsCat = settingsGit
+	a.settings.Cat = settingsGit
 	tt.Frame()
 	if a.NoGitAutoRefresh {
 		t.Fatal("git refresh started off")
@@ -93,7 +94,7 @@ func TestSettingsTogglesWriteTheSettingBack(t *testing.T) {
 func TestSettingsShortcutRecording(t *testing.T) {
 	registerFonts()
 	a := newProjectApp(t)
-	a.settingsCat = settingsKeyboard
+	a.settings.Cat = settingsKeyboard
 	tt := ui.NewTester(a.settingsWindowView, 900, 640)
 	tt.Frame()
 	if err := tt.Click("Shortcut for Save"); err != nil {
@@ -109,15 +110,15 @@ func TestSettingsShortcutRecording(t *testing.T) {
 	if got := a.commandAccel(cmdSave); got != wantAccel {
 		t.Fatalf("save shortcut: %q", got)
 	}
-	if a.settingsRecording != "" {
+	if a.settings.Recording != "" {
 		t.Fatal("recording did not stop")
 	}
 	if got := a.commandKeys(cmdSave); got != wantKeys {
 		t.Fatalf("save shortcut display: %q", got)
 	}
 	// The default is not an override.
-	a.setShortcut(cmdSave.id, cmdSave.accel)
-	if _, ok := a.shortcutKeys[cmdSave.id]; ok {
+	a.setShortcut(cmdSave.ID, cmdSave.Accel)
+	if _, ok := a.shortcutKeys[cmdSave.ID]; ok {
 		t.Fatalf("the default was kept as an override: %v", a.shortcutKeys)
 	}
 }
@@ -126,7 +127,7 @@ func TestSettingsShortcutPersistenceAndConflict(t *testing.T) {
 	registerFonts()
 	a := newProjectApp(t)
 	a.settingsPath = filepath.Join(t.TempDir(), "settings.json")
-	a.setShortcut(cmdSave.id, "CmdOrCtrl+Alt+S")
+	a.setShortcut(cmdSave.ID, "CmdOrCtrl+Alt+S")
 	if got := a.commandAccel(cmdSave); got != "CmdOrCtrl+Alt+S" {
 		t.Fatalf("save accel: %q", got)
 	}
@@ -138,7 +139,7 @@ func TestSettingsShortcutPersistenceAndConflict(t *testing.T) {
 	if err := json.Unmarshal(data, &saved); err != nil {
 		t.Fatal(err)
 	}
-	if saved.Shortcuts[cmdSave.id] != "CmdOrCtrl+Alt+S" {
+	if saved.Shortcuts[cmdSave.ID] != "CmdOrCtrl+Alt+S" {
 		t.Fatalf("saved shortcuts: %v", saved.Shortcuts)
 	}
 	loaded := &app{workspace: &workspace{}, settingsPath: a.settingsPath}
@@ -147,12 +148,12 @@ func TestSettingsShortcutPersistenceAndConflict(t *testing.T) {
 		t.Fatalf("loaded shortcut: %q", loaded.commandAccel(cmdSave))
 	}
 	// Binding a command to another's keys unbinds that one.
-	a.setShortcut(cmdSave.id, cmdPalette.accel)
+	a.setShortcut(cmdSave.ID, cmdPalette.Accel)
 	if got := a.commandAccel(cmdPalette); got != "" {
 		t.Fatalf("palette kept the taken keys: %q", got)
 	}
-	if !strings.Contains(a.settingsNotice, "Command Palette") {
-		t.Fatalf("conflict notice: %q", a.settingsNotice)
+	if !strings.Contains(a.settings.Notice, "Command Palette") {
+		t.Fatalf("conflict notice: %q", a.settings.Notice)
 	}
 	a.shortcutKeys = nil
 }
@@ -161,17 +162,17 @@ func TestSettingsHostsAddEditRemove(t *testing.T) {
 	a := newProjectApp(t)
 	a.hostDraftAddr, a.hostDraftName = "me@devbox", "Dev"
 	a.addHostChecked()
-	if len(a.hosts) != 1 || a.hosts[0].Name != "Dev" || a.hosts[0].Address != "me@devbox" {
-		t.Fatalf("hosts after add: %+v", a.hosts)
+	if len(a.hosts()) != 1 || a.hosts()[0].Name != "Dev" || a.hosts()[0].Address != "me@devbox" {
+		t.Fatalf("hosts after add: %+v", a.hosts())
 	}
 	a.hostEditAddr, a.hostEditName, a.hostEditAddress = "me@devbox", "Build", "me@buildbox"
 	a.saveHostEdit("me@devbox")
-	if len(a.hosts) != 1 || a.hosts[0].Name != "Build" || a.hosts[0].Address != "me@buildbox" {
-		t.Fatalf("hosts after edit: %+v", a.hosts)
+	if len(a.hosts()) != 1 || a.hosts()[0].Name != "Build" || a.hosts()[0].Address != "me@buildbox" {
+		t.Fatalf("hosts after edit: %+v", a.hosts())
 	}
 	a.removeHost("me@buildbox")
-	if len(a.hosts) != 0 {
-		t.Fatalf("hosts after remove: %+v", a.hosts)
+	if len(a.hosts()) != 0 {
+		t.Fatalf("hosts after remove: %+v", a.hosts())
 	}
 }
 
@@ -181,8 +182,8 @@ func TestSettingsHostRemoveButtons(t *testing.T) {
 	}
 	registerFonts()
 	a := newProjectApp(t)
-	a.hosts = []hostConfig{{Name: "Dev", Address: "me@devbox"}}
-	a.settingsCat = settingsHosts
+	a.hostService().SetHosts([]hostConfig{{Name: "Dev", Address: "me@devbox"}})
+	a.settings.Cat = settingsHosts
 	tt := ui.NewTester(a.settingsWindowView, 900, 640)
 	tt.Frame()
 	if err := tt.Click("Remove server Dev"); err != nil {
@@ -196,8 +197,8 @@ func TestSettingsHostRemoveButtons(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if len(a.hosts) != 0 {
-		t.Fatalf("host survived remove: %+v", a.hosts)
+	if len(a.hosts()) != 0 {
+		t.Fatalf("host survived remove: %+v", a.hosts())
 	}
 }
 
@@ -211,14 +212,14 @@ func TestSettingsSearchShortcut(t *testing.T) {
 	tt.Type("line numbers")
 	tt.Frame()
 	tt.Frame()
-	if a.settingsCat != settingsEditor {
-		t.Fatalf("page after Cmd+F and typing: %d", a.settingsCat)
+	if a.settings.Cat != settingsEditor {
+		t.Fatalf("page after Cmd+F and typing: %d", a.settings.Cat)
 	}
 	tt.Key(0, ui.KeyEscape)
 	tt.Frame()
 	tt.Frame()
-	if a.settingsQuery != "" {
-		t.Fatalf("Escape kept the query: %q", a.settingsQuery)
+	if a.settings.Query != "" {
+		t.Fatalf("Escape kept the query: %q", a.settings.Query)
 	}
 }
 
@@ -228,34 +229,34 @@ func TestSettingsResetKeepsProjectsAndServers(t *testing.T) {
 	a.Appearance = 2
 	a.EditorFontSize = 20
 	a.HideLineNumbers = true
-	a.hosts = []hostConfig{{Name: "Dev", Address: "me@devbox"}}
+	a.hostService().SetHosts([]hostConfig{{Name: "Dev", Address: "me@devbox"}})
 	a.project = "/tmp/project"
 	a.resetPreferences()
 	if a.Appearance != 0 || a.fontSize() != 12.5 || a.HideLineNumbers {
 		t.Fatalf("preferences after reset: appearance=%d size=%v hide=%v", a.Appearance, a.fontSize(), a.HideLineNumbers)
 	}
-	if len(a.hosts) != 1 || a.project != "/tmp/project" {
-		t.Fatalf("reset dropped projects or servers: hosts=%v project=%q", a.hosts, a.project)
+	if len(a.hosts()) != 1 || a.project != "/tmp/project" {
+		t.Fatalf("reset dropped projects or servers: hosts=%v project=%q", a.hosts(), a.project)
 	}
 }
 
 func TestHostSetUpButtonInstallsAndShowsStatus(t *testing.T) {
 	old := provisionRemoteFn
-	provisionRemoteFn = func(host string, existing *remoteConn) (*remoteSetup, error) {
+	provisionRemoteFn = func(host string, existing *remote.Conn) (*remote.Setup, error) {
 		if host != "fedora" {
 			t.Fatalf("set up host: %q", host)
 		}
-		return &remoteSetup{Uploaded: true, Path: "/home/me/.local/share/mojian/mojian-server"}, nil
+		return &remote.Setup{Uploaded: true, Path: "/home/me/.local/share/mojian/mojian-server"}, nil
 	}
 	t.Cleanup(func() { provisionRemoteFn = old })
 
 	a := newProjectApp(t)
-	a.hosts = []hostConfig{{Name: "Fedora", Address: "fedora"}}
-	a.settingsCat = settingsHosts
+	a.hostService().SetHosts([]hostConfig{{Name: "Fedora", Address: "fedora"}})
+	a.settings.Cat = settingsHosts
 	tt := ui.NewTester(a.settingsWindowView, 900, 1400)
 	tt.Frame()
 	if !tt.HasText("Set Up Server") {
-		t.Fatalf("the host row has no setup button (cat=%d): %q", a.settingsCat, tt.Texts())
+		t.Fatalf("the host row has no setup button (cat=%d): %q", a.settings.Cat, tt.Texts())
 	}
 	if err := tt.Click("Set Up Server"); err != nil {
 		t.Fatal(err)
@@ -280,7 +281,7 @@ func TestSettingsTableRendersEveryGenericRow(t *testing.T) {
 		settingsGeneral, settingsAppearance, settingsEditor,
 		settingsTerminal, settingsShell, settingsNotifications, settingsGit,
 	} {
-		a.settingsCat = cat
+		a.settings.Cat = cat
 		tt.Frame()
 		for _, row := range settings.Rows {
 			if row.Cat != cat {
@@ -296,8 +297,8 @@ func TestSettingsTableRendersEveryGenericRow(t *testing.T) {
 func TestSettingsHostsHidesRecentRemoteProjects(t *testing.T) {
 	registerFonts()
 	a := newProjectApp(t)
-	a.remoteProjects = []remoteProject{{Host: "buildbox", Path: "/srv/app"}}
-	a.settingsCat = settingsHosts
+	a.hostService().SetProjects([]remoteProject{{Host: "buildbox", Path: "/srv/app"}})
+	a.settings.Cat = settingsHosts
 	tt := ui.NewTester(a.settingsWindowView, 900, 900)
 	tt.Frame()
 	if tt.HasText("RECENT REMOTE PROJECTS") {

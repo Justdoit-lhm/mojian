@@ -36,12 +36,12 @@ func (a *app) markdownBody(c *ui.Context, k *colors, p *pane) {
 			Padding(26, 34, 44, 34).Children(func() {
 			if p.md == nil {
 				opts := &markdown.Options{}
-				if a.store == nil || !a.store.isRemote() {
+				if a.store == nil || !a.store.IsRemote() {
 					opts.LoadImage = markdown.FileImages(filepath.Dir(p.Note.Path))
 				}
 				p.md = opts
 			}
-			markdown.View(c, p.Note.text(), p.md)
+			markdown.View(c, p.Note.Text(), p.md)
 		})
 	})
 }
@@ -64,7 +64,7 @@ func (a *app) assetBody(c *ui.Context, k *colors, p *pane) {
 		a.pdfBody(c, k, p)
 		return
 	}
-	img, err := p.Asset.image()
+	img, err := p.Asset.Image()
 	if err != nil {
 		a.assetError(c, k, p, err)
 		return
@@ -83,7 +83,7 @@ func (a *app) pdfBody(c *ui.Context, k *colors, p *pane) {
 		v.pdfStarted, v.pdfLoading = true, true
 		v.pdfGen++
 		gen := v.pdfGen
-		path, win := p.Asset.localPath(), a.win
+		path, win := p.Asset.LocalPath(), a.win
 		go func() {
 			pages, dir, err := pdfPreview(path)
 			update := func() {
@@ -209,7 +209,7 @@ func (a *app) openButton(c *ui.Context, k *colors, p *pane) {
 		b.Background(k.Hover)
 	}
 	if b.Clicked() {
-		mygo.Shell.OpenPath(p.Asset.localPath())
+		mygo.Shell.OpenPath(p.Asset.LocalPath())
 	}
 	b.Children(func() {
 		ui.Text(c, "Open").FontSize(11.5).FontWeight(550).TextColor(k.Text)

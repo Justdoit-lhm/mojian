@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"mojian/internal/remote"
 	"mojian/internal/session"
 	integration "mojian/test"
 
@@ -31,8 +32,8 @@ func TestProjectSwitch(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.store = s
-	a.layoutPath = a.projectLayoutPath(s.dir)
-	a.rememberProject(s.dir)
+	a.layoutPath = a.projectLayoutPath(s.Dir)
+	a.rememberProject(s.Dir)
 	a.focusFirstNote()
 	a.saveLayout()
 	a.saveSettings()
@@ -42,8 +43,8 @@ func TestProjectSwitch(t *testing.T) {
 	alphaTabs := a.tabs
 
 	a.openProject(beta)
-	if a.store.dir != beta {
-		t.Fatalf("store dir: %q", a.store.dir)
+	if a.store.Dir != beta {
+		t.Fatalf("store dir: %q", a.store.Dir)
 	}
 	if a.currentNote() == nil || a.currentNote().Rel != "beta.py" {
 		t.Fatalf("current note: %+v", a.currentNote())
@@ -81,8 +82,8 @@ func TestProjectSwitch(t *testing.T) {
 	if a.currentNote() != alphaNote {
 		t.Fatal("switching back opened another note")
 	}
-	if a.store.dir != alpha {
-		t.Fatalf("store dir: %q", a.store.dir)
+	if a.store.Dir != alpha {
+		t.Fatalf("store dir: %q", a.store.Dir)
 	}
 	if len(a.tabs) != 1 {
 		t.Fatalf("tabs: %d", len(a.tabs))
@@ -108,8 +109,8 @@ func TestProjectChip(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.store = s
-	a.layoutPath = a.projectLayoutPath(s.dir)
-	a.rememberProject(s.dir)
+	a.layoutPath = a.projectLayoutPath(s.Dir)
+	a.rememberProject(s.Dir)
 	a.focusFirstNote()
 	tt := ui.NewTester(a.view, 1100, 700)
 	tt.Frame()
@@ -146,8 +147,8 @@ func TestRemoteWorkspaceSwitchUsesTheCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.store = s
-	a.layoutPath = a.projectLayoutPath(s.dir)
-	a.rememberProject(s.dir)
+	a.layoutPath = a.projectLayoutPath(s.Dir)
+	a.rememberProject(s.Dir)
 	a.focusFirstNote()
 	a.registerActiveWorkspace()
 
@@ -157,7 +158,7 @@ func TestRemoteWorkspaceSwitchUsesTheCache(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = client.Close() })
 	key := workspaceKeyRemote("buildbox", "/srv/app")
-	a.remotes = map[string]*remoteConn{"buildbox": {host: "buildbox", client: client}}
+	a.setRemoteConn(&remote.Conn{Host: "buildbox", Client: client})
 	a.workspaces[key] = &workspace{
 		key:         key,
 		project:     a.project,

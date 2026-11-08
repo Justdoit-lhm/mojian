@@ -10,7 +10,7 @@ import (
 func TestClosingPaneFadesOverItsOldPlace(t *testing.T) {
 	registerFonts()
 	a := newProjectApp(t)
-	a.splitWith(a.store.byRelPath("Reading notes.md"))
+	a.splitWith(a.store.ByRelPath("Reading notes.md"))
 	tt := ui.NewTester(a.view, 1100, 700)
 	tt.Frame()
 	if got := len(a.tab().panes()); got != 2 {

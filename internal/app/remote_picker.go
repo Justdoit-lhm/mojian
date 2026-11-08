@@ -7,13 +7,14 @@ import (
 
 	"mojian/internal/icons"
 	"mojian/internal/motion"
+	"mojian/internal/remote"
 	"mojian/internal/session"
 
 	"github.com/egoist/mygo/ui"
 )
 
 // provisionRemoteFn is replaceable in tests; the real flow talks SSH.
-var provisionRemoteFn = provisionRemote
+var provisionRemoteFn = remote.Provision
 
 // openRemotePicker asks the selected server for its home, then shows the
 // directories to choose a project from.
@@ -41,16 +42,16 @@ func (a *app) openRemotePicker(host string) {
 		rc := existing
 		var err error
 		if rc == nil {
-			rc, err = dialRemote(host)
+			rc, err = remote.Dial(host)
 		}
 		var home string
 		var dirs []session.FileEntry
 		if err == nil {
-			home, err = sshOutput(host, `printf %s "$HOME"`)
+			home, err = remote.SSHOutput(host, `printf %s "$HOME"`)
 		}
 		if err == nil {
 			onWindow(win, func() { a.setRemoteBusyMsg(seq, "Reading folders on "+a.hostLabel(host)+"…") })
-			dirs, err = rc.client.ListDirs(home)
+			dirs, err = rc.Client.ListDirs(home)
 		}
 		onWindow(win, func() {
 			if !a.endRemoteTask(seq) {
@@ -86,9 +87,9 @@ func (a *app) openRemotePicker(host string) {
 }
 
 // pickerRemote is the server whose folders the project picker shows.
-func (a *app) pickerRemote() *remoteConn {
+func (a *app) pickerRemote() *remote.Conn {
 	if a.remotePickHost != "" {
-		return a.remotes[a.remotePickHost]
+		return a.remoteConn(a.remotePickHost)
 	}
 	return a.activeRemote()
 }
@@ -205,7 +206,7 @@ func (a *app) remotePickerModal(c *ui.Context, k *colors) {
 // small spinner inside the picker.
 func (a *app) loadRemoteDirs(path string) {
 	rc := a.pickerRemote()
-	if rc == nil || rc.client == nil {
+	if rc == nil || rc.Client == nil {
 		a.remoteErr = "The server is not connected."
 		a.remoteDirs = nil
 		a.invalidate()
@@ -219,7 +220,7 @@ func (a *app) loadRemoteDirs(path string) {
 	a.invalidate()
 	win := a.win
 	go func() {
-		entries, err := rc.client.ListDirs(path)
+		entries, err := rc.Client.ListDirs(path)
 		onWindow(win, func() {
 			if seq != a.remoteDirsSeq {
 				return
@@ -265,14 +266,14 @@ func (a *app) serverChip(c *ui.Context, k *colors) {
 			Translate(0, -4*(1-drop)).Opacity(0.45 + 0.55*drop)
 		ui.Text(c, "SERVERS").FontSize(10).FontWeight(650).TextColor(k.TextFaint).Padding(4, 8)
 		a.serverRow(c, k, "", "Local")
-		for _, h := range a.hosts {
+		for _, h := range a.hosts() {
 			label := h.Name
 			if label == "" {
 				label = h.Address
 			}
 			a.serverRow(c, k, h.Address, label)
 		}
-		if len(a.hosts) == 0 {
+		if len(a.hosts()) == 0 {
 			ui.Text(c, "Add a server in Settings › Hosts.").FontSize(11).
 				TextColor(k.TextFaint).Padding(4, 8)
 		}
@@ -311,7 +312,7 @@ func (a *app) serverRow(c *ui.Context, k *colors, host, label string) {
 }
 
 func (a *app) remoteProjectRows(c *ui.Context, k *colors) {
-	recent := a.remoteProjects
+	recent := a.remoteProjects()
 	ui.Text(c, "PROJECTS ON "+strings.ToUpper(a.remoteName())).
 		FontSize(10).FontWeight(650).TextColor(k.TextFaint).Padding(4, 8)
 	if len(recent) == 0 {
@@ -347,7 +348,7 @@ func (a *app) remoteProjectRows(c *ui.Context, k *colors) {
 }
 
 func (a *app) hostLabel(address string) string {
-	for _, h := range a.hosts {
+	for _, h := range a.hosts() {
 		if h.Address == address {
 			if h.Name != "" {
 				return h.Name
@@ -367,15 +368,15 @@ func (a *app) addHost(name, address string) {
 	if name == "" {
 		name = address
 	}
-	for i := range a.hosts {
-		if a.hosts[i].Address == address {
-			a.hosts[i].Name = name
+	for i := range a.hosts() {
+		if a.hosts()[i].Address == address {
+			a.hosts()[i].Name = name
 			a.saveSettings()
 			a.invalidate()
 			return
 		}
 	}
-	a.hosts = append(a.hosts, hostConfig{Name: name, Address: address})
+	a.hostService().AddHost(name, address)
 	a.saveSettings()
 	a.invalidate()
 }
@@ -406,7 +407,7 @@ func (a *app) setUpHost(host string) {
 
 // finishHostSetup lands a setup result on the thread that owns the
 // Settings window.
-func (a *app) finishHostSetup(host string, setup *remoteSetup, err error) {
+func (a *app) finishHostSetup(host string, setup *remote.Setup, err error) {
 	if a.hostSetupAddr != host {
 		a.hostSetupBusy = false
 		return
@@ -437,7 +438,3 @@ func (a *app) finishHostSetup(host string, setup *remoteSetup, err error) {
 // hostConfig is a server the user added in Settings › Hosts. Address is
 // anything the system ssh accepts, such as buildbox, me@devbox or
 // ssh://me@devbox:2222 (the last is passed through as ssh accepts it).
-type hostConfig struct {
-	Name    string `json:"name"`
-	Address string `json:"address"`
-}

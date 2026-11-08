@@ -31,16 +31,16 @@ func (a *app) gitPage(c *ui.Context, k *colors) {
 // The Host methods give the Git page the project, a callback into the
 // window, and the file menu.
 func (a *app) ProjectDir() (string, bool) {
-	if a.store == nil || a.store.isMemory() {
+	if a.store == nil || a.store.IsMemory() {
 		return "", false
 	}
-	return a.store.dir, true
+	return a.store.Dir, true
 }
 
 // GitRunner runs Git where the project lives: locally, or on a server.
 func (a *app) GitRunner() gitpage.Runner {
-	if a.store != nil && a.store.isServer() {
-		return serverGitRunner{client: a.store.client()}
+	if a.store != nil && a.store.IsServer() {
+		return serverGitRunner{client: a.store.Client()}
 	}
 	return gitpage.LocalRunner{}
 }
@@ -89,7 +89,7 @@ func (a *app) Invalidate() { a.invalidate() }
 func (a *app) Fail(err error) { a.fail(err) }
 
 func (a *app) HasPath(rel string) bool {
-	return a.store != nil && (a.store.byRelPath(rel) != nil || a.store.assetByRel(rel) != nil)
+	return a.store != nil && (a.store.ByRelPath(rel) != nil || a.store.AssetByRel(rel) != nil)
 }
 
 func (a *app) OpenPath(rel string) { a.openRel(rel) }

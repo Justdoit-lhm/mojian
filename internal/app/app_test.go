@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"mojian/internal/welcome"
+
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
 )
@@ -19,7 +21,7 @@ import (
 func newProjectApp(t *testing.T) *app {
 	t.Helper()
 	dir := t.TempDir()
-	if err := seedHarnessProject(dir); err != nil {
+	if err := welcome.WriteFiles(dir); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("MOJIAN_VAULT", dir)
@@ -34,7 +36,7 @@ func newProjectApp(t *testing.T) *app {
 
 func TestCodeFilesLoad(t *testing.T) {
 	a := newProjectApp(t)
-	py := a.store.byRelPath(filepath.Join("scripts", "tasks.py"))
+	py := a.store.ByRelPath(filepath.Join("scripts", "tasks.py"))
 	if py == nil {
 		t.Fatal("the Python file was not loaded")
 	}
@@ -44,7 +46,7 @@ func TestCodeFilesLoad(t *testing.T) {
 	if l := editor.LanguageFor(py.Path); l == nil || l.Name != "Python" {
 		t.Errorf("Python language: %v", l)
 	}
-	js := a.store.byRelPath(filepath.Join("scripts", "app.js"))
+	js := a.store.ByRelPath(filepath.Join("scripts", "app.js"))
 	if js == nil || js.Title != "app.js" {
 		t.Fatalf("JavaScript file: %+v", js)
 	}
@@ -56,7 +58,7 @@ func TestCodeFilesLoad(t *testing.T) {
 func TestSplitOpensEmptyPaneThenFile(t *testing.T) {
 	registerFonts()
 	a := newProjectApp(t)
-	py := a.store.byRelPath(filepath.Join("scripts", "tasks.py"))
+	py := a.store.ByRelPath(filepath.Join("scripts", "tasks.py"))
 	a.openNote(py)
 	tt := ui.NewTester(a.view, 1100, 700)
 	tt.Frame()
@@ -80,7 +82,7 @@ func TestSplitOpensEmptyPaneThenFile(t *testing.T) {
 		t.Fatalf("empty pane texts: %q", tt.Texts())
 	}
 
-	other := a.store.byRelPath("Reading notes.md")
+	other := a.store.ByRelPath("Reading notes.md")
 	a.openNote(other)
 	tt.Frame()
 	panes = tb.panes()
@@ -104,7 +106,7 @@ func TestFocusAfterTabSwitch(t *testing.T) {
 	tt := ui.NewTester(a.view, 1100, 700)
 	n1 := a.currentNote()
 	a.newTab()
-	n2 := a.store.byRelPath("Reading notes.md")
+	n2 := a.store.ByRelPath("Reading notes.md")
 	a.openNote(n2)
 	if a.currentNote() != n2 {
 		t.Fatal("the second tab does not show the other file")
@@ -112,10 +114,10 @@ func TestFocusAfterTabSwitch(t *testing.T) {
 	tt.Frame()
 	a.showTab(1)
 	tt.Frame()
-	before := n1.text()
+	before := n1.Text()
 	tt.Type("X")
 	tt.Frame()
-	if n1.text() == before {
+	if n1.Text() == before {
 		t.Fatal("typing after a tab switch did not reach the editor")
 	}
 }
@@ -126,7 +128,7 @@ func TestCloseTabSelectsNextAndFocuses(t *testing.T) {
 	tt := ui.NewTester(a.view, 1100, 700)
 	want := a.currentNote()
 	a.newTab()
-	a.openNote(a.store.byRelPath("Reading notes.md"))
+	a.openNote(a.store.ByRelPath("Reading notes.md"))
 	a.closeTab(a.tab())
 	if len(a.tabs) != 1 || a.active != 0 {
 		t.Fatalf("tabs=%d active=%d", len(a.tabs), a.active)
@@ -135,10 +137,10 @@ func TestCloseTabSelectsNextAndFocuses(t *testing.T) {
 		t.Fatal("closing the active tab did not return to the other tab")
 	}
 	tt.Frame()
-	before := want.text()
+	before := want.Text()
 	tt.Type("Y")
 	tt.Frame()
-	if want.text() == before {
+	if want.Text() == before {
 		t.Fatal("typing after closing a tab did not reach the editor")
 	}
 }
@@ -170,12 +172,12 @@ func TestEditsWaitForExplicitSave(t *testing.T) {
 	tt := ui.NewTester(a.view, 1100, 700)
 	tt.Frame()
 	n := a.currentNote()
-	if n.buf == nil {
+	if n.Buf == nil {
 		t.Fatal("the editor buffer was not made")
 	}
 	body := "# Saved only on request\n\nBody.\n"
-	n.buf.Set(body)
-	if !n.dirty() {
+	n.Buf.Set(body)
+	if !n.Dirty() {
 		t.Fatal("the edited file is not dirty")
 	}
 	for range 2 {
@@ -188,7 +190,7 @@ func TestEditsWaitForExplicitSave(t *testing.T) {
 	if string(data) == body {
 		t.Fatal("editing wrote the file without an explicit save")
 	}
-	if !n.dirty() {
+	if !n.Dirty() {
 		t.Fatal("the edited file is no longer dirty")
 	}
 	a.saveNow()
@@ -199,7 +201,7 @@ func TestEditsWaitForExplicitSave(t *testing.T) {
 	if string(data) != body {
 		t.Fatalf("file after save: %q", data)
 	}
-	if n.dirty() {
+	if n.Dirty() {
 		t.Error("file still dirty after save")
 	}
 }
@@ -208,21 +210,21 @@ func TestFolderCreation(t *testing.T) {
 	a := newProjectApp(t)
 	a.treeSel = "Ideas"
 	a.startNewFolder()
-	if a.treeDraft == nil || a.treeDraft.kind != draftFolder || a.treeDraft.parent != "Ideas" {
+	if a.treeDraft == nil || a.treeDraft.Kind != draftFolder || a.treeDraft.Parent != "Ideas" {
 		t.Fatalf("draft: %+v", a.treeDraft)
 	}
-	a.treeDraft.name = "Field Notes"
+	a.treeDraft.Name = "Field Notes"
 	a.submitTreeDraft()
 	if a.treeDraft != nil {
 		t.Fatal("the draft is still open")
 	}
-	if !a.store.dirExists(filepath.Join("Ideas", "Field Notes")) {
+	if !a.store.DirExists(filepath.Join("Ideas", "Field Notes")) {
 		t.Fatal("the folder was not created")
 	}
 	if a.treeSel != filepath.Join("Ideas", "Field Notes") {
 		t.Errorf("selection: %q", a.treeSel)
 	}
-	n, err := a.store.newFileIn(a.treeSel, "note.md", "# Note\n")
+	n, err := a.store.NewFileIn(a.treeSel, "note.md", "# Note\n")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,12 +242,12 @@ func TestFolderThroughUI(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.treeDraft == nil || a.treeDraft.kind != draftFolder {
+	if a.treeDraft == nil || a.treeDraft.Kind != draftFolder {
 		t.Fatalf("clicking New Folder did not start a draft: %+v", a.treeDraft)
 	}
 	tt.Type("Field Notes")
 	tt.Frame()
-	if a.treeDraft == nil || a.treeDraft.name != "Field Notes" {
+	if a.treeDraft == nil || a.treeDraft.Name != "Field Notes" {
 		t.Fatalf("draft after typing: %+v", a.treeDraft)
 	}
 	tt.Key(0, ui.KeyEnter)
@@ -254,7 +256,7 @@ func TestFolderThroughUI(t *testing.T) {
 	if a.treeDraft != nil {
 		t.Fatalf("the draft is still open: %+v", a.treeDraft)
 	}
-	if !a.store.dirExists("Field Notes") {
+	if !a.store.DirExists("Field Notes") {
 		t.Fatalf("the folder was not created (treeSel=%q err=%q)", a.treeSel, a.err)
 	}
 }
@@ -268,7 +270,7 @@ func TestNewFileThroughUI(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.treeDraft == nil || a.treeDraft.kind != draftFile || a.treeDraft.parent != "scripts" {
+	if a.treeDraft == nil || a.treeDraft.Kind != draftFile || a.treeDraft.Parent != "scripts" {
 		t.Fatalf("draft: %+v", a.treeDraft)
 	}
 	tt.Type("worker.py")
@@ -279,7 +281,7 @@ func TestNewFileThroughUI(t *testing.T) {
 	if a.treeDraft != nil {
 		t.Fatalf("the draft is still open: %+v", a.treeDraft)
 	}
-	n := a.store.byRelPath(filepath.Join("scripts", "worker.py"))
+	n := a.store.ByRelPath(filepath.Join("scripts", "worker.py"))
 	if n == nil {
 		t.Fatalf("the file was not created (treeSel=%q err=%q)", a.treeSel, a.err)
 	}
@@ -328,15 +330,15 @@ func TestTreeTogglesWithCommand(t *testing.T) {
 
 func TestRefreshProject(t *testing.T) {
 	a := newProjectApp(t)
-	path := filepath.Join(a.store.dir, "made-in-terminal.py")
+	path := filepath.Join(a.store.Dir, "made-in-terminal.py")
 	if err := os.WriteFile(path, []byte("print('hi')\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if a.store.byRelPath("made-in-terminal.py") != nil {
+	if a.store.ByRelPath("made-in-terminal.py") != nil {
 		t.Fatal("the file appeared before the refresh")
 	}
 	a.refreshProject()
-	n := a.store.byRelPath("made-in-terminal.py")
+	n := a.store.ByRelPath("made-in-terminal.py")
 	if n == nil {
 		t.Fatal("the refresh did not pick up a file made in a terminal")
 	}
@@ -383,7 +385,7 @@ func TestSettingsPageAndPersistence(t *testing.T) {
 
 func TestMarkdownPreviewToggle(t *testing.T) {
 	a := newProjectApp(t)
-	a.openNote(a.store.byRelPath("Welcome.md"))
+	a.openNote(a.store.ByRelPath("Welcome.md"))
 	tt := ui.NewTester(a.view, 1100, 700)
 	tt.Frame()
 	if err := tt.Click("Preview"); err != nil {
@@ -414,7 +416,7 @@ func TestAssetsAppearAndOpen(t *testing.T) {
 			img.Set(x, y, color.RGBA{uint8(x * 20), uint8(y * 20), 180, 255})
 		}
 	}
-	path := filepath.Join(a.store.dir, "cover.png")
+	path := filepath.Join(a.store.Dir, "cover.png")
 	f, err := os.Create(path)
 	if err != nil {
 		t.Fatal(err)
@@ -423,10 +425,10 @@ func TestAssetsAppearAndOpen(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.Close()
-	if err := a.store.refresh(); err != nil {
+	if err := a.store.Refresh(); err != nil {
 		t.Fatal(err)
 	}
-	asset := a.store.assetByRel("cover.png")
+	asset := a.store.AssetByRel("cover.png")
 	if asset == nil {
 		t.Fatal("the image was not indexed")
 	}
@@ -459,7 +461,7 @@ func TestSettingsAppearanceAndEditor(t *testing.T) {
 	}
 	a.EditorFontSize = 16
 	a.HideLineNumbers = true
-	a.openNote(a.store.byRelPath("scripts/tasks.py"))
+	a.openNote(a.store.ByRelPath("scripts/tasks.py"))
 	tt.Frame()
 	p := a.tab().Focus
 	if p.state == nil {
@@ -482,8 +484,8 @@ func TestSettingsCategoriesAndFontFamily(t *testing.T) {
 			t.Fatal(err)
 		}
 		settings.Frame()
-		if a.settingsCat != settingsTerminal {
-			t.Fatalf("category after Terminal: %d", a.settingsCat)
+		if a.settings.Cat != settingsTerminal {
+			t.Fatalf("category after Terminal: %d", a.settings.Cat)
 		}
 		if !settings.HasText("Option as Alt") {
 			t.Fatalf("terminal settings texts: %q", settings.Texts())
@@ -498,7 +500,7 @@ func TestSettingsCategoriesAndFontFamily(t *testing.T) {
 	a.EditorLineHeight = 1.7
 	a.EditorTabSize = 2
 	a.NoActiveLine = true
-	a.openNote(a.store.byRelPath("scripts/tasks.py"))
+	a.openNote(a.store.ByRelPath("scripts/tasks.py"))
 	main := ui.NewTester(a.view, 1100, 700)
 	main.Frame()
 	p := a.tab().Focus

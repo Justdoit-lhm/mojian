@@ -13,7 +13,7 @@ func TestSSHPickerListsHosts(t *testing.T) {
 	}
 	a := newProjectApp(t)
 	a.settingsPath = ""
-	a.hosts = []hostConfig{{Name: "Build box", Address: "buildbox"}}
+	a.hostService().SetHosts([]hostConfig{{Name: "Build box", Address: "buildbox"}})
 	a.openSSHPicker()
 	tt := ui.NewTester(a.view, 1100, 700)
 	tt.Frame()

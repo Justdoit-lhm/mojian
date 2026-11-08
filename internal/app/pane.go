@@ -148,7 +148,7 @@ func (a *app) paneCardMode(c *ui.Context, k *colors, t *tab, p *pane, overlay bo
 			}
 			st := p.state
 			if st == nil {
-				st = p.Note.newState()
+				st = p.Note.NewState()
 				p.state = st
 			}
 			st.Theme = a.editorTheme(c)
@@ -312,14 +312,14 @@ func (a *app) paneChoices(q string) []fileChoice {
 	q = strings.ToLower(strings.TrimSpace(q))
 	match := func(s string) bool { return q == "" || fuzzy(strings.ToLower(s), q) }
 	var out []fileChoice
-	for _, n := range a.store.sorted() {
+	for _, n := range a.store.Sorted() {
 		if !match(n.Title + " " + n.Rel) {
 			continue
 		}
 		out = append(out, fileChoice{title: n.Title, rel: n.Rel, note: n})
 	}
 	var assets []*assetFile
-	for _, f := range a.store.assets {
+	for _, f := range a.store.Assets {
 		assets = append(assets, f)
 	}
 	sort.Slice(assets, func(i, j int) bool { return assets[i].Rel < assets[j].Rel })
@@ -419,7 +419,7 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, width float3
 		ui.Icon(c, ic).Size(iconSize, iconSize).TextColor(k.Text).Tooltip(name)
 		if compact {
 			ui.Spacer(c)
-			if p.Note != nil && p.Note.dirty() {
+			if p.Note != nil && p.Note.Dirty() {
 				ui.Box(c).Size(6, 6).Radius(3).Background(k.Attention).
 					Tooltip("Unsaved edits")
 			}
@@ -427,7 +427,7 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, width float3
 			ui.Row(c).Grow(1).MinWidth(0).Gap(5).AlignItems(ui.Center).ClipX().Children(func() {
 				ui.Text(c, name).FontSize(12.5).FontWeight(600).TextColor(k.Text).
 					SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
-				if p.Note != nil && p.Note.dirty() {
+				if p.Note != nil && p.Note.Dirty() {
 					ui.Box(c).Size(7, 7).Radius(4).Background(k.Attention).Margin(0, 0, 0, 2).
 						Tooltip("Unsaved edits")
 				}

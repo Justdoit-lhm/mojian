@@ -170,11 +170,11 @@ func (a *app) openSettingsWindow() {
 	a.settingsWin = win
 	win.OnClosed(func() {
 		a.settingsWin = nil
-		a.stopRecording()
-		a.settingsQuery = ""
-		a.settingsFound, a.settingsHits, a.settingsReveal = nil, nil, ""
-		a.settingsKeyFilter = ""
-		a.hostEditAddr, a.hostRemoveAddr, a.settingsNotice = "", "", ""
+		a.settings.StopRecording()
+		a.settings.Query = ""
+		a.settings.Found, a.settings.Hits, a.settings.Reveal = nil, nil, ""
+		a.settings.KeyFilter = ""
+		a.hostEditAddr, a.hostRemoveAddr, a.settings.Notice = "", "", ""
 	})
 	win.Focus()
 }

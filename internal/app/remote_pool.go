@@ -1,5 +1,7 @@
 package app
 
+import "mojian/internal/remote"
+
 // hostUsed reports whether a connection to host still has a user: a
 // loaded project, a terminal pane, or the open project picker.
 func (a *app) hostUsed(host string) bool {
@@ -42,12 +44,12 @@ func (a *app) releaseRemote(host string) {
 	if host == "" || a.remoteBusy || a.remoteDirsBusy || a.hostUsed(host) {
 		return
 	}
-	rc := a.remotes[host]
+	rc := a.remoteConn(host)
 	if rc == nil {
 		return
 	}
-	delete(a.remotes, host)
-	closeRemoteConn(rc)
+	a.deleteRemoteConn(host)
+	remote.Close(rc)
 }
 
 // reapRemotes drops every pooled connection whose last project or
@@ -56,7 +58,7 @@ func (a *app) reapRemotes() {
 	if a.remoteBusy || a.remoteDirsBusy {
 		return
 	}
-	for host := range a.remotes {
+	for host := range a.hostService().Conns() {
 		a.releaseRemote(host)
 	}
 }

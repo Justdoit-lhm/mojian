@@ -9,13 +9,13 @@ import (
 )
 
 func (a *app) settingsHostsPage(c *ui.Context, k *colors) {
-	a.settingsNoticeLine(c, k)
-	a.settingsSection(c, k, "ADD HOST", func() {
+	a.settings.NoticeLine(c, k)
+	a.settings.Section(c, k, "ADD HOST", func() {
 		row := ui.Column(c).Key("host-add").Padding(10, 16).Gap(6).Radius(6)
-		if a.settingsHits["Address"] {
+		if a.settings.Hits["Address"] {
 			row.Background(k.PanelSel)
 		}
-		if a.settingsReveal == "Address" {
+		if a.settings.Reveal == "Address" {
 			row.ScrollIntoView()
 		}
 		row.Children(func() {
@@ -46,9 +46,9 @@ func (a *app) settingsHostsPage(c *ui.Context, k *colors) {
 			})
 		})
 	})
-	a.settingsSection(c, k, "SERVERS", func() {
+	a.settings.Section(c, k, "SERVERS", func() {
 		a.hostSettingsRow(c, k, "", "Local", thisComputerName(), a.serverAlias == "")
-		for _, h := range a.hosts {
+		for _, h := range a.hosts() {
 			ui.Box(c).Height(1).Shrink(0).Background(k.PanelBorder)
 			label := h.Name
 			if label == "" {
@@ -56,12 +56,12 @@ func (a *app) settingsHostsPage(c *ui.Context, k *colors) {
 			}
 			a.hostSettingsRow(c, k, h.Address, label, h.Address, a.serverAlias == h.Address)
 		}
-		if len(a.hosts) == 0 {
+		if len(a.hosts()) == 0 {
 			ui.Text(c, "No servers yet. Add an SSH host above.").
 				FontSize(12).TextColor(k.TextFaint).Padding(14, 16)
 		}
 	})
-	a.settingsSection(c, k, "ABOUT HOSTS", func() {
+	a.settings.Section(c, k, "ABOUT HOSTS", func() {
 		ui.Text(c, "Set Up Server uploads mojian-server and libghostty-vt to ~/.local/share/mojian on the host, using your SSH key. No root, no service and no open port: the app reaches it through an SSH forward.").
 			FontSize(12).TextColor(k.TextFaint).LineHeight(1.4).Padding(12, 16)
 	})
@@ -71,20 +71,20 @@ func (a *app) addHostChecked() {
 	addr := strings.TrimSpace(a.hostDraftAddr)
 	name := strings.TrimSpace(a.hostDraftName)
 	if addr == "" {
-		a.settingsNotice = "An address is required."
+		a.settings.Notice = "An address is required."
 		a.invalidate()
 		return
 	}
-	for _, h := range a.hosts {
+	for _, h := range a.hosts() {
 		if h.Address == addr {
-			a.settingsNotice = "That server is already in the list."
+			a.settings.Notice = "That server is already in the list."
 			a.invalidate()
 			return
 		}
 	}
 	a.addHost(name, addr)
 	a.hostDraftAddr, a.hostDraftName = "", ""
-	a.settingsNotice = ""
+	a.settings.Notice = ""
 	a.invalidate()
 }
 
@@ -120,13 +120,13 @@ func (a *app) hostSettingsRow(c *ui.Context, k *colors, host, label, detail stri
 				edit := iconButton(c, k, "pencil", "Edit server "+label, 24, 14)
 				if edit.Clicked() {
 					a.hostEditAddr, a.hostEditName, a.hostEditAddress = host, label, host
-					a.hostRemoveAddr, a.settingsNotice = "", ""
+					a.hostRemoveAddr, a.settings.Notice = "", ""
 					a.invalidate()
 				}
 				remove := iconButton(c, k, "x", "Remove server "+label, 24, 14)
 				if remove.Clicked() {
 					a.hostRemoveAddr = host
-					a.settingsNotice = ""
+					a.settings.Notice = ""
 					a.invalidate()
 				}
 			}
@@ -169,10 +169,10 @@ func (a *app) hostSetupRow(c *ui.Context, k *colors, host string) {
 		col = k.TextMuted
 	}
 	row := ui.Row(c).Padding(0, 8, 6, 8).Gap(8).AlignItems(ui.Center)
-	if a.settingsHits["Set Up Server"] {
+	if a.settings.Hits["Set Up Server"] {
 		row.Background(k.PanelSel)
 	}
-	if a.settingsReveal == "Set Up Server" {
+	if a.settings.Reveal == "Set Up Server" {
 		row.ScrollIntoView()
 	}
 	row.Children(func() {
@@ -199,7 +199,7 @@ func (a *app) hostEditRow(c *ui.Context, k *colors, host, label string) {
 				a.saveHostEdit(host)
 			}
 			if settingsButton(c, "Cancel", false).Clicked() {
-				a.hostEditAddr, a.settingsNotice = "", ""
+				a.hostEditAddr, a.settings.Notice = "", ""
 				a.invalidate()
 			}
 			if settingsButton(c, "Save", true).Clicked() {
@@ -215,25 +215,25 @@ func (a *app) saveHostEdit(host string) {
 	addr := strings.TrimSpace(a.hostEditAddress)
 	name := strings.TrimSpace(a.hostEditName)
 	if addr == "" {
-		a.settingsNotice = "An address is required."
+		a.settings.Notice = "An address is required."
 		a.invalidate()
 		return
 	}
-	for _, h := range a.hosts {
+	for _, h := range a.hosts() {
 		if h.Address == addr && h.Address != host {
-			a.settingsNotice = "That address is already in the list."
+			a.settings.Notice = "That address is already in the list."
 			a.invalidate()
 			return
 		}
 	}
-	for i := range a.hosts {
-		if a.hosts[i].Address != host {
+	for i := range a.hosts() {
+		if a.hosts()[i].Address != host {
 			continue
 		}
 		if name == "" {
 			name = addr
 		}
-		a.hosts[i].Name, a.hosts[i].Address = name, addr
+		a.hosts()[i].Name, a.hosts()[i].Address = name, addr
 		if a.serverAlias == host {
 			a.serverAlias = addr
 		}
@@ -244,22 +244,22 @@ func (a *app) saveHostEdit(host string) {
 		if a.hostSetupAddr == host {
 			a.hostSetupAddr = addr
 		}
-		for j := range a.remoteProjects {
-			if a.remoteProjects[j].Host == host {
-				a.remoteProjects[j].Host = addr
+		for j := range a.remoteProjects() {
+			if a.remoteProjects()[j].Host == host {
+				a.remoteProjects()[j].Host = addr
 			}
 		}
-		a.hostEditAddr, a.settingsNotice = "", ""
+		a.hostEditAddr, a.settings.Notice = "", ""
 		a.saveSettings()
 		a.invalidate()
 		return
 	}
-	a.hostEditAddr, a.settingsNotice = "", ""
+	a.hostEditAddr, a.settings.Notice = "", ""
 	a.invalidate()
 }
 
 func (a *app) removeHost(address string) {
-	for i, h := range a.hosts {
+	for _, h := range a.hosts() {
 		if h.Address != address {
 			continue
 		}
@@ -270,14 +270,8 @@ func (a *app) removeHost(address string) {
 				return
 			}
 		}
-		a.hosts = append(a.hosts[:i], a.hosts[i+1:]...)
-		projects := a.remoteProjects[:0]
-		for _, p := range a.remoteProjects {
-			if p.Host != address {
-				projects = append(projects, p)
-			}
-		}
-		a.remoteProjects = projects
+		a.hostService().RemoveHost(address)
+		a.hostService().RemoveProjects(address)
 		a.hostRemoveAddr = ""
 		delete(a.hostReady, address)
 		if a.hostSetupAddr == address {

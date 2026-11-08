@@ -10,6 +10,7 @@ import (
 	"time"
 
 	gitpage "mojian/internal/git"
+	"mojian/internal/remote"
 	"mojian/internal/session"
 )
 
@@ -26,11 +27,11 @@ func newRemoteApp(t *testing.T, client *session.Client, root string) *app {
 			store: s, treeOpen: true, openDirs: map[string]bool{},
 			serverAlias: "buildbox", remotePath: root,
 		},
-		remotes: map[string]*remoteConn{"buildbox": {host: "buildbox", client: client}},
 	}
-	n := s.byRelPath("a.md")
+	a.setRemoteConn(&remote.Conn{Host: "buildbox", Client: client})
+	n := s.ByRelPath("a.md")
 	if n == nil {
-		t.Fatalf("the listing has no a.md: %+v", s.notes)
+		t.Fatalf("the listing has no a.md: %+v", s.Notes)
 	}
 	a.openNote(n)
 	if a.currentNote() == nil {
@@ -48,10 +49,10 @@ func TestRemoteProjectReadsAndSavesOnTheServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := newRemoteApp(t, client, root)
-	if got := a.currentNote().text(); got != "# A\n" {
+	if got := a.currentNote().Text(); got != "# A\n" {
 		t.Fatalf("note text: %q", got)
 	}
-	a.currentNote().buffer().Set("# changed on the server\n")
+	a.currentNote().Buffer().Set("# changed on the server\n")
 	if err := a.saveNow(); err != nil {
 		t.Fatalf("save: %v", err)
 	}
@@ -73,7 +74,7 @@ func TestRemoteProjectSavesBeforeLeaving(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := newRemoteApp(t, client, root)
-	a.currentNote().buffer().Set("# saved before switch\n")
+	a.currentNote().Buffer().Set("# saved before switch\n")
 	target := t.TempDir()
 	a.openProject(target)
 	if a.remotePath != "" || a.activeRemote() != nil {
@@ -97,12 +98,12 @@ func TestFailedRemoteSaveKeepsTheNoteDirty(t *testing.T) {
 	}
 	a := newRemoteApp(t, client, root)
 	n := a.currentNote()
-	n.buffer().Set("# unsaved\n")
+	n.Buffer().Set("# unsaved\n")
 	_ = client.Close()
 	if err := a.saveNow(); err == nil {
 		t.Fatal("saveNow hid a lost remote connection")
 	}
-	if !n.dirty() {
+	if !n.Dirty() {
 		t.Fatal("a failed remote save marked the note saved")
 	}
 	if c, err := session.ConnectAt(session.SocketPath()); err == nil {
@@ -120,7 +121,7 @@ func TestRemoteProjectRenamesOnTheServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := newRemoteApp(t, client, root)
-	if _, _, err := a.store.rename("a.md", "b.md"); err != nil {
+	if _, _, err := a.store.Rename("a.md", "b.md"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(root, "a.md")); err == nil {
@@ -133,8 +134,8 @@ func TestRemoteProjectRenamesOnTheServer(t *testing.T) {
 	if string(data) != "# A\n" {
 		t.Fatalf("renamed file: %q", data)
 	}
-	if a.store.byRelPath("b.md") == nil || a.store.byRelPath("a.md") != nil {
-		t.Fatalf("notes after rename: %+v", a.store.notes)
+	if a.store.ByRelPath("b.md") == nil || a.store.ByRelPath("a.md") != nil {
+		t.Fatalf("notes after rename: %+v", a.store.Notes)
 	}
 }
 
@@ -186,11 +187,11 @@ func TestRemoteAssetCacheUsesContentHash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	asset := s.assetByRel("pic.png")
+	asset := s.AssetByRel("pic.png")
 	if asset == nil || asset.Hash == "" {
 		t.Fatalf("asset listing: %+v", asset)
 	}
-	firstPath, err := s.materializeAsset(asset)
+	firstPath, err := s.MaterializeAsset(asset)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,14 +205,14 @@ func TestRemoteAssetCacheUsesContentHash(t *testing.T) {
 	if err := os.Chtimes(path, info.ModTime(), info.ModTime()); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.refresh(); err != nil {
+	if err := s.Refresh(); err != nil {
 		t.Fatal(err)
 	}
-	next := s.assetByRel("pic.png")
+	next := s.AssetByRel("pic.png")
 	if next == nil || next.Hash == "" || next.Hash == asset.Hash {
 		t.Fatalf("refreshed asset: %+v", next)
 	}
-	secondPath, err := s.materializeAsset(next)
+	secondPath, err := s.MaterializeAsset(next)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,24 +246,24 @@ func TestRemoteProjectCacheSwitchKeepsStoresAndConnection(t *testing.T) {
 	keyB := workspaceKeyRemote("buildbox", rootB)
 	wsA := &workspace{key: keyA, store: sA, serverAlias: "buildbox", remotePath: rootA, openDirs: map[string]bool{}}
 	wsB := &workspace{key: keyB, store: sB, serverAlias: "buildbox", remotePath: rootB, openDirs: map[string]bool{}}
-	rc := &remoteConn{host: "buildbox", client: client}
+	rc := &remote.Conn{Host: "buildbox", Client: client}
 	a := &app{
 		workspace:  wsA,
 		workspaces: map[string]*workspace{keyA: wsA, keyB: wsB},
-		remotes:    map[string]*remoteConn{"buildbox": rc},
 	}
+	a.setRemoteConn(rc)
 	a.openRemoteProjectAsync("buildbox", rootB)
 	if a.workspace != wsB || a.store != sB {
 		t.Fatal("switching to the cached project reopened it")
 	}
-	if a.remotes["buildbox"] != rc {
+	if a.remoteConn("buildbox") != rc {
 		t.Fatal("switching projects dropped the connection")
 	}
 	a.openRemoteProjectAsync("buildbox", rootA)
 	if a.workspace != wsA || a.store != sA {
 		t.Fatal("switching back reopened the project")
 	}
-	if a.remotes["buildbox"] != rc {
+	if a.remoteConn("buildbox") != rc {
 		t.Fatal("switching back dropped the connection")
 	}
 }

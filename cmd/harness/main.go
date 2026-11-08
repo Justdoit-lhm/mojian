@@ -17,8 +17,6 @@ import (
 	"syscall"
 
 	mygomcp "github.com/auron-labs/mygo-mcp"
-
-	"mojian/internal/app"
 )
 
 func main() {
@@ -29,8 +27,8 @@ func main() {
 	defer stop()
 
 	fixtures := []mygomcp.Fixture{
-		{Name: "Mojian", Width: 1120, Height: 720, Factory: app.HarnessWindowView},
-		{Name: "Mojian Settings", Width: 900, Height: 640, Factory: app.HarnessSettingsView},
+		{Name: "Mojian", Width: 1120, Height: 720, Factory: windowFixture},
+		{Name: "Mojian Settings", Width: 900, Height: 640, Factory: settingsFixture},
 	}
 	if err := mygomcp.Run(ctx, *addr, fixtures); err != nil {
 		log.Fatal(err)

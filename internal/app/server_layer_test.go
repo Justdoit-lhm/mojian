@@ -8,7 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"mojian/internal/fs"
 	gitpage "mojian/internal/git"
+	"mojian/internal/remote"
 	"mojian/internal/session"
 
 	integration "mojian/test"
@@ -32,27 +34,27 @@ func TestLocalProjectStoreUsesSessionServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.byRelPath(filepath.Join("folder", "nested.md")) == nil {
-		t.Fatalf("the server listing lost a nested file: %+v", s.notes)
+	if s.ByRelPath(filepath.Join("folder", "nested.md")) == nil {
+		t.Fatalf("the server listing lost a nested file: %+v", s.Notes)
 	}
-	if !s.dirs["folder"] {
+	if !s.Dirs["folder"] {
 		t.Fatal("the server listing lost a folder")
 	}
-	if s.fs.Kind() != fsServerLocal {
+	if s.FS.Kind() != fs.KindServerLocal {
 		t.Fatal("the store was not marked as local-server backed")
 	}
-	n := s.byRelPath("a.md")
+	n := s.ByRelPath("a.md")
 	if n == nil {
-		t.Fatalf("the listing has no a.md: %+v", s.notes)
+		t.Fatalf("the listing has no a.md: %+v", s.Notes)
 	}
-	if err := s.loadNote(n); err != nil {
+	if err := s.LoadNote(n); err != nil {
 		t.Fatal(err)
 	}
-	if got := n.text(); got != "# A\n" {
+	if got := n.Text(); got != "# A\n" {
 		t.Fatalf("note text: %q", got)
 	}
-	n.buffer().Set("# changed through the server\n")
-	if err := s.save(n); err != nil {
+	n.Buffer().Set("# changed through the server\n")
+	if err := s.Save(n); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(filepath.Join(root, "a.md"))
@@ -62,7 +64,7 @@ func TestLocalProjectStoreUsesSessionServer(t *testing.T) {
 	if string(data) != "# changed through the server\n" {
 		t.Fatalf("server file: %q", data)
 	}
-	if _, _, err := s.rename("a.md", "b.md"); err != nil {
+	if _, _, err := s.Rename("a.md", "b.md"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(root, "a.md")); err == nil {
@@ -91,14 +93,14 @@ func TestAppOpenProjectUsesLocalServer(t *testing.T) {
 		sessionClient: client,
 	}
 	a.openProject(project)
-	if a.store == nil || a.store.fs.Kind() != fsServerLocal {
+	if a.store == nil || a.store.FS.Kind() != fs.KindServerLocal {
 		t.Fatalf("project did not use the local server: %+v", a.store)
 	}
 	n := a.currentNote()
 	if n == nil || n.Rel != "a.md" {
 		t.Fatalf("current note: %+v", n)
 	}
-	n.buffer().Set("# saved through the local server\n")
+	n.Buffer().Set("# saved through the local server\n")
 	if err := a.saveNow(); err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +130,7 @@ func TestLocalServerGitRunner(t *testing.T) {
 	if _, ok := a.GitRunner().(serverGitRunner); !ok {
 		t.Fatalf("Git runner is %T, want serverGitRunner", a.GitRunner())
 	}
-	if _, err := s.newFileIn("", "new.md", "# New\n"); err != nil {
+	if _, err := s.NewFileIn("", "new.md", "# New\n"); err != nil {
 		t.Fatal(err)
 	}
 	data := gitpage.ReadStatus(a.GitRunner(), root)
@@ -159,7 +161,7 @@ func TestDetachRemoteConnKeepsServer(t *testing.T) {
 			t.Error("session server did not stop")
 		}
 	}()
-	rc := &remoteConn{host: "buildbox", client: client}
+	rc := &remote.Conn{Host: "buildbox", Client: client}
 	a := &app{workspace: &workspace{}}
 	a.detachRemoteConn(rc)
 	select {
@@ -194,7 +196,7 @@ func TestLocalServerFileOperations(t *testing.T) {
 	if err := os.WriteFile(copyPath, []byte("# Copy\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	dest, err := s.copyInto(copyPath, "")
+	dest, err := s.CopyInto(copyPath, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +210,7 @@ func TestLocalServerFileOperations(t *testing.T) {
 		t.Fatal("copyInto removed its source")
 	}
 
-	dest, err = s.moveInto(filepath.Join(root, "a.md"), "folder")
+	dest, err = s.MoveInto(filepath.Join(root, "a.md"), "folder")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +228,7 @@ func TestLocalServerFileOperations(t *testing.T) {
 	if err := os.WriteFile(movePath, []byte("# Move\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	dest, err = s.moveInto(movePath, "")
+	dest, err = s.MoveInto(movePath, "")
 	if err != nil {
 		t.Fatal(err)
 	}

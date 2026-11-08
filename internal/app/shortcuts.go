@@ -1,6 +1,7 @@
 package app
 
 import (
+	"mojian/internal/app/commands"
 	"runtime"
 	"strconv"
 	"strings"
@@ -20,27 +21,27 @@ func init() {
 
 // commandAccel is the accelerator the menus give a command: its own,
 // unless the user rebound it in Settings.
-func (a *app) commandAccel(c *command) string {
+func (a *app) commandAccel(c *commands.Command) string {
 	if c == nil {
 		return ""
 	}
-	if v, ok := a.shortcutKeys[c.id]; ok {
+	if v, ok := a.shortcutKeys[c.ID]; ok {
 		return v
 	}
-	return c.accel
+	return c.Accel
 }
 
 // commandKeys is the keys a command shows beside its name, in the
 // platform's notation.
-func (a *app) commandKeys(c *command) string {
+func (a *app) commandKeys(c *commands.Command) string {
 	if c == nil {
 		return ""
 	}
-	if v, ok := a.shortcutKeys[c.id]; ok {
+	if v, ok := a.shortcutKeys[c.ID]; ok {
 		return shortcutDisplay(v)
 	}
-	if c.display != "" {
-		return nativeKeys(c.display)
+	if c.Display != "" {
+		return nativeKeys(c.Display)
 	}
 	return shortcutDisplay(a.commandAccel(c))
 }
@@ -48,8 +49,8 @@ func (a *app) commandKeys(c *command) string {
 // menuAccel gives a menu item its keys, none while a shortcut is being
 // typed: macOS takes a key bound to a menu before the focused control
 // sees it, which would split a pane instead of recording its keys.
-func (a *app) menuAccel(c *command) string {
-	if a.settingsRecording != "" {
+func (a *app) menuAccel(c *commands.Command) string {
+	if a.settings.Recording != "" {
 		return ""
 	}
 	return a.commandAccel(c)
@@ -209,51 +210,10 @@ func shortcutKeyName(key ui.Key) (string, bool) {
 	return "", false
 }
 
-// recordShortcut takes a key typed for a command, reporting whether it
-// took it.
-func (a *app) recordShortcut(c *command, mods ui.Modifiers, key ui.Key) bool {
-	switch {
-	case key == ui.KeyEscape && mods == 0:
-		a.stopRecording()
-		return true
-	case (key == ui.KeyBackspace || key == ui.KeyDelete) && mods == 0:
-		a.setShortcut(c.id, "")
-		a.stopRecording()
-		return true
-	}
-	name, ok := shortcutKeyName(key)
-	if !ok {
-		return false
-	}
-	if mods&(ui.Super|ui.Ctrl|ui.Alt) == 0 && !strings.HasPrefix(name, "F") {
-		a.settingsNotice = "Add ⌘, ⌥ or ⌃ to a letter; function keys work alone."
-		return true
-	}
-	var parts []string
-	if mods&ui.Super != 0 {
-		if runtime.GOOS == "darwin" {
-			parts = append(parts, "CmdOrCtrl")
-		} else {
-			parts = append(parts, "Super")
-		}
-	}
-	if mods&ui.Ctrl != 0 {
-		parts = append(parts, "Ctrl")
-	}
-	if mods&ui.Alt != 0 {
-		parts = append(parts, "Alt")
-	}
-	if mods&ui.Shift != 0 {
-		parts = append(parts, "Shift")
-	}
-	a.setShortcut(c.id, strings.Join(append(parts, name), "+"))
-	a.stopRecording()
-	return true
-}
-
 // setShortcut binds a command, taking the keys from any other that had
-// them; the default's own keys remove the binding.
-func (a *app) setShortcut(id, accel string) {
+// them; the default's own keys remove the binding. The returned notice is
+// shown by the Settings window.
+func (a *app) setShortcutValue(id, accel string) string {
 	if a.shortcutKeys == nil {
 		a.shortcutKeys = map[string]string{}
 	}
@@ -261,20 +221,20 @@ func (a *app) setShortcut(id, accel string) {
 	for k, v := range a.shortcutKeys {
 		sc[k] = v
 	}
-	a.settingsNotice = ""
+	notice := ""
 	if accel != "" {
 		for _, other := range paletteCommands {
-			if other.id == id {
+			if other.ID == id {
 				continue
 			}
 			if strings.EqualFold(a.commandAccel(other), accel) {
-				sc[other.id] = ""
-				a.settingsNotice = shortcutDisplay(accel) + " was used by " + strings.TrimSuffix(other.title, "…") + "; it is now unbound."
+				sc[other.ID] = ""
+				notice = shortcutDisplay(accel) + " was used by " + strings.TrimSuffix(other.Title, "…") + "; it is now unbound."
 			}
 		}
 	}
 	c := commandByID(id)
-	if c != nil && strings.EqualFold(accel, c.accel) {
+	if c != nil && strings.EqualFold(accel, c.Accel) {
 		delete(sc, id)
 	} else {
 		sc[id] = accel
@@ -286,27 +246,16 @@ func (a *app) setShortcut(id, accel string) {
 	a.saveSettings()
 	a.refreshMenu()
 	a.invalidate()
+	return notice
 }
 
-func commandByID(id string) *command {
+func commandByID(id string) *commands.Command {
 	for _, c := range paletteCommands {
-		if c.id == id {
+		if c.ID == id {
 			return c
 		}
 	}
 	return nil
-}
-
-// stopRecording ends typing a shortcut and gives the menus their keys
-// back.
-func (a *app) stopRecording() {
-	if a.settingsRecording == "" {
-		return
-	}
-	a.settingsRecording = ""
-	a.settingsRecordSeen = false
-	a.refreshMenu()
-	a.invalidate()
 }
 
 // refreshMenu gives the menu bar the accelerators the settings now say.

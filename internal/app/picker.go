@@ -30,8 +30,8 @@ func (a *app) openProjectPicker() {
 	a.pickerSel = -1
 	a.pickerErr = ""
 	start := ""
-	if a.store != nil && !a.store.isMemory() {
-		start = a.store.dir
+	if a.store != nil && !a.store.IsMemory() {
+		start = a.store.Dir
 	}
 	if start == "" {
 		if home, err := os.UserHomeDir(); err == nil {

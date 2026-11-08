@@ -5,14 +5,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/egoist/mygo"
+	"mojian/internal/update"
+
 	"github.com/egoist/mygo/ui"
 )
 
 func TestSettingsUpdateActions(t *testing.T) {
 	registerFonts()
 	a := newProjectApp(t)
-	a.settingsCat = settingsUpdates
+	a.settings.Cat = settingsUpdates
 	tt := ui.NewTester(a.settingsWindowView, 900, 640)
 	tt.Frame()
 	if !tt.HasText("Check for Updates") {
@@ -22,7 +23,7 @@ func TestSettingsUpdateActions(t *testing.T) {
 		t.Fatalf("update settings: %q", tt.Texts())
 	}
 
-	a.pendingUpdate = &updateRelease{Version: "0.1.2"}
+	a.pendingUpdate = &update.Release{Version: "0.1.2"}
 	tt.Frame()
 	if !tt.HasText("Install Update") {
 		t.Fatalf("available update settings: %q", tt.Texts())
@@ -50,13 +51,6 @@ func TestSettingsUpdateActions(t *testing.T) {
 	}
 }
 
-func TestUpdateDisabledMessage(t *testing.T) {
-	got := updateErrorMessage(mygo.ErrUpdatesDisabled)
-	if !strings.Contains(got, "cannot update itself") {
-		t.Fatalf("disabled update message: %q", got)
-	}
-}
-
 func TestFailedUpdateCheckDoesNotClaimTheLatestVersion(t *testing.T) {
 	a := &app{workspace: &workspace{}}
 	a.updateChecking = true
@@ -75,7 +69,7 @@ func TestFailedUpdateCheckDoesNotClaimTheLatestVersion(t *testing.T) {
 
 func TestUpdateStateLandsOnTheThread(t *testing.T) {
 	a := &app{workspace: &workspace{}}
-	a.applyUpdateCheck(&updateRelease{Version: "0.3.0"}, nil)
+	a.applyUpdateCheck(&update.Release{Version: "0.3.0"}, nil)
 	if !a.updateChecked || a.updateErr != "" || a.pendingUpdate == nil {
 		t.Fatalf("check state: %+v", a)
 	}

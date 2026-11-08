@@ -24,9 +24,9 @@ func TestPasteUsesSystemClipboardWhenCutIsStale(t *testing.T) {
 	// A window makes the app read the system clipboard, as it does in the
 	// real window; the test seams supply its contents.
 	a.win = &mygo.Window{}
-	py := a.store.byRelPath(filepath.Join("scripts", "tasks.py"))
-	js := a.store.byRelPath(filepath.Join("scripts", "app.js"))
-	jsAbs, err := a.store.absRel(js.Rel)
+	py := a.store.ByRelPath(filepath.Join("scripts", "tasks.py"))
+	js := a.store.ByRelPath(filepath.Join("scripts", "app.js"))
+	jsAbs, err := a.store.AbsRel(js.Rel)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,13 +39,13 @@ func TestPasteUsesSystemClipboardWhenCutIsStale(t *testing.T) {
 	}
 	a.pasteInto("Ideas")
 
-	if _, err := os.Stat(filepath.Join(a.store.dir, "scripts", "tasks.py")); err != nil {
+	if _, err := os.Stat(filepath.Join(a.store.Dir, "scripts", "tasks.py")); err != nil {
 		t.Fatalf("the stale cut removed the source: %v", err)
 	}
-	if a.store.byRelPath(filepath.Join("scripts", "tasks.py")) != py {
+	if a.store.ByRelPath(filepath.Join("scripts", "tasks.py")) != py {
 		t.Fatal("the stale cut moved the source file")
 	}
-	if a.store.byRelPath(filepath.Join("Ideas", "app copy.js")) == nil {
+	if a.store.ByRelPath(filepath.Join("Ideas", "app copy.js")) == nil {
 		t.Fatalf("the clipboard file was not pasted (err=%q)", a.err)
 	}
 	if a.fileCut {
@@ -56,8 +56,8 @@ func TestPasteUsesSystemClipboardWhenCutIsStale(t *testing.T) {
 func TestCutMovesWhenTheClipboardStillHoldsIt(t *testing.T) {
 	a := newProjectApp(t)
 	a.win = &mygo.Window{}
-	py := a.store.byRelPath(filepath.Join("scripts", "tasks.py"))
-	abs, err := a.store.absRel(py.Rel)
+	py := a.store.ByRelPath(filepath.Join("scripts", "tasks.py"))
+	abs, err := a.store.AbsRel(py.Rel)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,10 +65,10 @@ func TestCutMovesWhenTheClipboardStillHoldsIt(t *testing.T) {
 	a.copySelectionTo(py.Rel, true)
 	a.pasteInto("Ideas")
 
-	if a.store.byRelPath(filepath.Join("scripts", "tasks.py")) != nil {
+	if a.store.ByRelPath(filepath.Join("scripts", "tasks.py")) != nil {
 		t.Fatal("the cut source is still in the project")
 	}
-	if a.store.byRelPath(filepath.Join("Ideas", "tasks.py")) == nil {
+	if a.store.ByRelPath(filepath.Join("Ideas", "tasks.py")) == nil {
 		t.Fatalf("the cut was not pasted (err=%q)", a.err)
 	}
 	if a.fileCut {
@@ -78,7 +78,7 @@ func TestCutMovesWhenTheClipboardStillHoldsIt(t *testing.T) {
 
 func TestSwitchingProjectClearsTheCut(t *testing.T) {
 	a := newProjectApp(t)
-	py := a.store.byRelPath(filepath.Join("scripts", "tasks.py"))
+	py := a.store.ByRelPath(filepath.Join("scripts", "tasks.py"))
 	a.copySelectionTo(py.Rel, true)
 	store := a.store
 	a.activateWorkspace(&workspace{key: "other", store: store, openDirs: map[string]bool{}})

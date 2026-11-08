@@ -21,7 +21,7 @@ func TestPreviewPaneKeepsHeaderButtonsWhenUnfocused(t *testing.T) {
 			img.Set(x, y, color.RGBA{uint8(x * 20), uint8(y * 20), 180, 255})
 		}
 	}
-	path := filepath.Join(a.store.dir, "cover.png")
+	path := filepath.Join(a.store.Dir, "cover.png")
 	f, err := os.Create(path)
 	if err != nil {
 		t.Fatal(err)
@@ -30,15 +30,15 @@ func TestPreviewPaneKeepsHeaderButtonsWhenUnfocused(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.Close()
-	if err := a.store.refresh(); err != nil {
+	if err := a.store.Refresh(); err != nil {
 		t.Fatal(err)
 	}
-	asset := a.store.assetByRel("cover.png")
+	asset := a.store.AssetByRel("cover.png")
 	if asset == nil {
 		t.Fatal("the image was not indexed")
 	}
 	a.openAsset(asset)
-	a.splitWith(a.store.byRelPath("Reading notes.md"))
+	a.splitWith(a.store.ByRelPath("Reading notes.md"))
 	tt := ui.NewTester(a.view, 1100, 700)
 	tt.Frame()
 	tt.Frame()
@@ -53,10 +53,10 @@ func TestPreviewPaneKeepsHeaderButtonsWhenUnfocused(t *testing.T) {
 func TestMarkdownPreviewKeepsHeaderButtonsWhenUnfocused(t *testing.T) {
 	registerFonts()
 	a := newProjectApp(t)
-	a.openNote(a.store.byRelPath("Welcome.md"))
+	a.openNote(a.store.ByRelPath("Welcome.md"))
 	p := a.tab().Focus
 	p.Preview = true
-	a.splitWith(a.store.byRelPath("Reading notes.md"))
+	a.splitWith(a.store.ByRelPath("Reading notes.md"))
 	tt := ui.NewTester(a.view, 1100, 700)
 	tt.Frame()
 	tt.Frame()
@@ -84,9 +84,9 @@ func countText(texts []string, want string) int {
 func TestEveryPaneKeepsHeaderButtonsWhenUnfocused(t *testing.T) {
 	registerFonts()
 	a := newProjectApp(t)
-	a.openNote(a.store.byRelPath("Reading notes.md"))
+	a.openNote(a.store.ByRelPath("Reading notes.md"))
 	first := a.tab().Focus
-	a.splitWith(a.store.byRelPath("Welcome.md"))
+	a.splitWith(a.store.ByRelPath("Welcome.md"))
 	tt := ui.NewTester(a.view, 1100, 700)
 	tt.Frame()
 	tt.Frame()

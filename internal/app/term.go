@@ -56,10 +56,10 @@ func warmSessionServer() {
 // not the file or folder selected in the Explorer, and one can be opened
 // before any file is.
 func (a *app) terminalDir() string {
-	if a.store == nil || a.store.isMemory() {
+	if a.store == nil || a.store.IsMemory() {
 		return ""
 	}
-	return a.store.dir
+	return a.store.Dir
 }
 
 func (a *app) toggleTerminal() {
@@ -135,7 +135,7 @@ func (a *app) newTerminalPane() {
 		a.fail(errors.New("terminals need macOS or Linux"))
 		return
 	}
-	if a.store == nil || a.store.isMemory() {
+	if a.store == nil || a.store.IsMemory() {
 		a.fail(errors.New("terminals need a project on disk"))
 		return
 	}
@@ -236,7 +236,7 @@ func (a *app) terminalClientExisting(spec termSpec) (*session.Client, error) {
 		return a.sessions()
 	}
 	if rc := a.remoteForHost(spec.Server); rc != nil {
-		return rc.client, nil
+		return rc.Client, nil
 	}
 	return nil, fmt.Errorf("%s is not connected", spec.Server)
 }
@@ -256,13 +256,13 @@ func (a *app) terminalClient(spec termSpec) (*session.Client, error) {
 func (a *app) remoteServerClient(host string) (*session.Client, error) {
 	a.initWorkspaces()
 	if rc := a.remoteForHost(host); rc != nil {
-		return rc.client, nil
+		return rc.Client, nil
 	}
 	rc, err := a.connectRemote(host)
 	if err != nil {
 		return nil, err
 	}
-	return rc.client, nil
+	return rc.Client, nil
 }
 
 // attachTerminal makes a terminal view attached to a session.

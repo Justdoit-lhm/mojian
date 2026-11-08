@@ -16,8 +16,8 @@ func TestTerminalWithoutFileOpensAtProjectRoot(t *testing.T) {
 	a.tabs = nil
 	a.active = -1
 	a.treeSel = "scripts/tasks.py"
-	if got := a.terminalDir(); got != a.store.dir {
-		t.Fatalf("terminal directory %q, want project root %q", got, a.store.dir)
+	if got := a.terminalDir(); got != a.store.Dir {
+		t.Fatalf("terminal directory %q, want project root %q", got, a.store.Dir)
 	}
 	a.toggleTerminal()
 	if len(a.tabs) != 1 {
@@ -38,9 +38,9 @@ func TestTerminalWithoutFileOpensAtProjectRoot(t *testing.T) {
 func TestSplitPutsPaneOnEdge(t *testing.T) {
 	a := newProjectApp(t)
 	first := a.tab().Focus
-	a.splitWith(a.store.byRelPath("Reading notes.md"))
+	a.splitWith(a.store.ByRelPath("Reading notes.md"))
 	second := a.tab().Focus
-	a.splitWithSide(a.store.byRelPath("scripts/tasks.py"), splitDown)
+	a.splitWithSide(a.store.ByRelPath("scripts/tasks.py"), splitDown)
 	third := a.tab().Focus
 	root := a.tab().Root
 	if root == nil || root.Vertical || root.A.Pane != first || !root.B.Vertical {
@@ -57,9 +57,9 @@ func TestSplitPutsPaneOnEdge(t *testing.T) {
 func TestOptionArrowsMoveInAllDirections(t *testing.T) {
 	a := newProjectApp(t)
 	first := a.tab().Focus
-	a.splitWith(a.store.byRelPath("Reading notes.md"))
+	a.splitWith(a.store.ByRelPath("Reading notes.md"))
 	second := a.tab().Focus
-	a.splitWithSide(a.store.byRelPath("scripts/tasks.py"), splitDown)
+	a.splitWithSide(a.store.ByRelPath("scripts/tasks.py"), splitDown)
 	third := a.tab().Focus
 	tt := ui.NewTester(a.view, 1100, 700)
 	tt.Frame()
@@ -88,9 +88,9 @@ func TestOptionArrowsMoveInAllDirections(t *testing.T) {
 func TestOptionShiftInsertsPaneOnEdge(t *testing.T) {
 	a := newProjectApp(t)
 	first := a.tab().Focus
-	a.splitWith(a.store.byRelPath("Reading notes.md"))
+	a.splitWith(a.store.ByRelPath("Reading notes.md"))
 	second := a.tab().Focus
-	a.splitWithSide(a.store.byRelPath("scripts/tasks.py"), splitDown)
+	a.splitWithSide(a.store.ByRelPath("scripts/tasks.py"), splitDown)
 	third := a.tab().Focus
 
 	a.movePaneDirection(paneUp)
@@ -112,7 +112,7 @@ func TestOptionShiftInsertsPaneOnEdge(t *testing.T) {
 func TestDropOnEdgeInsertsPane(t *testing.T) {
 	a := newProjectApp(t)
 	first := a.tab().Focus
-	a.splitWith(a.store.byRelPath("Reading notes.md"))
+	a.splitWith(a.store.ByRelPath("Reading notes.md"))
 	second := a.tab().Focus
 	a.movePaneTo(a.tab(), first, second, dropRight)
 	panes := a.tab().panes()
@@ -127,7 +127,7 @@ func TestDropOnEdgeInsertsPane(t *testing.T) {
 func TestPaneHeaderStartsADrag(t *testing.T) {
 	a := newProjectApp(t)
 	first := a.tab().Focus
-	a.splitWith(a.store.byRelPath("Reading notes.md"))
+	a.splitWith(a.store.ByRelPath("Reading notes.md"))
 	tt := ui.NewTester(a.view, 1100, 700)
 	tt.Frame()
 	handle, ok := tt.Find("Move Pane " + paneName(first))
@@ -150,7 +150,7 @@ func TestOpenedFileFillsAnEmptyTab(t *testing.T) {
 	if a.tab().Root == nil || a.tab().Root.Pane == nil {
 		t.Fatalf("the new tab has no pane: %+v", a.tab())
 	}
-	if got := a.terminalDir(); got != a.store.dir {
+	if got := a.terminalDir(); got != a.store.Dir {
 		t.Fatalf("terminal directory: %q", got)
 	}
 }

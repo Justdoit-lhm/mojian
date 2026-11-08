@@ -48,7 +48,7 @@ func (a *app) sshPicker(c *ui.Context, k *colors) {
 	}
 	q := strings.ToLower(strings.TrimSpace(a.sshQuery))
 	var filtered []hostConfig
-	for _, h := range a.hosts {
+	for _, h := range a.hosts() {
 		if q == "" || strings.Contains(strings.ToLower(h.Name+" "+h.Address), q) {
 			filtered = append(filtered, h)
 		}
@@ -81,7 +81,7 @@ func (a *app) sshPicker(c *ui.Context, k *colors) {
 					a.later(func() { a.connectSSH(host.Address) })
 				}
 			})
-			if len(a.hosts) == 0 {
+			if len(a.hosts()) == 0 {
 				ui.Column(c).Padding(20).Gap(10).Children(func() {
 					ui.Text(c, "No servers configured").FontSize(13).FontWeight(600).TextColor(k.Text)
 					ui.Text(c, "Add a server in Settings › Hosts, then come back here.").
@@ -89,7 +89,7 @@ func (a *app) sshPicker(c *ui.Context, k *colors) {
 					if ui.Button(c, "Open Settings › Hosts").Clicked() {
 						a.sshPick = false
 						a.later(func() {
-							a.settingsCat = settingsHosts
+							a.settings.Cat = settingsHosts
 							a.openSettingsWindow()
 						})
 					}
