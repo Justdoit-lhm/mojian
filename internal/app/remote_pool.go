@@ -1,0 +1,62 @@
+package app
+
+// hostUsed reports whether a connection to host still has a user: a
+// loaded project, a terminal pane, or the open project picker.
+func (a *app) hostUsed(host string) bool {
+	if host == "" {
+		return false
+	}
+	if a.remotePickHost == host {
+		return true
+	}
+	used := func(ws *workspace) bool {
+		if ws == nil {
+			return false
+		}
+		if ws.serverAlias == host && ws.remotePath != "" {
+			return true
+		}
+		for _, t := range ws.tabs {
+			for _, p := range t.panes() {
+				if p.Term != nil && p.Term.Spec.Server == host {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	if used(a.workspace) {
+		return true
+	}
+	for _, ws := range a.workspaces {
+		if ws != a.workspace && used(ws) {
+			return true
+		}
+	}
+	return false
+}
+
+// releaseRemote closes host's pooled connection when nothing uses it any
+// more. The server and its sessions keep running on the host.
+func (a *app) releaseRemote(host string) {
+	if host == "" || a.remoteBusy || a.remoteDirsBusy || a.hostUsed(host) {
+		return
+	}
+	rc := a.remotes[host]
+	if rc == nil {
+		return
+	}
+	delete(a.remotes, host)
+	closeRemoteConn(rc)
+}
+
+// reapRemotes drops every pooled connection whose last project or
+// terminal has gone.
+func (a *app) reapRemotes() {
+	if a.remoteBusy || a.remoteDirsBusy {
+		return
+	}
+	for host := range a.remotes {
+		a.releaseRemote(host)
+	}
+}

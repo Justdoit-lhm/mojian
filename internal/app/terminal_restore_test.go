@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"mojian/internal/session"
+
+	"github.com/egoist/mygo/ui"
 )
 
 // startTestSessionServer starts a server in dir and returns a client and
@@ -53,10 +55,11 @@ func TestRestoredTerminalUsesItsOwnServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := &app{
+		workspace: &workspace{
+			serverAlias: "one",
+			remotePath:  "/srv/app",
+		},
 		sessionClient: local,
-		serverAlias:   "one",
-		remotePath:    "/srv/app",
-		remote:        &remoteConn{host: "one", client: one},
 		remotes: map[string]*remoteConn{
 			"one": {host: "one", client: one},
 			"two": {host: "two", client: two},
@@ -73,7 +76,7 @@ func TestRestoredTerminalUsesItsOwnServer(t *testing.T) {
 	if p.Term.SID != info.ID || p.Term.Client != two {
 		t.Fatalf("terminal used %q on %p, want %q on the second server", p.Term.SID, p.Term.Client, info.ID)
 	}
-	if a.remote == nil || a.remote.host != "one" || a.serverAlias != "one" {
+	if rc := a.activeRemote(); rc == nil || rc.host != "one" || a.serverAlias != "one" {
 		t.Fatal("restoring a terminal changed the active project's server")
 	}
 	if p.Term.stream != nil {
@@ -121,8 +124,9 @@ func TestRestoredTerminalUsesTheRemoteServersSocket(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := &app{
+		workspace:     &workspace{serverAlias: "remote", remotePath: "/srv/app"},
 		sessionClient: local,
-		remote:        &remoteConn{host: "remote", client: remote},
+		remotes:       map[string]*remoteConn{"remote": {host: "remote", client: remote}},
 	}
 	p := newTermPane(newTermPaneSpec(termSpec{Server: "remote"}, info.ID))
 	a.startRestoredTerminal(p)
@@ -160,5 +164,19 @@ func TestRestoredTerminalUsesTheRemoteServersSocket(t *testing.T) {
 	case <-localDone:
 	case <-time.After(3 * time.Second):
 		t.Fatal("local server did not stop")
+	}
+}
+
+func TestTerminalErrorOffersRetry(t *testing.T) {
+	a := newProjectApp(t)
+	p := newTermPane(newTermPaneSpec(termSpec{}, "missing"))
+	p.Term.startErr = "the server is not connected"
+	tb := &tab{ID: nextID("t"), Root: &node{Pane: p}, Focus: p}
+	a.tabs = append(a.tabs, tb)
+	a.active = len(a.tabs) - 1
+	tt := ui.NewTester(a.view, 1100, 700)
+	tt.Frame()
+	if !tt.HasText("Could not open the terminal") || !tt.HasText("Try Again") {
+		t.Fatalf("terminal error texts: %q", tt.Texts())
 	}
 }

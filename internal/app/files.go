@@ -8,45 +8,11 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
 )
-
-// absRel resolves a path within the project, refusing anything outside it.
-func (s *store) absRel(rel string) (string, error) {
-	if s.memory {
-		return "", errors.New("files need the desktop app")
-	}
-	if rel == "" || rel == "." {
-		return s.dir, nil
-	}
-	clean := filepath.Clean(rel)
-	if filepath.IsAbs(clean) || clean == ".." ||
-		strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
-		return "", errors.New("path is outside the project")
-	}
-	p := filepath.Join(s.dir, clean)
-	r, err := filepath.Rel(s.dir, p)
-	if err != nil || r == ".." || strings.HasPrefix(r, ".."+string(filepath.Separator)) {
-		return "", errors.New("path is outside the project")
-	}
-	return p, nil
-}
-
-// relOf reports a path's place in the project, if it is inside it.
-func (s *store) relOf(p string) (string, bool) {
-	if s.memory {
-		return "", false
-	}
-	r, err := filepath.Rel(s.dir, p)
-	if err != nil || r == ".." || strings.HasPrefix(r, ".."+string(filepath.Separator)) {
-		return "", false
-	}
-	return r, true
-}
 
 func (s *store) reindex() {
 	s.byPath = make(map[string]*note, len(s.notes))
@@ -78,6 +44,11 @@ func (s *store) forget(rel string) {
 			delete(s.assets, assetRel)
 		}
 	}
+	for d := range s.dirs {
+		if d == rel || strings.HasPrefix(d, rel+string(filepath.Separator)) {
+			delete(s.dirs, d)
+		}
+	}
 	s.buildTree()
 }
 
@@ -94,11 +65,7 @@ func (s *store) remap(oldRel, newRel string, dir bool) {
 		}
 		rest := strings.TrimPrefix(n.Rel, oldRel)
 		n.Rel = filepath.Join(newRel, rest)
-		if s.server != nil {
-			n.Path = s.server.abs(n.Rel)
-		} else {
-			n.Path = filepath.Join(s.dir, n.Rel)
-		}
+		n.Path = s.absFor(n.Rel)
 		n.Title = noteTitle(n.text(), n.Path)
 		if n.buf != nil {
 			n.buf.SetLanguage(editorLanguage(n.Path))
@@ -113,11 +80,7 @@ func (s *store) remap(oldRel, newRel string, dir bool) {
 		}
 		rest := strings.TrimPrefix(assetRel, oldRel)
 		f.Rel = filepath.Join(newRel, rest)
-		if s.server != nil {
-			f.Path = s.server.abs(f.Rel)
-		} else {
-			f.Path = filepath.Join(s.dir, f.Rel)
-		}
+		f.Path = s.absFor(f.Rel)
 		f.Name = filepath.Base(f.Path)
 		delete(s.assets, assetRel)
 		s.assets[f.Rel] = f
@@ -132,70 +95,33 @@ func (s *store) rename(oldRel, name string) (string, []*note, error) {
 	if oldRel == "" {
 		return "", nil, errors.New("the project itself cannot be renamed")
 	}
-	if s.server != nil {
-		oldRel = filepath.Clean(oldRel)
-		base := filepath.Base(oldRel)
-		newName := fileName(name, base)
-		if newName == base {
-			return oldRel, nil, nil
-		}
-		newRel := filepath.Join(filepath.Dir(oldRel), newName)
-		if filepath.Dir(oldRel) == "." {
-			newRel = newName
-		}
-		if s.existsRel(newRel) {
-			return "", nil, fmt.Errorf("%s already exists", newName)
-		}
-		isDir := s.dirs[oldRel]
-		if err := s.renameRel(oldRel, newRel); err != nil {
-			return "", nil, err
-		}
-		changed := s.notesUnder(oldRel, isDir)
-		s.movedEntry(oldRel, newRel, isDir)
-		return newRel, changed, nil
-	}
-	oldAbs, err := s.absRel(oldRel)
-	if err != nil {
-		return "", nil, err
-	}
-	info, err := os.Lstat(oldAbs)
-	if err != nil {
-		return "", nil, err
-	}
-	newName := fileName(name, filepath.Base(oldAbs))
-	if newName == filepath.Base(oldAbs) {
+	oldRel = filepath.Clean(oldRel)
+	base := filepath.Base(oldRel)
+	newName := fileName(name, base)
+	if newName == base {
 		return oldRel, nil, nil
 	}
-	newAbs := filepath.Join(filepath.Dir(oldAbs), newName)
-	same := false
-	if existing, err := os.Lstat(newAbs); err == nil {
-		same = os.SameFile(info, existing)
-		if !same {
-			return "", nil, fmt.Errorf("%s already exists", newName)
+	newRel := filepath.Join(filepath.Dir(oldRel), newName)
+	if filepath.Dir(oldRel) == "." {
+		newRel = newName
+	}
+	if !s.fs.SameFile(oldRel, newRel) && s.existsRel(newRel) {
+		return "", nil, fmt.Errorf("%s already exists", newName)
+	}
+	isDir := s.dirs[oldRel]
+	if !isDir {
+		if e, err := s.fs.Stat(oldRel); err == nil {
+			isDir = e.Dir
 		}
-	} else if !errors.Is(err, os.ErrNotExist) {
+	}
+	if err := s.fs.Rename(oldRel, newRel); err != nil {
 		return "", nil, err
 	}
-	if same {
-		// A case-only rename on a case-insensitive volume needs a step
-		// aside before the new spelling can take the old name.
-		tmp := oldAbs + ".mojian-rename"
-		if err := os.Rename(oldAbs, tmp); err != nil {
-			return "", nil, err
-		}
-		if err := os.Rename(tmp, newAbs); err != nil {
-			_ = os.Rename(tmp, oldAbs)
-			return "", nil, err
-		}
-	} else if err := os.Rename(oldAbs, newAbs); err != nil {
-		return "", nil, err
+	changed := s.notesUnder(oldRel, isDir)
+	s.remap(oldRel, newRel, isDir)
+	if err := s.refresh(); err != nil {
+		return newRel, changed, err
 	}
-	newRel, err := filepath.Rel(s.dir, newAbs)
-	if err != nil {
-		return "", nil, err
-	}
-	changed := s.notesUnder(oldRel, info.IsDir())
-	s.remap(oldRel, newRel, info.IsDir())
 	return newRel, changed, nil
 }
 
@@ -229,18 +155,14 @@ func (s *store) copyInto(srcAbs, destDirRel string) (string, error) {
 	if inside(srcAbs, destDir) {
 		return "", errors.New("a folder cannot be copied into itself")
 	}
-	if s.server != nil && s.server.local {
-		destRel := uniqueCopyRel(s, destDirRel, filepath.Base(srcAbs))
-		if err := s.server.client.Copy(srcAbs, s.server.abs(destRel)); err != nil {
-			return "", err
-		}
-		return destRel, nil
-	}
-	dest := uniqueCopyPath(destDir, filepath.Base(srcAbs))
-	if err := copyPath(srcAbs, dest); err != nil {
+	destRel := s.uniqueRel(destDirRel, filepath.Base(srcAbs), true)
+	if err := s.fs.CopyFrom(srcAbs, destRel); err != nil {
 		return "", err
 	}
-	return relPath(s.dir, dest), nil
+	if err := s.refresh(); err != nil {
+		return destRel, err
+	}
+	return destRel, nil
 }
 
 // moveInto moves a file or folder into a folder of the project. Moves
@@ -262,81 +184,61 @@ func (s *store) moveInto(srcAbs, destDirRel string) (string, error) {
 	if inside(srcAbs, destDir) {
 		return "", errors.New("a folder cannot be moved into itself")
 	}
-	if s.server != nil && s.server.local {
-		oldRel, insideProject := s.relOf(srcAbs)
-		if insideProject {
-			if filepath.Dir(srcAbs) == destDir {
-				return oldRel, nil
-			}
-			return s.moveRel(oldRel, destDirRel)
+	if oldRel, insideProject := s.relOf(srcAbs); insideProject {
+		if filepath.Dir(srcAbs) == destDir {
+			return oldRel, nil
 		}
-		destRel, err := s.copyInto(srcAbs, destDirRel)
+		e, err := s.fs.Stat(oldRel)
 		if err != nil {
 			return "", err
 		}
-		if err := s.server.client.Remove(srcAbs); err != nil {
-			return destRel, err
-		}
-		if err := s.refresh(); err != nil {
-			return destRel, err
-		}
-		return destRel, nil
-	}
-	oldRel, insideProject := s.relOf(srcAbs)
-	if !insideProject {
-		dest, err := s.copyInto(srcAbs, destDirRel)
-		if err != nil {
+		newRel := s.uniqueRel(destDirRel, filepath.Base(srcAbs), false)
+		if err := s.fs.MoveFrom(srcAbs, newRel); err != nil {
 			return "", err
 		}
-		if err := os.RemoveAll(srcAbs); err != nil {
-			return dest, err
-		}
+		s.remap(oldRel, newRel, e.Dir)
 		if err := s.refresh(); err != nil {
-			return dest, err
+			return newRel, err
 		}
-		return dest, nil
+		return newRel, nil
 	}
-	if filepath.Dir(srcAbs) == destDir {
-		return oldRel, nil
+	destRel := s.uniqueRel(destDirRel, filepath.Base(srcAbs), false)
+	if err := s.fs.MoveFrom(srcAbs, destRel); err != nil {
+		return "", err
 	}
-	info, err := os.Lstat(srcAbs)
+	if err := s.refresh(); err != nil {
+		return destRel, err
+	}
+	return destRel, nil
+}
+
+// moveRel moves rel into dest, keeping its name when free.
+func (s *store) moveRel(rel, dest string) (string, error) {
+	e, err := s.fs.Stat(rel)
 	if err != nil {
 		return "", err
 	}
-	dest := uniquePath(destDir, filepath.Base(srcAbs))
-	if err := os.Rename(srcAbs, dest); err != nil {
-		// A volume boundary makes rename fail; copy, then remove.
-		if err := copyPath(srcAbs, dest); err != nil {
-			return "", err
-		}
-		if err := os.RemoveAll(srcAbs); err != nil {
-			return "", err
-		}
-		s.forget(oldRel)
-		if err := s.refresh(); err != nil {
-			return relPath(s.dir, dest), err
-		}
-		return relPath(s.dir, dest), nil
-	}
-	newRel, err := filepath.Rel(s.dir, dest)
-	if err != nil {
+	newRel := s.uniqueRel(dest, filepath.Base(rel), false)
+	if err := s.fs.Rename(rel, newRel); err != nil {
 		return "", err
 	}
-	s.remap(oldRel, newRel, info.IsDir())
+	s.remap(rel, newRel, e.Dir)
+	if err := s.refresh(); err != nil {
+		return newRel, err
+	}
 	return newRel, nil
 }
 
-// uniqueCopyPath names a copy "name copy", then "name copy 2".
-func uniqueCopyPath(dir, name string) string {
-	stem, ext := splitExt(name)
-	candidate := stem + " copy" + ext
-	for i := 2; ; i++ {
-		path := filepath.Join(dir, candidate)
-		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-			return path
-		}
-		candidate = fmt.Sprintf("%s copy %d%s", stem, i, ext)
+// duplicateRel copies rel beside it, named "name copy".
+func (s *store) duplicateRel(rel, dest string) (string, error) {
+	newRel := s.uniqueRel(dest, filepath.Base(rel), true)
+	if err := s.fs.Copy(rel, newRel); err != nil {
+		return "", err
 	}
+	if err := s.refresh(); err != nil {
+		return newRel, err
+	}
+	return newRel, nil
 }
 
 // inside reports whether p is dir or below it.
@@ -398,168 +300,6 @@ func editorLanguage(path string) *editor.Language {
 	return editor.LanguageFor(path)
 }
 
-// startTreeDraft opens a name field in the tree.
-func (a *app) startTreeDraft(kind draftKind, parent, target, name string) {
-	if a.store == nil {
-		return
-	}
-	if a.store.memory && kind != draftRename {
-		a.fail(errors.New("files need the desktop app"))
-		return
-	}
-	a.treeOpen = true
-	a.treeQuery = ""
-	a.treeSearch.CancelFocus()
-	if kind == draftRename {
-		parent = filepath.Dir(target)
-		if parent == "." {
-			parent = ""
-		}
-	} else {
-		a.treeSel = parent
-	}
-	a.openPath(parent)
-	a.draftSeq++
-	a.treeDraft = &treeDraft{kind: kind, parent: parent, target: target, name: name, gen: a.draftSeq}
-	a.treeReveal = target
-	a.invalidate()
-}
-
-func (a *app) startNewFile() {
-	a.startTreeDraft(draftFile, a.selectedDir(), "", "")
-}
-
-func (a *app) startNewFileIn(dir string) {
-	a.startTreeDraft(draftFile, dir, "", "")
-}
-
-func (a *app) startNewFolder() {
-	a.startTreeDraft(draftFolder, a.selectedDir(), "", "")
-}
-
-func (a *app) startRenameNode(rel string) {
-	if rel == "" || a.store == nil {
-		return
-	}
-	abs, err := a.store.absRel(rel)
-	if err != nil {
-		a.fail(err)
-		return
-	}
-	a.startTreeDraft(draftRename, "", rel, filepath.Base(abs))
-}
-
-func (a *app) cancelTreeDraft() {
-	a.treeDraft = nil
-	a.invalidate()
-}
-
-// submitTreeDraft creates the named file or folder, or renames the target.
-func (a *app) submitTreeDraft() {
-	d := a.treeDraft
-	if d == nil || a.store == nil {
-		return
-	}
-	name := strings.TrimSpace(d.name)
-	if d.kind == draftRename && name == "" {
-		a.treeDraft = nil
-		return
-	}
-	var (
-		rel     string
-		n       *note
-		err     error
-		changed []*note
-	)
-	before := map[*note]string{}
-	for _, n := range a.store.notes {
-		before[n] = editorShape(n.Path)
-	}
-	switch d.kind {
-	case draftFile:
-		if name == "" {
-			name = "untitled.txt"
-		}
-		n, err = a.store.newFileIn(d.parent, name, "")
-		if n != nil {
-			rel = n.Rel
-		}
-	case draftFolder:
-		if name == "" {
-			name = "New Folder"
-		}
-		rel, err = a.store.newFolder(d.parent, name)
-	case draftRename:
-		rel, changed, err = a.store.rename(d.target, name)
-	}
-	if err != nil {
-		a.fail(err)
-		return
-	}
-	a.treeDraft = nil
-	a.treeSel = rel
-	if d.kind == draftFolder {
-		if a.openDirs == nil {
-			a.openDirs = map[string]bool{}
-		}
-		a.openDirs[rel] = true
-	}
-	if d.kind == draftRename {
-		a.remapOpenDirs(d.target, rel)
-	}
-	a.openPath(filepath.Dir(rel))
-	a.treeReveal = rel
-	if d.kind == draftFile && n != nil {
-		a.openNote(n)
-	}
-	if d.kind == draftRename {
-		a.resetRenamedStates(changed, before)
-	}
-	a.changed()
-	a.invalidate()
-}
-
-// editorShape is what decides an editor's line numbers and wrapping.
-func editorShape(path string) string {
-	lang := ""
-	if l := editorLanguage(path); l != nil {
-		lang = l.Name
-	}
-	return fmt.Sprintf("%s/%t", lang, isMarkdownPath(path))
-}
-
-func (a *app) resetRenamedStates(notes []*note, before map[*note]string) {
-	renamed := make(map[*note]bool, len(notes))
-	shapeChanged := make(map[*note]bool)
-	for _, n := range notes {
-		renamed[n] = true
-		if before[n] != editorShape(n.Path) {
-			shapeChanged[n] = true
-		}
-	}
-	for _, t := range a.tabs {
-		for _, p := range t.panes() {
-			if p.Note == nil || !renamed[p.Note] {
-				continue
-			}
-			// Markdown previews resolve images relative to the note's
-			// folder, which a rename or move may have changed.
-			p.md = nil
-			if shapeChanged[p.Note] {
-				p.state = nil
-			}
-		}
-	}
-	if len(shapeChanged) == 0 {
-		return
-	}
-	if p := a.focusPane(); p != nil {
-		a.focusReq = p
-	}
-}
-
-// selectedDir is the folder new files and folders go into: the selected
-// folder, the parent of the selected file, or the project root.
 func (a *app) selectedDir() string {
 	if a.store == nil || a.treeSel == "" {
 		return ""
@@ -592,296 +332,23 @@ func (a *app) destinationFor(rel string) string {
 	return dir
 }
 
-func (a *app) copySelectionTo(rel string, cut bool) {
-	if rel == "" || a.store == nil {
-		return
-	}
-	if a.store.server != nil && !a.store.server.local {
-		// A remote path is not a local file, so the clipboard is the
-		// app's own; paste works within the same remote project.
-		a.fileClip = []string{rel}
-		a.fileClipRemote = true
-		a.fileCut = cut
-		a.invalidate()
-		return
-	}
-	abs, err := a.store.absRel(rel)
-	if err != nil {
-		a.fail(err)
-		return
-	}
-	a.fileClip = []string{abs}
-	a.fileClipRemote = false
-	a.fileCut = cut
-	if a.win != nil && runtime.GOOS != "js" {
-		if err := mygo.Clipboard.WriteFiles(abs); err != nil {
-			a.fail(err)
-		}
-	}
-	a.invalidate()
-}
-
 func (a *app) duplicate(rel string) {
-	if rel == "" || a.store == nil {
+	if rel == "" || a.store == nil || a.store.isMemory() {
 		return
 	}
-	dest := a.destinationFor(rel)
-	var newRel string
-	var err error
-	if a.store.server != nil {
-		newRel, err = a.store.duplicateRel(rel, dest)
-	} else {
-		var abs string
-		abs, err = a.store.absRel(rel)
-		if err == nil {
-			newRel, err = a.store.copyInto(abs, dest)
-		}
-	}
+	newRel, err := a.store.duplicateRel(rel, a.destinationFor(rel))
 	if err != nil {
 		a.fail(err)
 		return
-	}
-	if err := a.store.refresh(); err != nil {
-		a.fail(err)
 	}
 	a.selectRel(newRel)
-}
-
-func (a *app) pasteInto(rel string) {
-	if a.store == nil {
-		return
-	}
-	dest := a.destinationFor(rel)
-	if a.store.server != nil {
-		if a.store.server.local {
-			a.pasteLocalServer(rel, dest)
-		} else {
-			a.pasteRemote(rel, dest)
-		}
-		return
-	}
-	var paths []string
-	move := false
-	if a.fileCut && len(a.fileClip) > 0 {
-		paths, move = a.fileClip, true
-	} else if a.win != nil && runtime.GOOS != "js" {
-		if got, err := mygo.Clipboard.ReadFiles(); err == nil && len(got) > 0 {
-			paths = got
-		}
-	}
-	if len(paths) == 0 {
-		paths = a.fileClip
-	}
-	if len(paths) == 0 {
-		a.fail(errors.New("the clipboard has no files"))
-		return
-	}
-	var first string
-	var lastErr error
-	for _, p := range paths {
-		var newRel string
-		var err error
-		if move {
-			newRel, err = a.store.moveInto(p, dest)
-		} else {
-			newRel, err = a.store.copyInto(p, dest)
-		}
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		if first == "" {
-			first = newRel
-		}
-	}
-	a.fileCut = false
-	if err := a.store.refresh(); err != nil {
-		a.fail(err)
-		return
-	}
-	if lastErr != nil {
-		a.fail(lastErr)
-	}
-	if first != "" {
-		a.selectRel(first)
-	}
-}
-
-// pasteLocalServer pastes local files into a project backed by the local
-// server. The files themselves are copied or moved on the server, so the
-// project content never comes through the app.
-func (a *app) pasteLocalServer(rel, dest string) {
-	move := a.fileCut && !a.fileClipRemote
-	var paths []string
-	if a.fileClipRemote {
-		// fileClip holds remote-relative paths. Keep that clipboard for
-		// the remote project and paste whatever the system clipboard has.
-		if a.win != nil && runtime.GOOS != "js" {
-			if got, err := mygo.Clipboard.ReadFiles(); err == nil && len(got) > 0 {
-				paths = got
-			}
-		}
-		if len(paths) == 0 {
-			a.fail(errors.New("the clipboard has no local files"))
-			return
-		}
-	} else {
-		if move && len(a.fileClip) > 0 {
-			paths = a.fileClip
-		} else if a.win != nil && runtime.GOOS != "js" {
-			if got, err := mygo.Clipboard.ReadFiles(); err == nil && len(got) > 0 {
-				paths = got
-			}
-		}
-		if len(paths) == 0 {
-			paths = a.fileClip
-		}
-		if len(paths) == 0 {
-			a.fail(errors.New("the clipboard has no files"))
-			return
-		}
-	}
-	var first string
-	var lastErr error
-	for _, p := range paths {
-		var newRel string
-		var err error
-		if move {
-			newRel, err = a.store.moveInto(p, dest)
-		} else {
-			newRel, err = a.store.copyInto(p, dest)
-		}
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		if first == "" {
-			first = newRel
-		}
-	}
-	if move {
-		a.fileCut = false
-		a.fileClip = nil
-		a.fileClipRemote = false
-	}
-	if err := a.store.refresh(); err != nil {
-		a.fail(err)
-		return
-	}
-	if lastErr != nil {
-		a.fail(lastErr)
-	}
-	if first != "" {
-		a.selectRel(first)
-	}
-}
-
-// pasteRemote pastes the app's own remote clipboard into dest. A Finder
-// paste has local paths, which a remote project cannot use.
-func (a *app) pasteRemote(rel, dest string) {
-	if a.store == nil || !a.fileClipRemote || len(a.fileClip) == 0 {
-		if a.win != nil && runtime.GOOS != "js" {
-			if got, err := mygo.Clipboard.ReadFiles(); err == nil && len(got) > 0 {
-				a.fail(errors.New("a remote project cannot paste Finder files; copy them in the Explorer first"))
-				return
-			}
-		}
-		a.fail(errors.New("the clipboard has no files from this remote project"))
-		return
-	}
-	move := a.fileCut
-	var first string
-	var lastErr error
-	for _, src := range a.fileClip {
-		var newRel string
-		var err error
-		if move {
-			newRel, err = a.store.moveRel(src, dest)
-		} else {
-			newRel = uniqueCopyRel(a.store, dest, filepath.Base(src))
-			err = a.store.copyRel(src, newRel)
-		}
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		if first == "" {
-			first = newRel
-		}
-	}
-	if move {
-		a.fileCut = false
-		a.fileClip = nil
-		a.fileClipRemote = false
-	}
-	if err := a.store.refresh(); err != nil {
-		a.fail(err)
-		return
-	}
-	if lastErr != nil {
-		a.fail(lastErr)
-	}
-	if first != "" {
-		a.selectRel(first)
-	}
-}
-
-// trashRemote moves a remote file into the project's hidden trash folder,
-// since the system trash only holds local files.
-func (a *app) trashRemote(rel string) {
-	dest := a.destinationFor(rel)
-	stamp := time.Now().Format("20060102-150405")
-	dir := filepath.Join(".mojian-trash", stamp)
-	if err := a.store.mkdirRel(dir); err != nil {
-		a.fail(err)
-		return
-	}
-	newRel := filepath.Join(dir, filepath.Base(rel))
-	if a.store.existsRel(newRel) {
-		newRel = uniqueRel(a.store, dir, filepath.Base(rel))
-	}
-	if err := a.store.renameRel(rel, newRel); err != nil {
-		a.fail(err)
-		return
-	}
-	a.closeNotes(func(n *note) bool {
-		return n.Rel == rel || strings.HasPrefix(n.Rel, rel+string(filepath.Separator))
-	})
-	a.closeAssets(func(f *assetFile) bool {
-		return f.Rel == rel || strings.HasPrefix(f.Rel, rel+string(filepath.Separator))
-	})
-	a.store.forget(rel)
-	a.treeSel = dest
-	a.openPath(dest)
-	a.treeReveal = dest
-	if err := a.store.refresh(); err != nil {
-		a.fail(err)
-	}
-	a.changed()
-	a.invalidate()
-}
-
-func (a *app) copyPath(rel string, absolute bool) {
-	if rel == "" || a.store == nil {
-		return
-	}
-	if a.win == nil {
-		return
-	}
-	if absolute {
-		if abs, err := a.store.absRel(rel); err == nil {
-			mygo.Clipboard.WriteText(abs)
-		}
-		return
-	}
-	mygo.Clipboard.WriteText(filepath.ToSlash(rel))
 }
 
 func (a *app) reveal(rel string) {
 	if a.store == nil || runtime.GOOS == "js" {
 		return
 	}
-	if a.store.server != nil && !a.store.server.local {
+	if a.store.isRemote() {
 		a.fail(errors.New("remote projects have no Finder window"))
 		return
 	}
@@ -904,20 +371,11 @@ func (a *app) trash(rel string) {
 	if rel == "" || a.store == nil {
 		return
 	}
-	if runtime.GOOS == "js" {
+	if runtime.GOOS == "js" || a.store.isMemory() {
 		a.fail(errors.New("trash needs the desktop app"))
 		return
 	}
-	if a.store.server != nil && !a.store.server.local {
-		a.trashRemote(rel)
-		return
-	}
-	abs, err := a.store.absRel(rel)
-	if err != nil {
-		a.fail(err)
-		return
-	}
-	if err := trashPath(abs); err != nil {
+	if err := a.store.fs.Trash(rel); err != nil {
 		a.fail(err)
 		return
 	}
@@ -928,7 +386,7 @@ func (a *app) trash(rel string) {
 		return f.Rel == rel || strings.HasPrefix(f.Rel, rel+string(filepath.Separator))
 	})
 	a.store.forget(rel)
-	if a.store.server != nil {
+	if a.store.isServer() {
 		if err := a.store.refresh(); err != nil {
 			a.fail(err)
 			return

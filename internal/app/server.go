@@ -10,14 +10,11 @@ import (
 const localServerID = "local"
 
 // openLocalStore opens a local project through the local session server,
-// so files, Git and terminals share one server. Windows and the browser
-// keep their direct paths: they have no session server.
+// so files, Git and terminals share one server. The browser has no
+// session server and keeps its in-memory editor.
 func (a *app) openLocalStore(dir string) (*store, error) {
 	if runtime.GOOS == "js" {
 		return openStore()
-	}
-	if !terminalsSupported() {
-		return openStoreAt(dir)
 	}
 	abs, err := filepath.Abs(dir)
 	if err != nil {

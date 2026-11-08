@@ -36,13 +36,13 @@ func TestTerminalSessionSurvivesReopen(t *testing.T) {
 	if sid == "" {
 		t.Fatal("no session id")
 	}
-	a.closeTerminals()
+	closeWorkspaceTerminals(a.workspace)
 	_ = a.sessionClient.Close()
 	a.sessionClient = nil
 	a.tabs = nil
 	a.active = -1
 
-	b := &app{store: a.store, layoutPath: a.layoutPath, treeOpen: true}
+	b := &app{workspace: &workspace{store: a.store, layoutPath: a.layoutPath, treeOpen: true}}
 	if !b.restoreLayout() {
 		t.Fatal("layout did not restore")
 	}

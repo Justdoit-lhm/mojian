@@ -37,7 +37,7 @@ func readLine(r *bufio.Reader, max int) ([]byte, error) {
 }
 
 // ProtocolVersion changes when the wire protocol does.
-const ProtocolVersion = 2
+const ProtocolVersion = 3
 
 // ProtocolError says a running server speaks another protocol version.
 type ProtocolError struct{ Server, Client int }
@@ -101,6 +101,9 @@ type FileEntry struct {
 	Size int64         `json:"size,omitempty"`
 	Mod  time.Time     `json:"mod,omitempty"`
 	Kind filekind.Kind `json:"kind,omitempty"`
+	// Hash is the content hash of an asset, so a viewer cache is keyed by
+	// what the file contains rather than by its size and timestamp.
+	Hash string `json:"hash,omitempty"`
 }
 
 // ExecResult is what a command run on the server left.

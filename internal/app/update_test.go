@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -53,5 +54,41 @@ func TestUpdateDisabledMessage(t *testing.T) {
 	got := updateErrorMessage(mygo.ErrUpdatesDisabled)
 	if !strings.Contains(got, "cannot update itself") {
 		t.Fatalf("disabled update message: %q", got)
+	}
+}
+
+func TestFailedUpdateCheckDoesNotClaimTheLatestVersion(t *testing.T) {
+	a := &app{workspace: &workspace{}}
+	a.updateChecking = true
+	a.updateChecked = true
+	a.applyUpdateCheck(nil, errors.New("offline"))
+	if a.updateChecked {
+		t.Fatal("a failed check marked the app as current")
+	}
+	if a.updateErr == "" {
+		t.Fatal("a failed check did not keep its error")
+	}
+	if got := a.updateSummary(); got != "" {
+		t.Fatalf("failed check summary: %q", got)
+	}
+}
+
+func TestUpdateStateLandsOnTheThread(t *testing.T) {
+	a := &app{workspace: &workspace{}}
+	a.applyUpdateCheck(&updateRelease{Version: "0.3.0"}, nil)
+	if !a.updateChecked || a.updateErr != "" || a.pendingUpdate == nil {
+		t.Fatalf("check state: %+v", a)
+	}
+	if got := a.updateSummary(); !strings.Contains(got, "0.3.0") {
+		t.Fatalf("available summary: %q", got)
+	}
+	a.updateInstalling = true
+	a.applyUpdateInstall(errors.New("signature"))
+	if a.updateInstalling || a.updateErr != "signature" || a.updateReady {
+		t.Fatalf("install error state: %+v", a)
+	}
+	a.applyUpdateInstall(nil)
+	if !a.updateReady || a.updateErr != "" {
+		t.Fatalf("install ready state: %+v", a)
 	}
 }

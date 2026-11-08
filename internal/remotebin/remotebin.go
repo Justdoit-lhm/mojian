@@ -5,7 +5,6 @@ package remotebin
 import (
 	"embed"
 	"fmt"
-	"runtime"
 	"strings"
 )
 
@@ -39,6 +38,3 @@ func Binary(machine string) ([]byte, error) {
 	}
 	return files.ReadFile("mojian-server-linux-" + arch)
 }
-
-// LocalArchitecture is the local build's architecture, for messages.
-func LocalArchitecture() string { return runtime.GOARCH }

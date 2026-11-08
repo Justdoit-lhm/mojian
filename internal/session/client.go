@@ -400,22 +400,6 @@ func (c *Client) ListDirs(path string) (out []FileEntry, err error) {
 	return
 }
 
-// Executable returns the path of the app binary and its modification time.
-func Executable() (string, time.Time) {
-	exe, err := os.Executable()
-	if err != nil {
-		return "", time.Time{}
-	}
-	if p, err := filepath.EvalSymlinks(exe); err == nil {
-		exe = p
-	}
-	st, err := os.Stat(exe)
-	if err != nil {
-		return exe, time.Time{}
-	}
-	return exe, st.ModTime()
-}
-
 func spawnExecutable() (string, error) {
 	exe, err := os.Executable()
 	if err != nil {

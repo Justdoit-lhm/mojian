@@ -139,3 +139,46 @@ func TestKillEndsTheWholeProcessGroup(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 }
+
+func TestListTreeHashesAssetsByContent(t *testing.T) {
+	c, dir := startOpsServer(t)
+	root := filepath.Join(dir, "project")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "pic.png")
+	first := []byte("\x89PNG\r\n\x1a\nfirst")
+	second := []byte("\x89PNG\r\n\x1a\nother")
+	if len(first) != len(second) {
+		t.Fatal("fixture lengths differ")
+	}
+	if err := os.WriteFile(path, first, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, err := c.ListTree(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Hash == "" {
+		t.Fatalf("asset hash: %+v", entries)
+	}
+	firstHash := entries[0].Hash
+	// Same size and timestamp, different bytes: the hash must still change.
+	if err := os.WriteFile(path, second, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(path, info.ModTime(), info.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	entries, err = c.ListTree(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Hash == "" || entries[0].Hash == firstHash {
+		t.Fatalf("changed asset hash: %+v", entries)
+	}
+}

@@ -30,8 +30,8 @@ func checkMygoUpdate(ctx context.Context) (*updateRelease, error) {
 }
 
 // installMygoUpdate downloads and verifies the update. It returns when the
-// new version is staged, or installed in place on Linux and Windows; the
-// app keeps running the old version until App.Relaunch.
+// new version is staged, or installed in place on Linux; the app keeps
+// running the old version until App.Relaunch.
 func installMygoUpdate(ctx context.Context, up *updateRelease) error {
 	if up == nil || up.update == nil {
 		return errNoUpdate
@@ -42,10 +42,6 @@ func installMygoUpdate(ctx context.Context, up *updateRelease) error {
 // errNoUpdate is reported when Install is asked for a release the checker
 // did not keep.
 var errNoUpdate = errors.New("no update was found")
-
-type updateCheckFunc func(context.Context) (*updateRelease, error)
-
-type updateInstallFunc func(context.Context, *updateRelease) error
 
 // checkForUpdates checks the feed in the background, so the settings window
 // never waits on the network. The buttons and the state change on the UI
@@ -60,22 +56,12 @@ func (a *app) checkForUpdates() {
 	a.pendingUpdate = nil
 	a.updateReady = false
 	a.invalidate()
-	check := a.updateCheckFn
-	if check == nil {
-		check = checkMygoUpdate
-	}
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 		defer cancel()
-		up, err := check(ctx)
+		up, err := checkMygoUpdate(ctx)
 		a.onUpdateUI(func() {
-			a.updateChecking = false
-			a.updateChecked = true
-			if err != nil {
-				a.updateErr = updateErrorMessage(err)
-			} else {
-				a.pendingUpdate = up
-			}
+			a.applyUpdateCheck(up, err)
 			a.invalidate()
 		})
 	}()
@@ -83,8 +69,8 @@ func (a *app) checkForUpdates() {
 
 // installAvailableUpdate downloads the release found by the last check and
 // stages it. On macOS the new bundle replaces the app as it quits; on
-// Linux and Windows the files are replaced in place and the running
-// process keeps the old image until the next relaunch.
+// Linux the files are replaced in place and the running process keeps
+// the old image until the next relaunch.
 func (a *app) installAvailableUpdate() {
 	up := a.pendingUpdate
 	if up == nil || a.updateInstalling || a.updateReady {
@@ -93,24 +79,38 @@ func (a *app) installAvailableUpdate() {
 	a.updateInstalling = true
 	a.updateErr = ""
 	a.invalidate()
-	install := a.updateInstallFn
-	if install == nil {
-		install = installMygoUpdate
-	}
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
-		err := install(ctx, up)
+		err := installMygoUpdate(ctx, up)
 		a.onUpdateUI(func() {
-			a.updateInstalling = false
-			if err != nil {
-				a.updateErr = updateErrorMessage(err)
-			} else {
-				a.updateReady = true
-			}
+			a.applyUpdateInstall(err)
 			a.invalidate()
 		})
 	}()
+}
+
+// applyUpdateCheck lands a check result: a failed check is not a claim
+// that the app is current.
+func (a *app) applyUpdateCheck(up *updateRelease, err error) {
+	a.updateChecking = false
+	a.updateChecked = err == nil
+	if err != nil {
+		a.updateErr = updateErrorMessage(err)
+		return
+	}
+	a.pendingUpdate = up
+}
+
+// applyUpdateInstall lands an install result.
+func (a *app) applyUpdateInstall(err error) {
+	a.updateInstalling = false
+	if err != nil {
+		a.updateErr = updateErrorMessage(err)
+		return
+	}
+	a.updateErr = ""
+	a.updateReady = true
 }
 
 // restartForUpdate relaunches the app after an update was staged. The quit
@@ -153,6 +153,8 @@ func (a *app) updateSummary() string {
 			return fmt.Sprintf("Mojian %s is available.", a.pendingUpdate.Version)
 		}
 		return "A new version is available."
+	case a.updateErr != "":
+		return ""
 	case a.updateChecked:
 		return "You are running the latest version."
 	}

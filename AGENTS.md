@@ -4,7 +4,7 @@
 
 Mojian is a quiet text editor for plain files, written in Go against [MyGo](https://mygo.egoist.dev)'s native UI. It is not a web app: there is no webview, no cgo, no JavaScript build. One Go binary draws its own window (Metal on macOS). Tabs are workspaces; each tab holds a binary split tree of panes, and each pane edits a file, previews a picture or PDF, or runs a terminal. Version `0.2.0`, bundle id `dev.mojian.app`, macOS 13+.
 
-A project is just a folder; it keeps its own tabs and layout. Opened projects stay loaded in a workspace cache (`internal/app/workspace.go`): switching stashes the active tabs, terminals, layout and Git page and restores the next project without reading it again. Edits stay in memory until an explicit `⌘S`. On macOS and Linux every local project is opened through the local session server, so its files, Git and terminals share one process; quitting the app detaches the terminals and reopening reattaches them. Remote projects are edited directly on the host: only a listing is cached, and a file's text is read when it opens. A remote server and its terminals stay alive after the app or SSH connection disconnects. Windows keeps the direct-file editor and has no session server.
+A project is just a folder; it keeps its own tabs and layout. Opened projects stay loaded in a workspace cache (`internal/app/workspace.go`): switching stashes the active tabs, terminals, layout and Git page and restores the next project without reading it again. Edits stay in memory until an explicit `⌘S`. On macOS and Linux every local project is opened through the local session server, so its files, Git and terminals share one process; quitting the app detaches the terminals and reopening reattaches them. Remote projects are edited directly on the host: only a listing is cached, and a file's text is read when it opens. A remote server and its terminals stay alive after the app or SSH connection disconnects. Windows is not supported.
 
 Read `.agents/skills/mygo-maintenance/SKILL.md` before touching UI code; it is the authoritative source for MyGo lifetime and threading rules.
 
@@ -19,11 +19,11 @@ Frame conventions that keep this correct:
 - `a.invalidate()` (`app.go:551`) requests a redraw of both windows after state changes made outside the view.
 - Slow work never runs in a view. Background results land through `Window.Update` and are dropped when a sequence/generation counter moved on — see `git.Page.Seq`/`DiffSeq` (`internal/git/git.go:103-118`) and `assetView.pdfGen` (`internal/app/assetview.go:78`).
 
-**One traced path (open → edit → save).** Tree row click → `(*app).openRel` (`app.go:876`) → `store.byRelPath` (`store.go:572`) → `(*app).openNote` → `pane.Note`; the pane renders `note.buffer`, a single `*editor.Buffer` shared by every pane showing that file. `⌘S` → menu/palette command → `(*app).saveNow` (`app.go:647`) → `store.saveAll` → `store.save` → `writeFileAtomic` for a Windows/direct file (tmp file + fsync + rename) or `session.Client.WriteFile` for a server-backed one → `buf.MarkSaved()`. Edits stay in memory until an explicit save.
+**One traced path (open → edit → save).** Tree row click → `(*app).openRel` → `store.byRelPath` → `(*app).openNote` → `pane.Note`; the pane renders `note.buffer`, a single `*editor.Buffer` shared by every pane showing that file. `⌘S` → menu/palette command → `(*app).saveNow` → `store.saveAll` → `store.save` → the project's `fsBackend` (`writeFileAtomic` for a direct file, `session.Client.WriteFile` for a server-backed one) → `buf.MarkSaved()`. Edits stay in memory until an explicit save.
 
 **Terminals live in a second process.** `internal/session` is a Unix-socket server (`session.Serve`, `server.go:48`) speaking JSON lines, `ProtocolVersion = 2` (`proto.go:16`). The app spawns it by re-executing itself with `-server` (`spawn_unix.go:19`), so quitting the app detaches PTYs instead of killing them; reopening reattaches by session id. A remote server is started without a transient flag and stays alive while any terminal session exists, so a dropped SSH connection does not end its shells; `mojian-server -stop` ends it explicitly. Terminal panes are `terminal.Terminal` (MyGo's libghostty plugin) bound to a `session.Stream`. Each layout terminal records `Server` (`local` or an SSH host) so it reattaches to the server that owns it.
 
-**Server projects.** `internal/app/server.go` opens local projects through the local session server on macOS and Linux; Windows and the browser keep their direct paths. `internal/app/server_store.go` backs both local and remote projects with a `serverFS` (`local` distinguishes them): `session.Client.ListTree` lists names, sizes, times and kinds, a note is read when it opens, and saves and file operations write through the same client. There is no local mirror. For remote projects, `internal/app/remote.go` uploads the embedded Linux server + `libghostty-vt` from `internal/remotebin`, opens an `ssh -N -L` forward to the remote socket, and detaches without shutting the server down. Connections are pooled by host, shared by every loaded project and kept while one uses them; the first connection and project opening run off the UI thread behind a loading card (`openRemoteProjectAsync`). Git runs through the project's server (`internal/app/git_bridge.go`); pictures and PDFs are fetched into a local viewer cache.
+**Server projects.** `internal/app/server.go` opens local projects through the local session server on macOS and Linux; the browser keeps its in-memory editor. A `store` holds an `fsBackend` (`internal/app/fs.go`): `directFS` (tests/browser neighbours), `memoryFS`, or `serverFS` (`local` distinguishes a local server from a remote one). `session.Client.ListTree` lists names, sizes, times, kinds and an asset's content hash, a note is read when it opens, and saves and file operations write through the same client. There is no local mirror. `store.refresh` reconciles the one listing into notes, assets and the tree; `fs_direct.go` keeps the eager local listing, `fs_server.go` the lazy one. For remote projects, `internal/app/remote_conn.go` uploads the embedded Linux server + `libghostty-vt` from `internal/remotebin`, opens an `ssh -N -L` forward to the remote socket, and detaches without shutting the server down. Settings › Hosts is the only host source: the app no longer scans `~/.ssh/config`, and each host has a Set Up Server action that uploads the binaries and checks the server answers over the forward. Connections are pooled by host, shared by every loaded project and kept while one uses them; the first connection and project opening run off the UI thread behind a loading card (`openRemoteProjectAsync`). Git runs through the project's server (`internal/app/git_bridge.go`); pictures and PDFs are fetched into a local viewer cache.
 
 **Cross-package contracts.** `git.Host` (`internal/git/git.go:34`) is the only interface the Git page uses to reach the window; `*app` implements it in `internal/app/git_bridge.go`. `internal/app/theme_bridge.go` exists so `app` touches `internal/theme` through one file.
 
@@ -80,16 +80,36 @@ sh tools/build-remote.sh  # rebuild embedded Linux servers (needed after server/
 
 | File | Role |
 |---|---|
-| `internal/app/app.go` | `app` struct, `Run`, window lifecycle, menus/commands, settings, layout debounce, `fail`/`later`. |
-| `internal/app/model.go` | `pane`/`tab`, the `node` split tree, pane directions and moves, layout snapshot/restore (persisted as `columns`). |
-| `internal/app/store.go` | Project folder, `note` buffers, text/asset classification, lazy remote notes, atomic save. |
-| `internal/app/view.go` | Root view: title bar, workspace switch, pane cards, error banner. |
-| `internal/app/term.go` | Terminal panes, session client bootstrap, attach, restore, detach on close. |
-| `internal/app/remote.go` | SSH connections, server upload, persistent remote lifecycle. |
+| `internal/app/app.go` | `app` struct, `Run`, open, project list, layout debounce, `fail`/`later`. |
+| `internal/app/window.go` | Window/tray lifecycle, Settings window opener, theme application. |
+| `internal/app/settings_file.go` | `settingsFile`, load/save/reset persistence, atomic writes, font getters. |
+| `internal/app/panes.go` | Opening notes/assets, tabs, pane close/zoom/selection. |
+| `internal/app/menu.go` | Menu construction, command dispatch, window title, reveal project. |
+| `internal/app/model.go` | `pane`/`tab`, the `node` split tree, pane directions and moves. |
+| `internal/app/layout.go` | Layout snapshot/restore and its JSON format. |
+| `internal/app/store.go` | `store` state: notes, assets, listing cache, save and refresh. |
+| `internal/app/fs.go` | `fsBackend` interface, path guards and backend capability helpers. |
+| `internal/app/fs_direct.go` / `fs_memory.go` / `fs_server.go` | Direct folder, in-memory and session-server backends. |
+| `internal/app/store_fs.go` | Generic note loading, asset fetch, path guards and connection handoff. |
+| `internal/app/prefs.go` | The one settings struct, defaults and range validation. |
+| `internal/app/listui.go` | Shared list navigation, command dialog shell and file picker row. |
+| `internal/app/settings.go` | Settings window, search model, rail and row primitives. |
+| `internal/app/settings_rows.go` | Generic table-driven preference pages and prefs access. |
+| `internal/app/settings_pages.go` | Advanced, Updates and About pages plus command availability. |
+| `internal/app/settings_keyboard.go` / `settings_hosts.go` / `settings_fonts.go` | Keyboard, Hosts and font controls. |
+| `internal/app/view.go` | Root view: title bar, workspace switch, closing panes, error banner. |
+| `internal/app/pane.go` | Pane card, header, drag/drop and empty-pane picker. |
+| `internal/app/welcome.go` | Welcome/empty state and recent files. |
+| `internal/app/tree.go` / `tree_view.go` | Project listing tree/state and its sidebar rows/search. |
+| `internal/app/files.go` / `fileclip.go` / `files_tree.go` | File operations, clipboard paste, tree drafts. |
+| `internal/app/term.go` | Terminal panes, session attach, async restore, detach. |
+| `internal/app/remote_conn.go` | SSH argv, install/provision, forward, connection pool. |
+| `internal/app/remote_project.go` | Remote project open, reconnect, loading task state. |
+| `internal/app/remote_picker.go` | Host config/UI, picker, busy card, server chip. |
 | `internal/app/server.go` | Local session-server project opener and `localServerID`. |
-| `internal/app/server_store.go` | Server-backed project: listing, lazy reads, writes, file operations, asset cache. |
+| `internal/settings` | Pure Settings page table: categories, rows, kinds, search words. |
+| `internal/git/git.go` / `parse.go` / `view.go` | Git page state, status/diff parsing, and view. |
 | `internal/filekind` | Shared text/asset/skip-dir classification for the app and the session server. |
-| `internal/app/files.go` | Rename/copy/move/trash/paste, `absRel` path guard, tree drafts. |
 | `internal/app/palette.go` | Command table used by menu, palette and browser shortcuts. |
 | `mygo.json` | App manifest: name, identifier, version, `out`, macOS minimum. |
 | `go.mod` | Go version, MyGo pin, `tool` directive. |
@@ -108,7 +128,7 @@ sh tools/build-remote.sh  # rebuild embedded Linux servers (needed after server/
 - **Framework:** stdlib `testing` only — no testify, gomock, golden files or coverage thresholds. Test functions live in `_test.go` files; no subtests, no `t.Parallel()`, no benchmarks.
 - **White-box tests** sit beside the code (`package app`, `session`, `git`, `icons`) and read unexported state. **Black-box tests** live in `test/` (`package integration`) with real temp folders and real Git; `test/helpers.go` exports `WriteVault` and `InitRepo` (the latter isolates Git with `GIT_CONFIG_GLOBAL=/dev/null`).
 - **UI tests** render headlessly with `ui.NewTester(a.view, 1100, 700)` (Settings: `settingsWindowView`, 900×640) and assert on `HasText`/`Texts`, clicks, typing and keys. Call `registerFonts()` before measuring text. Code that uses `a.later` needs an extra `tt.Frame()` — often two.
-- **Setup patterns:** `t.TempDir()` plus `t.Setenv` for `MOJIAN_VAULT`, `MOJIAN_DIR` and `HOME` (SSH tests write `.ssh/config`). Terminal tests start `session.Serve` in a goroutine and poll `session.SocketPath()` with a 3 s deadline. PTY and socket tests are Unix-only via build tags. Never add `t.Parallel()` to tests that set env or bind sockets.
-- **Injection seams** exist for tests, keep them working: `app.shellStarter` (`app.go:92`), `trashPath` (`files.go`), `remoteConn` literals, and the `dataDir`/`layoutPath`/`settingsPath` fields.
+- **Setup patterns:** `t.TempDir()` plus `t.Setenv` for `MOJIAN_VAULT`, `MOJIAN_DIR` and `HOME`. Terminal tests start `session.Serve` in a goroutine and poll `session.SocketPath()` with a 3 s deadline. PTY and socket tests are Unix-only via build tags. Never add `t.Parallel()` to tests that set env or bind sockets.
+- **Injection seams** exist for tests, keep them working: `app.shellStarter`, `trashPath`, `provisionRemoteFn`, `readClipboardFiles`/`writeClipboardFiles`, `remoteConn` values in the `remotes` pool, and the `dataDir`/`layoutPath`/`settingsPath` fields.
 - **Expectations:** behavior, boundaries and regressions — not wiring. Add a regression test only where the failure mode is plausible; verify features with a throwaway script or the running app instead of new permanent tests.
 - **Known drift:** `README.md` claims white-box tests in `internal/theme`; none exist. `internal/app/main_test.go` contains an unused `newTestApp` helper. Do not "fix" either by inventing coverage.

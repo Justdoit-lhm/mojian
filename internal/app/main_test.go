@@ -88,7 +88,7 @@ func TestLayoutRoundTrip(t *testing.T) {
 	if len(notes) < 2 {
 		t.Fatalf("notes: %d", len(notes))
 	}
-	a := &app{store: s, layoutPath: filepath.Join(dir, "layout.json")}
+	a := &app{workspace: &workspace{store: s, layoutPath: filepath.Join(dir, "layout.json")}}
 	t1 := newTab(notes[0])
 	a.tabs = []*tab{t1}
 	a.active = 0
@@ -98,7 +98,7 @@ func TestLayoutRoundTrip(t *testing.T) {
 	}
 	a.saveLayout()
 
-	b := &app{store: s, layoutPath: a.layoutPath}
+	b := &app{workspace: &workspace{store: s, layoutPath: a.layoutPath}}
 	if !b.restoreLayout() {
 		t.Fatal("restoreLayout returned false")
 	}
@@ -127,12 +127,12 @@ func TestRestoreFillsALonePane(t *testing.T) {
 		t.Fatal(err)
 	}
 	n := s.sorted()[0]
-	a := &app{store: s, layoutPath: filepath.Join(dir, "layout.json")}
+	a := &app{workspace: &workspace{store: s, layoutPath: filepath.Join(dir, "layout.json")}}
 	p := newPane(n)
 	a.tabs = []*tab{{ID: nextID("t"), Root: &node{Pane: p}, Focus: p}}
 	a.saveLayout()
 
-	b := &app{store: s, layoutPath: a.layoutPath}
+	b := &app{workspace: &workspace{store: s, layoutPath: a.layoutPath}}
 	if !b.restoreLayout() {
 		t.Fatal("restoreLayout returned false")
 	}
@@ -172,7 +172,7 @@ func TestRestoreReadsTheOldSplitTree(t *testing.T) {
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	app := &app{store: s, layoutPath: path}
+	app := &app{workspace: &workspace{store: s, layoutPath: path}}
 	if !app.restoreLayout() {
 		t.Fatal("restoreLayout returned false")
 	}
@@ -197,7 +197,7 @@ func TestNoteSave(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	n, err := s.newNote()
+	n, err := s.newFileIn("", "Untitled.md", "# Untitled\n\n")
 	if err != nil {
 		t.Fatal(err)
 	}

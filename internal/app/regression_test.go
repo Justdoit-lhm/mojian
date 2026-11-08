@@ -162,7 +162,7 @@ func TestPaletteSelectsLateTab(t *testing.T) {
 }
 
 func TestLaterRunsFromSettingsWindow(t *testing.T) {
-	a := &app{}
+	a := &app{workspace: &workspace{}}
 	ran := false
 	a.later(func() { ran = true })
 	tt := ui.NewTester(a.settingsWindowView, 900, 640)

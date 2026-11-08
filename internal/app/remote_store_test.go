@@ -22,9 +22,11 @@ func newRemoteApp(t *testing.T, client *session.Client, root string) *app {
 		t.Fatal(err)
 	}
 	a := &app{
-		store: s, treeOpen: true, openDirs: map[string]bool{},
-		remote:      &remoteConn{host: "buildbox", client: client},
-		serverAlias: "buildbox", remotePath: root,
+		workspace: &workspace{
+			store: s, treeOpen: true, openDirs: map[string]bool{},
+			serverAlias: "buildbox", remotePath: root,
+		},
+		remotes: map[string]*remoteConn{"buildbox": {host: "buildbox", client: client}},
 	}
 	n := s.byRelPath("a.md")
 	if n == nil {
@@ -74,8 +76,8 @@ func TestRemoteProjectSavesBeforeLeaving(t *testing.T) {
 	a.currentNote().buffer().Set("# saved before switch\n")
 	target := t.TempDir()
 	a.openProject(target)
-	if a.remotePath != "" || a.remote != nil {
-		t.Fatalf("the remote project stayed open: %q %+v", a.remotePath, a.remote)
+	if a.remotePath != "" || a.activeRemote() != nil {
+		t.Fatalf("the remote project stayed open: %q %+v", a.remotePath, a.activeRemote())
 	}
 	data, err := os.ReadFile(filepath.Join(root, "a.md"))
 	if err != nil {
@@ -158,5 +160,65 @@ func TestRemoteGitRunsOnTheServer(t *testing.T) {
 	}
 	if !strings.Contains(diff, "new file") || !strings.Contains(diff, "+# A") {
 		t.Fatalf("remote untracked diff: %q", diff)
+	}
+}
+
+func TestRemoteAssetCacheUsesContentHash(t *testing.T) {
+	client, done := startTestSessionServer(t, t.TempDir())
+	defer client.Close()
+	defer func() { _ = client.Shutdown(); <-done }()
+	root := t.TempDir()
+	path := filepath.Join(root, "pic.png")
+	first := []byte("\x89PNG\r\n\x1a\nfirst")
+	second := []byte("\x89PNG\r\n\x1a\nother")
+	if len(first) != len(second) {
+		t.Fatal("fixture lengths differ")
+	}
+	if err := os.WriteFile(path, first, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache := t.TempDir()
+	s, err := openServerStore(client, root, cache, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	asset := s.assetByRel("pic.png")
+	if asset == nil || asset.Hash == "" {
+		t.Fatalf("asset listing: %+v", asset)
+	}
+	firstPath, err := s.materializeAsset(asset)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(firstPath); err != nil || string(data) != string(first) {
+		t.Fatalf("first cache: %q, %v", data, err)
+	}
+	// Same size and timestamp, different bytes.
+	if err := os.WriteFile(path, second, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(path, info.ModTime(), info.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.refresh(); err != nil {
+		t.Fatal(err)
+	}
+	next := s.assetByRel("pic.png")
+	if next == nil || next.Hash == "" || next.Hash == asset.Hash {
+		t.Fatalf("refreshed asset: %+v", next)
+	}
+	secondPath, err := s.materializeAsset(next)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if secondPath == firstPath {
+		t.Fatal("the cache key did not change with the content")
+	}
+	if data, err := os.ReadFile(secondPath); err != nil || string(data) != string(second) {
+		t.Fatalf("second cache: %q, %v", data, err)
 	}
 }

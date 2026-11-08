@@ -9,18 +9,12 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// settingsCommands is paletteCommands for the Settings window, assigned
-// after the commands are built: referring to paletteCommands from a view
-// whose commands include Settings would make an initialization cycle.
-var settingsCommands func() []*command
-
 // openSettingsCommand opens Settings, assigned after the view is built:
 // a direct call from cmdSettings' initializer would make the command
 // table depend on the window that lists it.
 var openSettingsCommand func(*app)
 
 func init() {
-	settingsCommands = func() []*command { return paletteCommands }
 	openSettingsCommand = func(a *app) { a.openSettingsWindow() }
 }
 
@@ -45,7 +39,10 @@ func (a *app) commandKeys(c *command) string {
 	if v, ok := a.shortcutKeys[c.id]; ok {
 		return shortcutDisplay(v)
 	}
-	return nativeKeys(c.keys)
+	if c.display != "" {
+		return nativeKeys(c.display)
+	}
+	return shortcutDisplay(a.commandAccel(c))
 }
 
 // menuAccel gives a menu item its keys, none while a shortcut is being
@@ -266,7 +263,7 @@ func (a *app) setShortcut(id, accel string) {
 	}
 	a.settingsNotice = ""
 	if accel != "" {
-		for _, other := range settingsCommands() {
+		for _, other := range paletteCommands {
 			if other.id == id {
 				continue
 			}
@@ -292,7 +289,7 @@ func (a *app) setShortcut(id, accel string) {
 }
 
 func commandByID(id string) *command {
-	for _, c := range settingsCommands() {
+	for _, c := range paletteCommands {
 		if c.id == id {
 			return c
 		}

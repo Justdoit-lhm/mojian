@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -395,7 +396,6 @@ type session struct {
 
 	mu         sync.Mutex
 	vt         *terminal.Terminal
-	vtIn       *io.PipeWriter
 	clients    map[*attached]struct{}
 	cols, rows int
 	exited     bool
@@ -464,7 +464,7 @@ func newSession(id string, o CreateOptions) (*session, error) {
 	vt.Resize(cols, rows)
 	s := &session{
 		id: id, shell: name, created: time.Now(), cmd: cmd, pty: p,
-		vt: vt, vtIn: pw, clients: map[*attached]struct{}{},
+		vt: vt, clients: map[*attached]struct{}{},
 		cols: cols, rows: rows, done: make(chan struct{}),
 	}
 	readDone := make(chan struct{})
@@ -725,6 +725,19 @@ func (d discard) Read(p []byte) (int, error)  { return d.r.Read(p) }
 func (d discard) Write(p []byte) (int, error) { return len(p), nil }
 func (d discard) Close() error                { return d.r.Close() }
 
+func fileHash(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+
 func listTree(root string) ([]FileEntry, error) {
 	var out []FileEntry
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
@@ -761,9 +774,13 @@ func listTree(root string) ([]FileEntry, error) {
 		if err != nil || kind == filekind.Other {
 			return nil
 		}
-		out = append(out, FileEntry{
+		e := FileEntry{
 			Rel: filepath.ToSlash(rel), Size: info.Size(), Mod: info.ModTime(), Kind: kind,
-		})
+		}
+		if kind == filekind.Asset {
+			e.Hash = fileHash(path)
+		}
+		out = append(out, e)
 		return nil
 	})
 	return out, err
@@ -777,6 +794,9 @@ func statEntry(path string) (FileEntry, error) {
 	e := FileEntry{Rel: path, Dir: info.IsDir(), Size: info.Size(), Mod: info.ModTime()}
 	if !info.IsDir() {
 		e.Kind, _ = filekind.ClassifyFile(path)
+		if e.Kind == filekind.Asset {
+			e.Hash = fileHash(path)
+		}
 	}
 	return e, nil
 }

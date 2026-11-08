@@ -25,14 +25,12 @@ func (a *app) openProjectPicker() {
 		a.fail(fmt.Errorf("projects need the desktop app"))
 		return
 	}
-	a.projectOpen = false
-	a.paletteOpen = false
-	a.quickOpen = false
+	a.closeModals()
 	a.projectPicker = true
 	a.pickerSel = -1
 	a.pickerErr = ""
 	start := ""
-	if a.store != nil && !a.store.memory {
+	if a.store != nil && !a.store.isMemory() {
 		start = a.store.dir
 	}
 	if start == "" {

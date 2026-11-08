@@ -1,10 +1,10 @@
 # Releasing Mojian
 
 A release is a tag. Pushing `vX.Y.Z` runs the Release workflow
-(`.github/workflows/release.yml`), which tests the tree on macOS, Linux
-and Windows, builds the macOS app for Apple Silicon and Intel, the Linux
-archives and packages for amd64 and arm64, and the Windows portable zip,
-then publishes the GitHub release with every installer.
+(`.github/workflows/release.yml`), which tests the tree on macOS and
+Linux, builds the macOS app for Apple Silicon and Intel, and the Linux
+archives and packages for amd64 and arm64, then publishes the GitHub
+release with every installer.
 
 ## Steps
 
@@ -32,8 +32,7 @@ then publishes the GitHub release with every installer.
 The workflow refuses a tag that does not match `mygo.json`, builds
 `mojian-X.Y.Z-arm64.dmg`, `mojian-X.Y.Z-amd64.dmg`,
 `mojian-X.Y.Z-linux-amd64.tar.gz`, `mojian-X.Y.Z-linux-arm64.tar.gz`,
-`mojian-X.Y.Z-windows-amd64.zip`, the NSIS installer, the signed
-`*-darwin-*.tar.gz` and `*-windows-*.tar.gz` update archives,
+the signed `*-darwin-*.tar.gz` update archives,
 `update-<target>.json` manifests, `install.sh` and the matching `.deb`
 packages, creates a draft release with generated notes, uploads every
 installer and `SHA256SUMS`, and publishes it as the latest release only

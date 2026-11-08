@@ -11,8 +11,7 @@ import (
 // click opens one in the active tab. The welcome page and ⇧⌘O both lead
 // here, so the action is visible even when the Explorer is already open.
 func (a *app) openQuickOpen() {
-	a.paletteOpen = false
-	a.projectPicker = false
+	a.closeModals()
 	a.quickOpen = true
 	a.quickQuery = ""
 	a.quickSel = 0
@@ -38,26 +37,13 @@ func (a *app) quickOpenModal(c *ui.Context, k *colors) {
 	a.quickSel = min(max(a.quickSel, 0), max(len(choices)-1, 0))
 	was := a.quickOpen
 	reveal := false
-	ui.DialogBase(c, &a.quickOpen, func(backdrop, panel ui.Element) {
-		backdrop.Background(k.Backdrop)
-		panel.Width(560).MaxHeight(440).Radius(radius).Background(k.Panel).Border(1, k.PanelBorder).
-			Shadow(0, 24, 60, -8, ui.RGBA(0, 0, 0, 0.28)).
-			Shadow(0, 2, 6, 0, ui.RGBA(0, 0, 0, 0.06)).Clip()
+	commandDialog(c, k, &a.quickOpen, 560, 440, false, func() {
 		ui.Row(c).Padding(12, 16).Gap(10).AlignItems(ui.Center).
 			BorderWidth(0, 0, 1, 0).BorderColor(k.PanelBorder).Children(func() {
 			ui.Icon(c, icons.Icon("search")).Size(17, 17).TextColor(k.TextFaint)
 			in := ui.TextInputBase(c, &a.quickQuery).Grow(1).FontSize(15).
 				Placeholder("Open a file…").Label("Open a file").AutoFocus()
-			if in.Changed() {
-				a.quickSel, reveal = 0, true
-			}
-			if in.Shortcut(0, ui.KeyDown) {
-				a.quickSel, reveal = min(a.quickSel+1, len(choices)-1), true
-			}
-			if in.Shortcut(0, ui.KeyUp) {
-				a.quickSel, reveal = max(a.quickSel-1, 0), true
-			}
-			if in.Submitted() && len(choices) > 0 {
+			if listNav(in, &a.quickSel, len(choices), &reveal) {
 				a.quickOpen = false
 				ch := choices[a.quickSel]
 				a.later(func() { a.quickOpenChoice(ch) })
@@ -70,28 +56,14 @@ func (a *app) quickOpenModal(c *ui.Context, k *colors) {
 			}
 			for i, ch := range choices {
 				i, ch := i, ch
-				row := ui.Row(c.Key(i)).Height(34).Padding(0, 10).Gap(10).Radius(radius).
-					AlignItems(ui.Center).Cursor(ui.CursorPointer).
-					Role(ui.RoleButton).Label(ch.title)
-				if i == a.quickSel {
-					row.Background(k.PanelSel)
-					if reveal {
-						row.ScrollIntoView()
-					}
-				} else if row.Hovered() {
-					row.Background(k.Hover)
+				row, clicked := fileChoiceRow(c, k, i, ch, i == a.quickSel, 34, 10, 10, 13.5, 13, 500)
+				if i == a.quickSel && reveal {
+					row.ScrollIntoView()
 				}
-				if row.Clicked() {
+				if clicked {
 					a.quickOpen = false
 					a.later(func() { a.quickOpenChoice(ch) })
 				}
-				row.Children(func() {
-					ui.Icon(c, icons.FileIcon(ch.rel)).Size(15, 15).TextColor(k.TextMuted)
-					ui.Text(c, ch.title).FontSize(13.5).FontWeight(500).TextColor(k.Text).
-						SingleLine().Ellipsis("…").Shrink(0.3).MinWidth(0)
-					ui.Text(c, ch.rel).FontSize(13).TextColor(k.TextFaint).
-						SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
-				})
 			}
 		})
 	})

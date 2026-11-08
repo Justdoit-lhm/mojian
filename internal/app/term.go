@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 
 	"mojian/internal/session"
 
@@ -15,21 +14,20 @@ import (
 // termTab is the shell shown by a terminal pane. Its process lives in the
 // session server, so closing the app only detaches it.
 type termTab struct {
-	Term   *terminal.Terminal
-	Exited bool
+	Term *terminal.Terminal
 
 	SID    string
 	Spec   termSpec
 	Client *session.Client
 	stream *session.Stream
 
-	starting bool
-	startErr string
+	startErr   string
+	connecting bool
 }
 
 // termSpec is what a terminal pane opens: the login shell, or SSH to a
-// host alias from ~/.ssh/config. Server names the session server that
-// owns the terminal, so a restored pane reattaches on the same machine.
+// configured host address. Server names the session server that owns the
+// terminal, so a restored pane reattaches on the same machine.
 type termSpec struct {
 	Host   string
 	Server string
@@ -58,7 +56,7 @@ func warmSessionServer() {
 // not the file or folder selected in the Explorer, and one can be opened
 // before any file is.
 func (a *app) terminalDir() string {
-	if a.store == nil || a.store.memory {
+	if a.store == nil || a.store.isMemory() {
 		return ""
 	}
 	return a.store.dir
@@ -137,7 +135,7 @@ func (a *app) newTerminalPane() {
 		a.fail(errors.New("terminals need macOS or Linux"))
 		return
 	}
-	if a.store == nil || a.store.memory {
+	if a.store == nil || a.store.isMemory() {
 		a.fail(errors.New("terminals need a project on disk"))
 		return
 	}
@@ -224,23 +222,23 @@ func (a *app) startTerminalSpec(spec termSpec) (*termTab, error) {
 	if err != nil {
 		return nil, err
 	}
-	var cmd []string
-	dir := a.terminalDir()
-	if spec.Host != "" {
-		cmd = sshArgs(spec.Host)
-		dir = ""
-	} else if spec.Server != localServerID {
-		dir = a.remotePath
-	} else if strings.TrimSpace(a.shellPath) != "" {
-		cmd = []string{a.shellPath, "-l"}
-	}
-	info, err := client.Create(session.CreateOptions{
-		Command: cmd, Dir: dir, Cols: 80, Rows: 24,
-	})
+	info, err := client.Create(a.terminalCreateOptions(spec))
 	if err != nil {
 		return nil, fmt.Errorf("session: %w", err)
 	}
 	return a.attachTerminal(client, info.ID, spec)
+}
+
+// terminalClientExisting chooses an already connected server for a
+// restored pane; it never dials SSH from the window thread.
+func (a *app) terminalClientExisting(spec termSpec) (*session.Client, error) {
+	if spec.Host != "" || spec.Server == "" || spec.Server == localServerID {
+		return a.sessions()
+	}
+	if rc := a.remoteForHost(spec.Server); rc != nil {
+		return rc.client, nil
+	}
+	return nil, fmt.Errorf("%s is not connected", spec.Server)
 }
 
 // terminalClient chooses the session server that owns a terminal. A
@@ -289,26 +287,26 @@ func (a *app) terminalOptions(conn *session.Stream, tt *termTab) terminal.Option
 		}
 	}
 	copySelect := terminal.CopyOnSelectNone
-	if a.terminalCopySelect {
+	if a.TerminalCopySelect {
 		copySelect = terminal.CopyOnSelectClipboard
 	}
 	return terminal.Options{
 		Conn: conn,
 		Font: terminal.Font{
-			Family:     a.terminalFontFamily,
+			Family:     a.TerminalFontFamily,
 			Size:       float32(a.termFontSize()),
 			LineHeight: float32(a.termLineHeight()),
 		},
-		OptionAsAlt:  a.terminalOptionAsAlt,
+		OptionAsAlt:  a.TerminalOptionAsAlt,
 		CopyOnSelect: copySelect,
-		Cursor:       terminal.CursorStyle(a.terminalCursor),
-		NoBlink:      a.noCursorBlink,
+		Cursor:       terminal.CursorStyle(a.TerminalCursor),
+		NoBlink:      a.NoCursorBlink,
 		Scrollback:   a.termScrollback() * 1 << 20,
 		Transparent:  true,
 		Padding:      terminal.Padding{X: 10, Y: 8},
 		OnBell: func() {
 			update(func() {
-				if a.notifyBell && (a.win == nil || !a.win.IsFocused()) {
+				if a.NotifyBell && (a.win == nil || !a.win.IsFocused()) {
 					mygo.NewNotification(mygo.NotificationOptions{
 						Title: "Terminal", Body: tt.Spec.title(),
 					}).Show()
@@ -318,8 +316,7 @@ func (a *app) terminalOptions(conn *session.Stream, tt *termTab) terminal.Option
 		},
 		OnExit: func(int) {
 			update(func() {
-				tt.Exited = true
-				if a.notifyExit && !a.quitting && (a.win == nil || !a.win.IsFocused()) {
+				if a.NotifyExit && !a.quitting && (a.win == nil || !a.win.IsFocused()) {
 					mygo.NewNotification(mygo.NotificationOptions{
 						Title: "Terminal finished", Body: tt.Spec.title(),
 					}).Show()
@@ -347,103 +344,4 @@ func (a *app) sessions() (*session.Client, error) {
 	}
 	a.sessionClient = c
 	return c, nil
-}
-
-// startRestoredTerminal starts or reattaches a terminal restored by the
-// layout, once its pane is first shown.
-func (a *app) startRestoredTerminal(p *pane) {
-	if p == nil || p.Term == nil || p.Term.Term != nil || p.Term.starting || p.Term.startErr != "" {
-		return
-	}
-	if p.Term.SID == "" && p.Term.Spec.Host == "" {
-		return
-	}
-	t := p.Term
-	if t.Spec.Server == "" {
-		// Layouts written before terminals carried a server keep working:
-		// a direct SSH pane lives locally; a plain shell follows the
-		// project that was open when the layout was written.
-		switch {
-		case t.Spec.Host != "":
-			t.Spec.Server = localServerID
-		case a.remotePath != "" && a.serverAlias != "":
-			t.Spec.Server = a.serverAlias
-		default:
-			t.Spec.Server = localServerID
-		}
-	}
-	t.starting = true
-	defer func() { t.starting = false }()
-	// Use the same server that owns the saved session.
-	client, err := a.terminalClient(t.Spec)
-	if err != nil {
-		t.startErr = err.Error()
-		return
-	}
-	sid := t.SID
-	if sid != "" {
-		if list, listErr := client.List(); listErr == nil {
-			found := false
-			for _, info := range list {
-				if info.ID == sid && !info.Exited {
-					found = true
-					break
-				}
-			}
-			if !found {
-				sid = ""
-			}
-		}
-	}
-	var tt *termTab
-	if sid != "" {
-		tt, err = a.attachTerminal(client, sid, t.Spec)
-	} else {
-		tt, err = a.startTerminalSpec(t.Spec)
-	}
-	if err != nil {
-		t.startErr = err.Error()
-		a.invalidate()
-		return
-	}
-	t.Term, t.SID, t.stream = tt.Term, tt.SID, tt.stream
-	t.Client = tt.Client
-	a.changed()
-	a.invalidate()
-}
-
-// endTerminal ends a session when its pane is closed by the user.
-func (a *app) endTerminal(t *termTab) {
-	if t == nil || t.SID == "" {
-		return
-	}
-	client := t.Client
-	if client == nil {
-		client = a.sessionClient
-	}
-	if client == nil {
-		return
-	}
-	sid := t.SID
-	go func() { _ = client.Kill(sid) }()
-}
-
-// closeTerminals detaches every terminal before the window or project
-// goes: the server keeps the shells running.
-func (a *app) closeTerminals() {
-	a.dropClosingPanes(nil)
-	for _, t := range a.tabs {
-		for _, p := range t.panes() {
-			if p.Term != nil {
-				if p.Term.Term != nil {
-					_ = p.Term.Term.Close()
-					p.Term.Term = nil
-				}
-				if p.Term.stream != nil {
-					_ = p.Term.stream.Close()
-					p.Term.stream = nil
-				}
-			}
-		}
-	}
 }

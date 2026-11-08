@@ -40,7 +40,7 @@ func newProjectApp(t *testing.T) *app {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := &app{store: s, treeOpen: true, openDirs: map[string]bool{"scripts": true}}
+	a := &app{workspace: &workspace{store: s, treeOpen: true, openDirs: map[string]bool{"scripts": true}}}
 	a.focusFirstNote()
 	return a
 }
@@ -359,7 +359,7 @@ func TestRefreshProject(t *testing.T) {
 }
 
 func TestMenuBuilds(t *testing.T) {
-	a := &app{}
+	a := &app{workspace: &workspace{}}
 	if m := a.menu(); m == nil {
 		t.Fatal("no menu")
 	}
@@ -376,10 +376,10 @@ func TestSettingsPageAndPersistence(t *testing.T) {
 	if terminalsSupported() && !tt.HasText("Hosts") {
 		t.Fatalf("settings window texts: %q", tt.Texts())
 	}
-	a.editorFontSize = 15
-	a.hideLineNumbers = true
-	a.markdownPreview = true
-	a.terminalFontSize = 14
+	a.EditorFontSize = 15
+	a.HideLineNumbers = true
+	a.MarkdownPreview = true
+	a.TerminalFontSize = 14
 	a.saveSettings()
 	var saved settingsFile
 	data, err := os.ReadFile(a.settingsPath)
@@ -467,11 +467,11 @@ func TestSettingsAppearanceAndEditor(t *testing.T) {
 		t.Fatal(err)
 	}
 	settings.Frame()
-	if a.appearance != 2 {
-		t.Fatalf("appearance after Dark: %d", a.appearance)
+	if a.Appearance != 2 {
+		t.Fatalf("appearance after Dark: %d", a.Appearance)
 	}
-	a.editorFontSize = 16
-	a.hideLineNumbers = true
+	a.EditorFontSize = 16
+	a.HideLineNumbers = true
 	a.openNote(a.store.byRelPath("scripts/tasks.py"))
 	tt.Frame()
 	p := a.tab().Focus
@@ -506,11 +506,11 @@ func TestSettingsCategoriesAndFontFamily(t *testing.T) {
 		t.Fatal(err)
 	}
 	settings.Frame()
-	a.editorFontFamily = "Menlo"
-	a.editorFontSize = 15
-	a.editorLineHeight = 1.7
-	a.editorTabSize = 2
-	a.noActiveLine = true
+	a.EditorFontFamily = "Menlo"
+	a.EditorFontSize = 15
+	a.EditorLineHeight = 1.7
+	a.EditorTabSize = 2
+	a.NoActiveLine = true
 	a.openNote(a.store.byRelPath("scripts/tasks.py"))
 	main := ui.NewTester(a.view, 1100, 700)
 	main.Frame()

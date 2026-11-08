@@ -32,7 +32,7 @@ func (a *app) gitPage(c *ui.Context, k *colors) {
 // window, and the file menu.
 
 func (a *app) ProjectDir() (string, bool) {
-	if a.store == nil || a.store.memory {
+	if a.store == nil || a.store.isMemory() {
 		return "", false
 	}
 	return a.store.dir, true
@@ -40,8 +40,8 @@ func (a *app) ProjectDir() (string, bool) {
 
 // GitRunner runs Git where the project lives: locally, or on a server.
 func (a *app) GitRunner() gitpage.Runner {
-	if a.store != nil && a.store.server != nil {
-		return serverGitRunner{client: a.store.server.client}
+	if a.store != nil && a.store.isServer() {
+		return serverGitRunner{client: a.store.client()}
 	}
 	return gitpage.LocalRunner{}
 }

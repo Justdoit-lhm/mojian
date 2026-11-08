@@ -17,7 +17,7 @@ func (a *app) projectName() string {
 	if a.remotePath != "" {
 		return filepath.Base(a.remotePath)
 	}
-	if a.store == nil || a.store.memory {
+	if a.store == nil || a.store.isMemory() {
 		return "Mojian"
 	}
 	return filepath.Base(a.store.dir)
@@ -31,7 +31,7 @@ func (a *app) projectPath() string {
 	if a.store == nil {
 		return ""
 	}
-	if a.store.memory {
+	if a.store.isMemory() {
 		return "in memory"
 	}
 	return shortPath(a.store.dir)
@@ -64,7 +64,7 @@ func (a *app) recentProjects() []string {
 			out = append(out, p)
 		}
 	}
-	if a.store != nil && !a.store.memory {
+	if a.store != nil && !a.store.isMemory() {
 		add(a.store.dir)
 	}
 	add(a.project)
@@ -91,7 +91,7 @@ func (a *app) openProject(dir string) {
 		a.saveSettings()
 		return
 	}
-	if a.remotePath == "" && a.store != nil && !a.store.memory && a.store.dir == abs {
+	if a.remotePath == "" && a.store != nil && !a.store.isMemory() && a.store.dir == abs {
 		a.projectOpen = false
 		a.invalidate()
 		return
@@ -150,7 +150,7 @@ func (a *app) projectChip(c *ui.Context, k *colors) {
 	if chip.Hovered() || a.projectOpen {
 		chip.Background(k.Hover)
 	}
-	if chip.Clicked() && !a.store.memory {
+	if chip.Clicked() && !a.store.isMemory() {
 		a.projectOpen = !a.projectOpen
 	}
 	chip.Children(func() {
@@ -159,7 +159,7 @@ func (a *app) projectChip(c *ui.Context, k *colors) {
 			SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
 		ui.Icon(c, icons.Icon("chevron-down")).Size(13, 13).TextColor(k.TextFaint)
 	})
-	if a.store.memory {
+	if a.store.isMemory() {
 		return
 	}
 	ui.PopoverBase(c, chip, &a.projectOpen, func(panel ui.Element) {
@@ -200,7 +200,7 @@ func (a *app) projectChip(c *ui.Context, k *colors) {
 			if row.Hovered() {
 				row.Background(k.Hover)
 			}
-			row.Tooltip(tip("Open Folder", cmdOpenProject))
+			row.Tooltip(a.tip("Open Folder", cmdOpenProject))
 			if row.Clicked() {
 				a.projectOpen = false
 				a.openProjectPicker()
@@ -214,7 +214,7 @@ func (a *app) projectChip(c *ui.Context, k *colors) {
 }
 
 func (a *app) projectRow(c *ui.Context, k *colors, p string) {
-	current := a.store != nil && !a.store.memory && filepath.Clean(a.store.dir) == filepath.Clean(p)
+	current := a.store != nil && !a.store.isMemory() && filepath.Clean(a.store.dir) == filepath.Clean(p)
 	row := ui.Row(c.Key("project:"+p)).Height(42).Padding(0, 8).Gap(9).Radius(radius).
 		AlignItems(ui.Center).Cursor(ui.CursorPointer).Role(ui.RoleButton).
 		Label(a.projectLabel(p))

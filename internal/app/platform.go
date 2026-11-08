@@ -95,14 +95,10 @@ func shortcutKey(r rune) string {
 }
 
 func fileManagerNameFor(goos string) string {
-	switch goos {
-	case "darwin":
+	if goos == "darwin" {
 		return "Finder"
-	case "windows":
-		return "Explorer"
-	default:
-		return "Files"
 	}
+	return "Files"
 }
 
 func thisComputerName() string {
@@ -118,9 +114,6 @@ func revealLabel() string {
 }
 
 func revealLabelFor(goos string) string {
-	if goos == "windows" {
-		return "Show in Explorer"
-	}
 	return "Reveal in " + fileManagerNameFor(goos)
 }
 

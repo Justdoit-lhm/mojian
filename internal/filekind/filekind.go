@@ -68,11 +68,6 @@ var assetExts = map[string]bool{
 	".pdf": true,
 }
 
-// IsAsset reports whether path is shown by the picture or PDF viewer.
-func IsAsset(path string) bool {
-	return assetExts[strings.ToLower(filepath.Ext(path))]
-}
-
 // Classify returns what path opens as, using head (its first HeadSize
 // bytes, or nil when not read) for extensions nothing else knows.
 func Classify(path string, head []byte) Kind {
@@ -121,11 +116,4 @@ func ClassifyFile(path string) (Kind, error) {
 	head := make([]byte, HeadSize)
 	n, _ := f.Read(head)
 	return Classify(path, head[:n]), nil
-}
-
-// ReadHead reads the start of a remote file for Classify.
-func ReadHead(f *os.File) ([]byte, error) {
-	head := make([]byte, HeadSize)
-	n, err := f.Read(head)
-	return head[:n], err
 }

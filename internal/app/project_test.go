@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"mojian/internal/session"
 	integration "mojian/test"
 
 	"github.com/egoist/mygo/ui"
@@ -21,9 +22,9 @@ func TestProjectSwitch(t *testing.T) {
 
 	data := t.TempDir()
 	a := &app{
+		workspace:    &workspace{treeOpen: true},
 		dataDir:      data,
 		settingsPath: filepath.Join(data, "settings.json"),
-		treeOpen:     true,
 	}
 	s, err := openStoreAt(alpha)
 	if err != nil {
@@ -101,7 +102,7 @@ func TestProjectChip(t *testing.T) {
 	registerFonts()
 	dir := filepath.Join(t.TempDir(), "Quiet")
 	integration.WriteVault(t, dir, map[string]string{"note.md": "# A note\n", "app.js": "console.log(1);\n"})
-	a := &app{dataDir: t.TempDir(), treeOpen: true}
+	a := &app{workspace: &workspace{treeOpen: true}, dataDir: t.TempDir()}
 	s, err := openStoreAt(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -139,7 +140,7 @@ func TestRemoteWorkspaceSwitchUsesTheCache(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, "App")
 	integration.WriteVault(t, dir, map[string]string{"main.go": "package main\n"})
-	a := &app{dataDir: t.TempDir(), treeOpen: true}
+	a := &app{workspace: &workspace{treeOpen: true}, dataDir: t.TempDir()}
 	s, err := openStoreAt(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -150,7 +151,13 @@ func TestRemoteWorkspaceSwitchUsesTheCache(t *testing.T) {
 	a.focusFirstNote()
 	a.registerActiveWorkspace()
 
+	client, err := session.Connect()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = client.Close() })
 	key := workspaceKeyRemote("buildbox", "/srv/app")
+	a.remotes = map[string]*remoteConn{"buildbox": {host: "buildbox", client: client}}
 	a.workspaces[key] = &workspace{
 		key:         key,
 		project:     a.project,

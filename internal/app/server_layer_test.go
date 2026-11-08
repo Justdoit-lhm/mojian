@@ -38,7 +38,7 @@ func TestLocalProjectStoreUsesSessionServer(t *testing.T) {
 	if !s.dirs["folder"] {
 		t.Fatal("the server listing lost a folder")
 	}
-	if s.server == nil || !s.server.local {
+	if !s.isLocalServer() {
 		t.Fatal("the store was not marked as local-server backed")
 	}
 	n := s.byRelPath("a.md")
@@ -86,12 +86,12 @@ func TestAppOpenProjectUsesLocalServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := &app{
+		workspace:     &workspace{treeOpen: true},
 		dataDir:       t.TempDir(),
-		treeOpen:      true,
 		sessionClient: client,
 	}
 	a.openProject(project)
-	if a.store == nil || a.store.server == nil || !a.store.server.local {
+	if a.store == nil || !a.store.isLocalServer() {
 		t.Fatalf("project did not use the local server: %+v", a.store)
 	}
 	n := a.currentNote()
@@ -124,7 +124,7 @@ func TestLocalServerGitRunner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := &app{store: s}
+	a := &app{workspace: &workspace{store: s}}
 	if _, ok := a.GitRunner().(serverGitRunner); !ok {
 		t.Fatalf("Git runner is %T, want serverGitRunner", a.GitRunner())
 	}
@@ -160,7 +160,7 @@ func TestDetachRemoteConnKeepsServer(t *testing.T) {
 		}
 	}()
 	rc := &remoteConn{host: "buildbox", client: client}
-	a := &app{}
+	a := &app{workspace: &workspace{}}
 	a.detachRemoteConn(rc)
 	select {
 	case <-client.Closed():

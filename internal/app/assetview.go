@@ -36,7 +36,7 @@ func (a *app) markdownBody(c *ui.Context, k *colors, p *pane) {
 			Padding(26, 34, 44, 34).Children(func() {
 			if p.md == nil {
 				opts := &markdown.Options{}
-				if a.store == nil || a.store.server == nil {
+				if a.store == nil || !a.store.isRemote() {
 					opts.LoadImage = markdown.FileImages(filepath.Dir(p.Note.Path))
 				}
 				p.md = opts

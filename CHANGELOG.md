@@ -1,5 +1,55 @@
 # Changelog
 
+## 0.2.1
+
+- Windows is no longer a supported target. The app builds and runs on
+  macOS and Linux; the browser build keeps its in-memory editor.
+- Settings › Hosts is the only host source. The SSH terminal picker lists
+  the hosts configured there instead of scanning `~/.ssh/config`.
+- Each host has a Set Up Server action: it uploads `mojian-server` and
+  `libghostty-vt` to `~/.local/share/mojian` on the host, starts the
+  server, checks its protocol, and reports the result in the host row.
+  Tested over real SSH against Fedora 44.
+- A cached remote project reconnects when its connection dropped instead
+  of switching to a closed client. Terminals owned by that host are
+  reattached when their pane is shown again.
+- Clipboard cuts are one-shot: a cut moves files only while the system
+  clipboard still holds the cut paths. Switching projects clears the cut;
+  a remote project's clipboard is scoped to its host and folder.
+- Slider settings are written once the drag settles instead of on every
+  pointer frame.
+- A failed update check no longer also says the app is up to date.
+- The active project is stored as one workspace object instead of being
+  copied field by field between the app and the cache.
+- A project's files live behind one `fsBackend`: a direct folder, the
+  session server, or the browser's memory. Listing, reads, writes, rename,
+  copy, trash, assets and path guards no longer branch on `server` and
+  `memory` at each call site.
+- The remote connection pool owns every connection; cached workspaces
+  keep only a host name. A dropped connection is re-established before a
+  cached project switches, and its terminal panes reattach when shown.
+- A restored terminal attaches off the window thread and shows a Try Again
+  action when its server is unreachable.
+- Command dialogs, filtered-list keys and file-picker rows share one
+  implementation.
+- Settings search builds its index once per shortcut change instead of on
+  every frame; the found-page map only stores which pages matched.
+- The Settings pages are data: `internal/settings` declares categories,
+  rows, controls, ranges and search words, and the app renders the generic
+  pages from that one table. Keyboard, Hosts, Advanced and Updates keep
+  custom controls but their rows still come from the same table.
+- Large files are split by domain: window/settings persistence/menu/panes,
+  pane and welcome views, tree state and tree view, clipboard and tree
+  drafts, remote connection/project/picker, Git state/parse/view, and
+  note/store/file-creation pieces.
+- The session protocol (version 3) carries a SHA-256 hash for every asset
+  in a listing, and remote picture/PDF caches are keyed by that hash
+  instead of size and timestamp. A file changed with the same size and
+  mtime no longer serves a stale image.
+- The remote connection pool releases a host when its last project,
+  terminal or open picker goes, instead of holding every connection until
+  the app quits.
+
 ## 0.2.0
 
 - On macOS and Linux, local projects now open through the same session

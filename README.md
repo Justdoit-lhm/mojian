@@ -7,7 +7,7 @@
 <p align="center"><em>Words on paper. The tool steps back.</em></p>
 
 <p align="center">
-  macOS 13+ &nbsp;·&nbsp; Linux amd64/arm64 &nbsp;·&nbsp; Windows 10/11 amd64 &nbsp;·&nbsp; MyGo native UI &nbsp;·&nbsp; No webview &nbsp;·&nbsp; No cgo
+  macOS 13+ &nbsp;·&nbsp; Linux amd64/arm64 &nbsp;·&nbsp; MyGo native UI &nbsp;·&nbsp; No webview &nbsp;·&nbsp; No cgo
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@ opened, and a note is the file on disk.
 A tab holds tiled panes. A pane can edit a file, preview an image or PDF,
 or — on macOS and Linux — run a terminal. The window is drawn by
 [MyGo](https://mygo.egoist.dev) as native UI: Metal on macOS, GTK 3 on
-Linux, Direct3D 11 on Windows. There is no webview, no Electron and no
+Linux. There is no webview, no Electron and no
 JavaScript build.
 
 The Chinese name 墨间 (mò jiān) is ink, and the space it needs. The tool
@@ -41,14 +41,6 @@ writing stays yours.
 |---|---|---|---|---|
 | macOS 13+ | Apple Silicon or Intel | `.dmg` | Yes | Yes |
 | Linux amd64 / arm64 | GTK 3 | `.deb`, `.tar.gz` | Yes | Yes |
-| Windows 10/11 amd64 | none | portable `.zip` | Yes | Not in 0.1.1 |
-
-The Windows build is a portable, editor-focused release. Its menus,
-palettes and Settings hide the terminal, SSH and remote-project features
-that depend on the Unix session server; Windows opens folders directly
-without one. Those server features remain available on macOS and Linux.
-CI builds the Windows target and runs its headless test suite on a Windows
-runner.
 
 ## Install
 
@@ -81,18 +73,11 @@ sh install.sh
 
 The Linux app needs GTK 3 and a desktop session.
 
-### Windows
-
-Run `mojian-setup-<version>-amd64.exe`, or extract
-`mojian-<version>-windows-amd64.zip` and run `Mojian.exe`. Keep
-`ghostty-vt.dll` beside the executable. The binaries are unsigned, so
-SmartScreen may ask you to confirm the first launch.
-
 ## The editor
 
 ### A project is a folder
 
-`Cmd+O` on macOS or `Ctrl+O` on Linux and Windows opens any folder. The
+`Cmd+O` on macOS or `Ctrl+O` on Linux opens any folder. The
 chips at the top left switch between recent projects; on macOS and Linux
 they also switch between local and server projects. Each project keeps its
 own tabs, panes and recent files. With no project chosen, the first launch
@@ -118,7 +103,7 @@ A tab is a workspace made of panes. A split opens an empty pane with an
 inline file search. Drag a pane by its header onto another pane's edge to
 insert it there, or use `Option+Shift` / `Alt+Shift` and the arrows.
 `Option` / `Alt` and the arrows move pane focus. `Shift+Cmd+M` on macOS or
-`Ctrl+Shift+M` on Linux and Windows zooms the focused pane.
+`Ctrl+Shift+M` on Linux zooms the focused pane.
 
 `Shift+Cmd+B` / `Ctrl+Shift+B` toggles the Explorer. Its search field
 filters files, and **Open File** (`Shift+Cmd+O` / `Ctrl+Shift+O`) opens a
@@ -134,16 +119,17 @@ such as `.git`, `node_modules`, `dist` and `build` stay out of sight.
 On macOS and Linux, local projects and their terminals run through the
 same detached session server: quitting Mojian detaches the shells and
 reopening reattaches them, and saves, file operations and Git use the same
-server. `Shift+Cmd+L` / `Ctrl+Shift+L` opens an SSH terminal from
-`~/.ssh/config`.
+server. `Shift+Cmd+L` / `Ctrl+Shift+L` opens an SSH terminal to a host
+from Settings › Hosts.
 
-Add a host in Settings › Hosts, then choose it from the server chip. Mojian
-starts a small per-user server there over `ssh` and works on the folder in
-place: the Explorer lists the host's files, a file is read when it opens,
-and saves and file operations write straight back. Git runs on the host
-too. The first connection shows a loading card while the server uploads,
-and a project once opened stays loaded, so switching back restores its
-tabs and terminals without reading it again. The remote server and its
+Add a host in Settings › Hosts, then use **Set Up Server** on its row to
+upload `mojian-server` and `libghostty-vt` to `~/.local/share/mojian` and
+check that it answers; the result stays in the row. Choose the host from
+the server chip to work on a folder in place: the Explorer lists the
+host's files, a file is read when it opens, and saves and file operations
+write straight back. Git runs on the host too. A project once opened stays
+loaded, so switching back restores its tabs and terminals without reading
+it again. The remote server and its
 terminals stay alive when the SSH connection or Mojian disconnects; each
 terminal remembers the server that owns it, and `mojian-server -stop` ends
 a server explicitly. No root, no listening port and no system service are
@@ -170,16 +156,15 @@ Updates** reports when the app is current or offers a newer version;
 Update** applies a staged update and relaunches Mojian. The check never
 blocks the editor.
 
-Self-updates need a writable installation: the macOS app bundle, the
-per-user Linux archive, or a Windows folder you own. A `.deb` installed in
-`/opt` and the Windows machine-wide installer are updated by their package
-manager instead.
+Self-updates need a writable installation: the macOS app bundle or the
+per-user Linux archive. A `.deb` installed in `/opt` is updated by its
+package manager instead.
 
 ## Keyboard shortcuts
 
 The in-app labels follow the platform. This table shows both spellings.
 
-| Action | macOS | Linux / Windows |
+| Action | macOS | Linux |
 |---|---|---|
 | Open project | `⌘O` | `Ctrl+O` |
 | Open file | `⇧⌘O` | `Ctrl+Shift+O` |
@@ -227,12 +212,10 @@ Build the release targets you need:
 ```sh
 go tool mygo build -platform darwin/arm64,darwin/amd64
 go tool mygo build -platform linux/amd64,linux/arm64
-go tool mygo build -platform windows/amd64
 ```
 
 The output lives under `build/<os>-<arch>/`. macOS produces `.app` and
-`.dmg`; Linux produces `.tar.gz` and `.deb`; Windows produces `Mojian.exe`
-and its DLL. MyGo is pinned as a Go tool in `go.mod`, so the first
+`.dmg`; Linux produces `.tar.gz` and `.deb`. MyGo is pinned as a Go tool in `go.mod`, so the first
 `go tool mygo` downloads the exact version.
 
 `go tool mygo dev -web` opens the interface in a browser, with files kept
@@ -251,8 +234,7 @@ Each release contains:
 
 - macOS: `mojian-<version>-arm64.dmg`, `mojian-<version>-amd64.dmg`
 - Linux: `mojian-<version>-linux-{amd64,arm64}.tar.gz`, matching `.deb` packages, `install.sh`
-- Windows: `mojian-<version>-windows-amd64.zip`, `mojian-setup-<version>-amd64.exe`
-- Signed update archives (`*-darwin-*.tar.gz`, `*-linux-*.tar.gz`, `*-windows-*.tar.gz`) and `update-<target>.json` manifests
+- Signed update archives (`*-darwin-*.tar.gz`, `*-linux-*.tar.gz`) and `update-<target>.json` manifests
 - `SHA256SUMS`
 
 ## Design

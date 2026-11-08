@@ -219,7 +219,7 @@ func TestPickerOpensChosenProject(t *testing.T) {
 	beta := filepath.Join(root, "Beta")
 	integration.WriteVault(t, alpha, map[string]string{"a.md": "# A\n"})
 	integration.WriteVault(t, beta, map[string]string{"b.py": "print(1)\n"})
-	a := &app{dataDir: t.TempDir(), treeOpen: true}
+	a := &app{workspace: &workspace{treeOpen: true}, dataDir: t.TempDir()}
 	s, err := openStoreAt(alpha)
 	if err != nil {
 		t.Fatal(err)
@@ -273,5 +273,22 @@ func TestDuplicateFile(t *testing.T) {
 	}
 	if a.treeSel != want {
 		t.Errorf("selection: %q", a.treeSel)
+	}
+}
+
+func TestRenameCaseOnlySpelling(t *testing.T) {
+	a := newProjectApp(t)
+	rel, changed, err := a.store.rename(filepath.Join("scripts", "tasks.py"), "TASKS.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join("scripts", "TASKS.py"); rel != want {
+		t.Fatalf("rename: %q, want %q", rel, want)
+	}
+	if len(changed) != 1 || changed[0].Rel != rel {
+		t.Fatalf("changed notes: %+v", changed)
+	}
+	if a.store.byRelPath(rel) == nil {
+		t.Fatal("the renamed note is missing")
 	}
 }

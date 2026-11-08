@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"mojian/internal/settings"
+
 	"github.com/egoist/mygo/ui"
 )
 
@@ -48,42 +50,42 @@ func TestSettingsTogglesWriteTheSettingBack(t *testing.T) {
 	a.settingsCat = settingsEditor
 	tt := ui.NewTester(a.settingsWindowView, 900, 640)
 	tt.Frame()
-	before := a.hideLineNumbers
+	before := a.HideLineNumbers
 	if err := tt.Click("Line numbers toggle"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.hideLineNumbers == before {
-		t.Fatalf("Line numbers did not change: %v", a.hideLineNumbers)
+	if a.HideLineNumbers == before {
+		t.Fatalf("Line numbers did not change: %v", a.HideLineNumbers)
 	}
-	before = a.noActiveLine
+	before = a.NoActiveLine
 	if err := tt.Click("Highlight active line toggle"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.noActiveLine == before {
-		t.Fatalf("Highlight active line did not change: %v", a.noActiveLine)
+	if a.NoActiveLine == before {
+		t.Fatalf("Highlight active line did not change: %v", a.NoActiveLine)
 	}
-	if a.editorSoftWrap {
+	if a.EditorSoftWrap {
 		t.Fatal("soft wrap started on")
 	}
 	if err := tt.Click("Soft wrap code toggle"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !a.editorSoftWrap {
+	if !a.EditorSoftWrap {
 		t.Fatal("Soft wrap code did not turn on")
 	}
 	a.settingsCat = settingsGit
 	tt.Frame()
-	if a.noGitAutoRefresh {
+	if a.NoGitAutoRefresh {
 		t.Fatal("git refresh started off")
 	}
 	if err := tt.Click("Refresh when the window returns toggle"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !a.noGitAutoRefresh {
+	if !a.NoGitAutoRefresh {
 		t.Fatal("Refresh when the window returns did not turn off")
 	}
 }
@@ -139,7 +141,7 @@ func TestSettingsShortcutPersistenceAndConflict(t *testing.T) {
 	if saved.Shortcuts[cmdSave.id] != "CmdOrCtrl+Alt+S" {
 		t.Fatalf("saved shortcuts: %v", saved.Shortcuts)
 	}
-	loaded := &app{settingsPath: a.settingsPath}
+	loaded := &app{workspace: &workspace{}, settingsPath: a.settingsPath}
 	loaded.loadSettings()
 	if loaded.commandAccel(cmdSave) != "CmdOrCtrl+Alt+S" {
 		t.Fatalf("loaded shortcut: %q", loaded.commandAccel(cmdSave))
@@ -223,16 +225,70 @@ func TestSettingsSearchShortcut(t *testing.T) {
 func TestSettingsResetKeepsProjectsAndServers(t *testing.T) {
 	registerFonts()
 	a := newProjectApp(t)
-	a.appearance = 2
-	a.editorFontSize = 20
-	a.hideLineNumbers = true
+	a.Appearance = 2
+	a.EditorFontSize = 20
+	a.HideLineNumbers = true
 	a.hosts = []hostConfig{{Name: "Dev", Address: "me@devbox"}}
 	a.project = "/tmp/project"
 	a.resetPreferences()
-	if a.appearance != 0 || a.fontSize() != 12.5 || a.hideLineNumbers {
-		t.Fatalf("preferences after reset: appearance=%d size=%v hide=%v", a.appearance, a.fontSize(), a.hideLineNumbers)
+	if a.Appearance != 0 || a.fontSize() != 12.5 || a.HideLineNumbers {
+		t.Fatalf("preferences after reset: appearance=%d size=%v hide=%v", a.Appearance, a.fontSize(), a.HideLineNumbers)
 	}
 	if len(a.hosts) != 1 || a.project != "/tmp/project" {
 		t.Fatalf("reset dropped projects or servers: hosts=%v project=%q", a.hosts, a.project)
+	}
+}
+
+func TestHostSetUpButtonInstallsAndShowsStatus(t *testing.T) {
+	old := provisionRemoteFn
+	provisionRemoteFn = func(host string, existing *remoteConn) (*remoteSetup, error) {
+		if host != "fedora" {
+			t.Fatalf("set up host: %q", host)
+		}
+		return &remoteSetup{Uploaded: true, Path: "/home/me/.local/share/mojian/mojian-server"}, nil
+	}
+	t.Cleanup(func() { provisionRemoteFn = old })
+
+	a := newProjectApp(t)
+	a.hosts = []hostConfig{{Name: "Fedora", Address: "fedora"}}
+	a.settingsCat = settingsHosts
+	tt := ui.NewTester(a.settingsWindowView, 900, 1400)
+	tt.Frame()
+	if !tt.HasText("Set Up Server") {
+		t.Fatalf("the host row has no setup button (cat=%d): %q", a.settingsCat, tt.Texts())
+	}
+	if err := tt.Click("Set Up Server"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !a.hostReady["fedora"] {
+		t.Fatal("the host was not marked ready")
+	}
+	if !strings.Contains(a.hostSetupMsg, "uploaded") {
+		t.Fatalf("setup message: %q", a.hostSetupMsg)
+	}
+	if !tt.HasText("Server uploaded · /home/me/.local/share/mojian/mojian-server") {
+		t.Fatalf("the setup status is not on the page: %q", tt.Texts())
+	}
+}
+
+func TestSettingsTableRendersEveryGenericRow(t *testing.T) {
+	registerFonts()
+	a := newProjectApp(t)
+	tt := ui.NewTester(a.settingsWindowView, 900, 1600)
+	for _, cat := range []int{
+		settingsGeneral, settingsAppearance, settingsEditor,
+		settingsTerminal, settingsShell, settingsNotifications, settingsGit,
+	} {
+		a.settingsCat = cat
+		tt.Frame()
+		for _, row := range settings.Rows {
+			if row.Cat != cat {
+				continue
+			}
+			if !tt.HasText(row.Title) {
+				t.Fatalf("page %q is missing row %q: %q", settingsCats[cat].Title, row.Title, tt.Texts())
+			}
+		}
 	}
 }

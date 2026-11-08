@@ -7,7 +7,7 @@
 <p align="center"><em>字落于纸，工具退于幕后。</em></p>
 
 <p align="center">
-  macOS 13+ &nbsp;·&nbsp; Linux amd64/arm64 &nbsp;·&nbsp; Windows 10/11 amd64 &nbsp;·&nbsp; MyGo 原生界面 &nbsp;·&nbsp; 无 WebView &nbsp;·&nbsp; 无 cgo
+  macOS 13+ &nbsp;·&nbsp; Linux amd64/arm64 &nbsp;·&nbsp; MyGo 原生界面 &nbsp;·&nbsp; 无 WebView &nbsp;·&nbsp; 无 cgo
 </p>
 
 <p align="center">
@@ -23,7 +23,7 @@
 
 墨间是一款安静、克制的纯文本编辑器，直接打开普通文件夹。没有资料库、索引、数据库，也不需要账号：项目就是你打开的文件夹，笔记就是磁盘上的文件。
 
-一个标签页由多个平铺窗格组成。每个窗格可以编辑文件、预览图片或 PDF；在 macOS 和 Linux 上，还可以运行终端。界面由 [MyGo](https://mygo.egoist.dev) 绘制为原生 UI：macOS 使用 Metal，Linux 使用 GTK 3，Windows 使用 Direct3D 11。没有 WebView、没有 Electron，也没有 JavaScript 构建流程。
+一个标签页由多个平铺窗格组成。每个窗格可以编辑文件、预览图片或 PDF；在 macOS 和 Linux 上，还可以运行终端。界面由 [MyGo](https://mygo.egoist.dev) 绘制为原生 UI：macOS 使用 Metal，Linux 使用 GTK 3。没有 WebView、没有 Electron，也没有 JavaScript 构建流程。
 
 **墨**是文字，**间**是留白。工具退到纸后，文件留在眼前；编辑的节奏，由你掌握。
 
@@ -33,9 +33,6 @@
 |---|---|---|---|---|
 | macOS 13+ | Apple Silicon 或 Intel | `.dmg` | 支持 | 支持 |
 | Linux amd64 / arm64 | GTK 3 | `.deb`、`.tar.gz` | 支持 | 支持 |
-| Windows 10/11 amd64 | 无额外依赖 | 便携 `.zip` | 支持 | 0.1.1 暂不支持 |
-
-Windows 版是面向编辑的便携版本。依赖 Unix 会话服务器的终端、SSH 与远程项目功能会在菜单、命令面板和设置中隐藏；这些功能在 macOS 与 Linux 上保持完整。CI 会在 Windows 运行器上构建目标并运行无头测试。
 
 ## 安装
 
@@ -65,18 +62,11 @@ sh install.sh
 
 Linux 版需要 GTK 3 和桌面会话。
 
-### Windows
-
-运行 `mojian-setup-<版本>-amd64.exe`，或解压
-`mojian-<版本>-windows-amd64.zip` 后运行 `Mojian.exe`。请让
-`ghostty-vt.dll` 与可执行文件保持在同一目录。程序未签名，首次启动时
-SmartScreen 可能要求确认。
-
 ## 编辑器
 
 ### 项目即文件夹
 
-macOS 用 `Cmd+O`，Linux 和 Windows 用 `Ctrl+O` 打开任意文件夹。左上角的徽标切换最近项目；在 macOS 和 Linux 上还可以切换本地与服务器项目。每个项目保留自己的标签页、窗格和最近文件。未指定项目时，首次启动会打开 `~/Documents/Mojian`，文件夹为空时留下一张欢迎笔记。
+macOS 用 `Cmd+O`，Linux 用 `Ctrl+O` 打开任意文件夹。左上角的徽标切换最近项目；在 macOS 和 Linux 上还可以切换本地与服务器项目。每个项目保留自己的标签页、窗格和最近文件。未指定项目时，首次启动会打开 `~/Documents/Mojian`，文件夹为空时留下一张欢迎笔记。
 
 ### 写作优先
 
@@ -92,9 +82,9 @@ Markdown 窗格可在源码与预览之间切换；设置 › 编辑器可以让
 
 ### 终端与服务器（macOS / Linux）
 
-`Shift+Cmd+T` / `Ctrl+Shift+T` 在项目根目录打开终端。本地终端运行在独立的会话服务器中：退出墨间只是断开，重新打开会接回原来的 shell。`Shift+Cmd+L` / `Ctrl+Shift+L` 从 `~/.ssh/config` 打开 SSH 终端。
+`Shift+Cmd+T` / `Ctrl+Shift+T` 在项目根目录打开终端。本地终端运行在独立的会话服务器中：退出墨间只是断开，重新打开会接回原来的 shell。`Shift+Cmd+L` / `Ctrl+Shift+L` 打开到设置 › 主机中某个主机的 SSH 终端。
 
-在设置 › 主机中添加地址后，可从顶部服务器徽标选择。墨间通过 `ssh` 在远端启动小型用户级服务器，并直接编辑该目录：文件树只读取目录信息，打开文件时才读取内容，保存和文件操作直接写回远端，Git 也在远端运行。远程终端随 SSH 连接结束，断线后不会继续留在后台。不需要 root，不监听端口，也不安装系统服务。
+在设置 › 主机中添加地址后，可从顶部服务器徽标选择。每个主机行的「配置服务器」会把 `mojian-server` 与 `libghostty-vt` 上传到该主机的 `~/.local/share/mojian`，然后检查它能否启动；不需要 root，不监听端口，也不安装系统服务。之后墨间通过 `ssh` 直接编辑远端目录：文件树只读取目录信息，打开文件时才读取内容，保存和文件操作直接写回远端，Git 也在远端运行。远程终端随 SSH 连接结束，断线后不会继续留在后台。
 
 ### Git 与命令面板
 
@@ -106,13 +96,13 @@ Markdown 窗格可在源码与预览之间切换；设置 › 编辑器可以让
 
 设置 › 更新会检查 GitHub 上最新的签名版本。**检查更新**会提示当前已是最新版本，或给出新版本；**安装更新**会下载并校验签名；**重启更新**会应用已暂存的更新并重新启动墨间。检查在后台进行，不会阻塞编辑。
 
-自动更新要求应用所在位置可写：macOS 应用包、Linux 用户目录安装，或你有写权限的 Windows 文件夹。安装在 `/opt` 的 `.deb` 和 Windows 全局安装版由包管理器负责更新。
+自动更新要求应用所在位置可写：macOS 应用包或 Linux 用户目录安装。安装在 `/opt` 的 `.deb` 由包管理器负责更新。
 
 ## 快捷键
 
 应用内会按平台显示对应按键；下表同时列出两种写法。
 
-| 操作 | macOS | Linux / Windows |
+| 操作 | macOS | Linux |
 |---|---|---|
 | 打开项目 | `⌘O` | `Ctrl+O` |
 | 打开文件 | `⇧⌘O` | `Ctrl+Shift+O` |
@@ -157,10 +147,9 @@ go tool mygo vet .      # go vet 与 MyGo 的 UI 生命周期检查
 ```sh
 go tool mygo build -platform darwin/arm64,darwin/amd64
 go tool mygo build -platform linux/amd64,linux/arm64
-go tool mygo build -platform windows/amd64
 ```
 
-产物位于 `build/<系统>-<架构>/`。macOS 生成 `.app` 与 `.dmg`；Linux 生成 `.tar.gz` 与 `.deb`；Windows 生成 `Mojian.exe` 及其 DLL。MyGo 作为 Go tool 固定在 `go.mod` 中，首次运行 `go tool mygo` 会下载对应版本。
+产物位于 `build/<系统>-<架构>/`。macOS 生成 `.app` 与 `.dmg`；Linux 生成 `.tar.gz` 与 `.deb`。MyGo 作为 Go tool 固定在 `go.mod` 中，首次运行 `go tool mygo` 会下载对应版本。
 
 `go tool mygo dev -web` 会在浏览器中打开界面，文件只保存在内存里。修改会话协议或 `cmd/mojian-server` 后，用 `sh tools/build-remote.sh` 重新生成嵌入的远程二进制。
 
@@ -173,8 +162,7 @@ go tool mygo build -platform windows/amd64
 
 - macOS：`mojian-<版本>-arm64.dmg`、`mojian-<版本>-amd64.dmg`
 - Linux：`mojian-<版本>-linux-{amd64,arm64}.tar.gz`、对应的 `.deb` 包、`install.sh`
-- Windows：`mojian-<版本>-windows-amd64.zip`、`mojian-setup-<版本>-amd64.exe`
-- 签名更新包（`*-darwin-*.tar.gz`、`*-linux-*.tar.gz`、`*-windows-*.tar.gz`）与 `update-<target>.json` 清单
+- 签名更新包（`*-darwin-*.tar.gz`、`*-linux-*.tar.gz`）与 `update-<target>.json` 清单
 - `SHA256SUMS`
 
 ## 设计

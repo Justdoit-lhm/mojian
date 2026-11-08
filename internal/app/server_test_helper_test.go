@@ -9,8 +9,7 @@ import (
 )
 
 // startLocalServerForTest gives a test that calls openProject a session
-// server on macOS and Linux. Windows keeps its direct-file path and needs
-// no server. The server is shut down when the test ends.
+// server. The server is shut down when the test ends.
 func startLocalServerForTest(t *testing.T) {
 	t.Helper()
 	if !terminalsSupported() {
