@@ -52,8 +52,9 @@ jobs:
             curl -fsSL --retry 10 --retry-all-errors --retry-delay 10 --max-time 300 \
               -o "$dir/$name" "$url" || {
               tag="${url%/*}"; tag="${tag##*/}"
+              file="${url##*/}"
               id="$(gh api "repos/egoist/mygo/releases/tags/$tag" \
-                --jq --arg n "$name" '.assets[] | select(.name==$n) | .id')"
+                | jq -r --arg n "$file" '.assets[] | select(.name==$n) | .id')"
               gh api -H 'Accept: application/octet-stream' \
                 "repos/egoist/mygo/releases/assets/$id" > "$dir/$name"
             }
@@ -126,8 +127,9 @@ jobs:
             curl -fsSL --retry 10 --retry-all-errors --retry-delay 10 --max-time 300 \
               -o "$dir/$name" "$url" || {
               tag="${url%/*}"; tag="${tag##*/}"
+              file="${url##*/}"
               id="$(gh api "repos/egoist/mygo/releases/tags/$tag" \
-                --jq --arg n "$name" '.assets[] | select(.name==$n) | .id')"
+                | jq -r --arg n "$file" '.assets[] | select(.name==$n) | .id')"
               gh api -H 'Accept: application/octet-stream' \
                 "repos/egoist/mygo/releases/assets/$id" > "$dir/$name"
             }
