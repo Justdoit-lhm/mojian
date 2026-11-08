@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 - On macOS and Linux, local projects now open through the same session
   server as terminals: the Explorer, saves, file operations and Git all go
