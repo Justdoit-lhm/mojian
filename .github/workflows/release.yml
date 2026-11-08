@@ -27,6 +27,40 @@ jobs:
             echo "::error::the tag $GITHUB_REF_NAME does not match mygo.json's v$version"
             exit 1
           }
+      - name: Seed the native terminal library
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # go test downloads libghostty-vt from GitHub's release CDN, which
+          # answers 504 now and then; MyGo's own retries last a few seconds.
+          # Fetch it here with patience, and through the API if the CDN keeps
+          # failing, so the tests and the build find it already cached.
+          set -euo pipefail
+          manifest="$(go list -m -f '{{.Dir}}' github.com/egoist/mygo)/plugins/terminal/mygo-plugin.json"
+          target="$(go env GOOS)-$(go env GOARCH)"
+          pick() { jq -r --arg t "$target" '.libraries[] | select(.name=="libghostty-vt") | .files[$t].'"$1" "$manifest"; }
+          url="$(pick url)"
+          name="$(pick name)"
+          sha="$(pick sha256)"
+          case "$(go env GOOS)" in
+            darwin) cache="$HOME/Library/Caches" ;;
+            *) cache="${XDG_CACHE_HOME:-$HOME/.cache}" ;;
+          esac
+          dir="$cache/mygo/natives/$sha"
+          mkdir -p "$dir"
+          if [ ! -f "$dir/$name" ]; then
+            curl -fsSL --retry 10 --retry-all-errors --retry-delay 10 --max-time 300 \
+              -o "$dir/$name" "$url" || {
+              tag="${url%/*}"; tag="${tag##*/}"
+              id="$(gh api "repos/egoist/mygo/releases/tags/$tag" \
+                --jq --arg n "$name" '.assets[] | select(.name==$n) | .id')"
+              gh api -H 'Accept: application/octet-stream' \
+                "repos/egoist/mygo/releases/assets/$id" > "$dir/$name"
+            }
+          fi
+          got="$(shasum -a 256 "$dir/$name" 2>/dev/null || sha256sum "$dir/$name")"
+          test "${got%% *}" = "$sha" || { echo "::error::$name is not the expected file"; exit 1; }
+          echo "cached $dir/$name"
       - name: Test
         run: go test ./...
       - name: Build
@@ -67,6 +101,40 @@ jobs:
             echo "::error::the tag $GITHUB_REF_NAME does not match mygo.json's v$version"
             exit 1
           }
+      - name: Seed the native terminal library
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # go test downloads libghostty-vt from GitHub's release CDN, which
+          # answers 504 now and then; MyGo's own retries last a few seconds.
+          # Fetch it here with patience, and through the API if the CDN keeps
+          # failing, so the tests and the build find it already cached.
+          set -euo pipefail
+          manifest="$(go list -m -f '{{.Dir}}' github.com/egoist/mygo)/plugins/terminal/mygo-plugin.json"
+          target="$(go env GOOS)-$(go env GOARCH)"
+          pick() { jq -r --arg t "$target" '.libraries[] | select(.name=="libghostty-vt") | .files[$t].'"$1" "$manifest"; }
+          url="$(pick url)"
+          name="$(pick name)"
+          sha="$(pick sha256)"
+          case "$(go env GOOS)" in
+            darwin) cache="$HOME/Library/Caches" ;;
+            *) cache="${XDG_CACHE_HOME:-$HOME/.cache}" ;;
+          esac
+          dir="$cache/mygo/natives/$sha"
+          mkdir -p "$dir"
+          if [ ! -f "$dir/$name" ]; then
+            curl -fsSL --retry 10 --retry-all-errors --retry-delay 10 --max-time 300 \
+              -o "$dir/$name" "$url" || {
+              tag="${url%/*}"; tag="${tag##*/}"
+              id="$(gh api "repos/egoist/mygo/releases/tags/$tag" \
+                --jq --arg n "$name" '.assets[] | select(.name==$n) | .id')"
+              gh api -H 'Accept: application/octet-stream' \
+                "repos/egoist/mygo/releases/assets/$id" > "$dir/$name"
+            }
+          fi
+          got="$(shasum -a 256 "$dir/$name" 2>/dev/null || sha256sum "$dir/$name")"
+          test "${got%% *}" = "$sha" || { echo "::error::$name is not the expected file"; exit 1; }
+          echo "cached $dir/$name"
       - name: Test
         run: go test ./...
       - name: Build
