@@ -15,9 +15,10 @@ func (a *app) sidebar(c *ui.Context, k *colors) {
 	if a.store == nil {
 		return
 	}
-	card := ui.Column(c).Width(treeW).Shrink(0).MinHeight(0).Radius(radius).Clip().
+	card := ui.Column(c.Key("tree:"+a.activeWorkspaceKey())).Width(treeW).Shrink(0).MinHeight(0).Radius(radius).Clip().
 		Background(k.Card).Border(1, k.CardBorder).
-		Shadow(0, 1, 2, 0, k.Shadow).Shadow(0, 6, 22, -2, k.Shadow)
+		Shadow(0, 1, 2, 0, k.Shadow).Shadow(0, 6, 22, -2, k.Shadow).
+		Transition(motion.Sidebar)
 	card.Children(func() {
 		a.sidebarHeader(c, k)
 		a.sidebarSearch(c, k)

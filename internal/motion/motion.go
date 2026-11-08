@@ -66,6 +66,17 @@ var (
 		Position:  true,
 	}
 
+	// Sidebar brings the Explorer in from the window's edge and lets it
+	// leave the same way. The workspace takes the room at once, as the
+	// survivor does when a pane closes, and the copy fades over the place
+	// the tree had; its key follows the project, so switching projects
+	// crossfades the tree beside the page.
+	Sidebar = ui.ElementTransition{
+		Animation: treeSpring,
+		Enter:     &ui.Motion{X: -6, Opacity: 0},
+		Exit:      &ui.Motion{X: -6, Opacity: 0},
+	}
+
 	// PopoverIn is the spring of a title-bar menu dropping in from just
 	// above its anchor, so the menu feels attached to the chip.
 	PopoverIn = ui.Animation{Spring: ui.SpringOptions{Duration: 180 * time.Millisecond}}

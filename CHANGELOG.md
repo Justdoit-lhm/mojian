@@ -2,6 +2,9 @@
 
 ## 0.2.3
 
+- The Explorer slides in from the window's edge and fades back out when
+  the file tree is hidden, and it crossfades when switching projects on
+  the same spring that unfolds its folders.
 - Settings › Updates reads the latest release manifest directly from the
   release download URL and retries GitHub's transient 5xx answers, so a
   rate-limited API or a brief Gateway Timeout no longer fails the check.
