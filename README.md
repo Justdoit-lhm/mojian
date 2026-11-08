@@ -4,10 +4,8 @@
 
 <p>
   <a href="https://awesomemygo.dev/apps/mojian"><img src="https://awesomemygo.dev/badge.svg" alt="Listed on Awesome MyGo"></a>
-  <a href="https://github.com/ox0pine/mojian/releases"><img src="https://img.shields.io/github/v/release/ox0pine/mojian?style=flat-square&amp;labelColor=1F1B16&amp;color=D24A2B" alt="Latest release"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/ox0pine/mojian?style=flat-square&amp;labelColor=1F1B16&amp;color=1F1B16" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/platform-macOS%2013%2B%20%C2%B7%20Linux-1F1B16?style=flat-square&amp;labelColor=1F1B16" alt="macOS 13+ and Linux">
-  <img src="https://img.shields.io/badge/UI-native%20%C2%B7%20no%20webview%20%C2%B7%20no%20cgo-1F1B16?style=flat-square&amp;labelColor=1F1B16" alt="Native UI, no webview, no cgo">
+  <a href="https://github.com/ox0pine/mojian/releases"><img src="https://img.shields.io/github/v/release/ox0pine/mojian?style=flat&amp;labelColor=1F1B16&amp;color=D24A2B" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/ox0pine/mojian?style=flat&amp;labelColor=1F1B16&amp;color=1F1B16" alt="MIT license"></a>
 </p>
 
 Mojian is a native plain-text editor for ordinary folders. Edit files, preview images and PDFs, run persistent terminals, and inspect Git diffs in tiled workspaces. No database, account, webview, or cgo.
