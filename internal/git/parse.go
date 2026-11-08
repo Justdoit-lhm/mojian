@@ -56,7 +56,6 @@ func ReadStatus(r Runner, project string) StatusData {
 }
 
 // parseStatus turns porcelain -z output into changes, scoped to prefix.
-// parseStatus turns porcelain -z output into changes, scoped to prefix.
 func parseStatus(out, prefix string) []Change {
 	var changes []Change
 	parts := strings.Split(out, "\x00")
@@ -157,7 +156,6 @@ func ReadDiff(r Runner, root string, c Change) (string, error) {
 }
 
 // untrackedDiff makes a new-file diff for a file Git does not track.
-// untrackedDiff makes a new-file diff for a file Git does not track.
 func untrackedDiff(r Runner, root, path, display string) (string, error) {
 	data, err := r.ReadFile(root, path, 512*1024)
 	if err != nil {
@@ -188,7 +186,6 @@ func untrackedDiff(r Runner, root, path, display string) (string, error) {
 	return b.String(), nil
 }
 
-// runGit runs Git in a folder, with a deadline and a cap on its output.
 // runGit runs Git in a folder, with a deadline and a cap on its output.
 func runGit(dir string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

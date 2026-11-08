@@ -1,11 +1,18 @@
 # Changelog
 
-## Unreleased
+## 0.2.2
 
 - Double-clicking a tab's name and typing a new one keeps the text on the
   original label's baseline instead of dropping a few pixels.
 - Settings › Hosts no longer repeats the recent remote projects list; the
   project switcher still offers them.
+- Every pane keeps its split, zoom and close buttons visible, focused or
+  not. With more than one pane, their accessible labels name the pane.
+- Switching between loaded projects no longer reopens or reconnects them:
+  the picker keeps its connection while the chosen project opens, and a
+  new connection updates every cached project on that host.
+- The project and server menus drop in with a short spring, and their
+  title-bar chips animate their hover face.
 
 ## 0.2.1
 

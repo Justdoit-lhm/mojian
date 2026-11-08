@@ -40,23 +40,33 @@ func (a *app) workspaceReachable(ws *workspace) bool {
 // workspace on the same host at the new control client. Terminals that
 // were attached through the lost connection are detached so their panes
 // reattach when they are shown again.
-func (a *app) adoptWorkspaceConn(ws *workspace, rc *remoteConn) {
+// installRemoteConn makes rc the pool's connection for its host and
+// points every loaded workspace on that host at its client. A new
+// connection also detaches terminal views so their panes reattach.
+func (a *app) installRemoteConn(rc *remoteConn) {
 	if rc == nil {
 		return
 	}
 	a.initWorkspaces()
+	same := a.remotes[rc.host] == rc
 	a.remotes[rc.host] = rc
-	for _, w := range a.workspaces {
-		if w.store == nil || !w.store.isServer() || w.serverAlias != rc.host {
-			continue
+	patch := func(w *workspace) {
+		if w == nil || w.store == nil || !w.store.isServer() || w.serverAlias != rc.host {
+			return
 		}
 		w.store.setClient(rc.client)
-		detachTerminalsOn(w, rc.host, rc.client)
+		if !same {
+			detachTerminalsOn(w, rc.host, rc.client)
+		}
+	}
+	patch(a.workspace)
+	for _, w := range a.workspaces {
+		if w != a.workspace {
+			patch(w)
+		}
 	}
 }
 
-// detachTerminalsOn closes the views of terminals owned by host, keeping
-// the sessions on the server for a reattach.
 // detachTerminalsOn closes the views of terminals owned by host, keeping
 // the sessions on the server for a reattach.
 func detachTerminalsOn(ws *workspace, host string, client *session.Client) {
@@ -85,7 +95,7 @@ func (a *app) reconnectActiveRemoteAsync() {
 		return
 	}
 	if existing := a.remoteForHost(host); existing != nil && remoteHealthy(existing) {
-		a.adoptWorkspaceConn(a.workspace, existing)
+		a.installRemoteConn(existing)
 		a.invalidate()
 		return
 	}
@@ -106,7 +116,7 @@ func (a *app) reconnectActiveRemoteAsync() {
 				a.fail(err)
 				return
 			}
-			a.adoptWorkspaceConn(a.workspace, rc)
+			a.installRemoteConn(rc)
 			a.saveSettings()
 			a.invalidate()
 		})
@@ -115,19 +125,18 @@ func (a *app) reconnectActiveRemoteAsync() {
 
 // reconnectWorkspaceAsync reconnects before switching, behind the same
 // loading state as opening a project.
-// reconnectWorkspaceAsync reconnects before switching, behind the same
-// loading state as opening a project.
 func (a *app) reconnectWorkspaceAsync(ws *workspace, host string) {
 	if ws == nil || a.remoteBusy {
 		return
 	}
 	existing := a.remoteForHost(host)
 	if existing != nil && remoteHealthy(existing) {
-		a.adoptWorkspaceConn(ws, existing)
+		a.installRemoteConn(existing)
 		a.switchWorkspace(ws)
 		return
 	}
 	if err := a.saveNow(); err != nil {
+		a.dropPickerRemote()
 		a.fail(fmt.Errorf("could not save the open project: %w", err))
 		return
 	}
@@ -148,7 +157,7 @@ func (a *app) reconnectWorkspaceAsync(ws *workspace, host string) {
 				a.fail(err)
 				return
 			}
-			a.adoptWorkspaceConn(ws, rc)
+			a.installRemoteConn(rc)
 			a.switchWorkspace(ws)
 			a.saveSettings()
 			a.invalidate()
@@ -163,6 +172,7 @@ func (a *app) reconnectWorkspaceAsync(ws *workspace, host string) {
 // with a loading state. A project already in the workspace cache switches
 // at once, without connecting again.
 func (a *app) openRemoteProjectAsync(host, remotePath string) {
+	a.remoteOpening = false
 	if !terminalsSupported() {
 		a.fail(fmt.Errorf("remote projects need macOS or Linux"))
 		return
@@ -173,6 +183,7 @@ func (a *app) openRemoteProjectAsync(host, remotePath string) {
 	}
 	remotePath = strings.TrimRight(remotePath, "/")
 	if a.remoteBusy {
+		a.dropPickerRemote()
 		return
 	}
 	a.initWorkspaces()
@@ -181,13 +192,16 @@ func (a *app) openRemoteProjectAsync(host, remotePath string) {
 		a.rememberRemoteProject(remoteProject{Host: host, Path: remotePath})
 		if a.workspaceReachable(ws) {
 			a.switchWorkspace(ws)
+			a.dropPickerRemote()
 			a.saveSettings()
 		} else {
+			a.dropPickerRemote()
 			a.reconnectWorkspaceAsync(ws, host)
 		}
 		return
 	}
 	if err := a.saveNow(); err != nil {
+		a.dropPickerRemote()
 		a.fail(fmt.Errorf("could not save the open project: %w", err))
 		return
 	}
@@ -198,6 +212,7 @@ func (a *app) openRemoteProjectAsync(host, remotePath string) {
 	existing := a.remoteForHost(host)
 	seq, win := a.beginRemoteTask("Opening " + filepath.Base(remotePath) + " on " + a.hostLabel(host) + "…")
 	if seq == 0 {
+		a.dropPickerRemote()
 		return
 	}
 	cache := a.serverAssetCache(host, remotePath)
@@ -225,11 +240,12 @@ func (a *app) openRemoteProjectAsync(host, remotePath string) {
 				if rc != nil && rc != existing {
 					a.detachRemoteConn(rc)
 				}
+				a.dropPickerRemote()
 				a.fail(err)
 				return
 			}
 			if rc != nil {
-				a.remotes[host] = rc
+				a.installRemoteConn(rc)
 			}
 			a.stashActiveWorkspace()
 			ws := &workspace{
@@ -322,7 +338,6 @@ func (a *app) endRemoteTask(seq int) bool {
 	return true
 }
 
-// onWindow runs fn on the window's thread when this build has one.
 // onWindow runs fn on the window's thread when this build has one.
 func onWindow(win *mygo.Window, fn func()) {
 	if win != nil {

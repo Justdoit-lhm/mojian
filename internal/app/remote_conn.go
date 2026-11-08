@@ -190,7 +190,7 @@ func (a *app) connectRemote(host string) (*remoteConn, error) {
 	if err != nil {
 		return nil, err
 	}
-	a.remotes[host] = rc
+	a.installRemoteConn(rc)
 	return rc, nil
 }
 
@@ -223,7 +223,6 @@ func (a *app) activeRemote() *remoteConn {
 	return a.remotes[a.serverAlias]
 }
 
-// remoteHealthy reports whether rc still has a live control client.
 // remoteHealthy reports whether rc still has a live control client.
 func remoteHealthy(rc *remoteConn) bool {
 	if rc == nil || rc.client == nil {
@@ -397,7 +396,6 @@ func shutdownAt(socket string) {
 }
 
 // remoteHashEqual reports whether the file on host already has data.
-// remoteHashEqual reports whether the file on host already has data.
 func remoteHashEqual(host, path string, data []byte) bool {
 	want := sha256.Sum256(data)
 	sum, err := sshOutput(host, "if command -v sha256sum >/dev/null 2>&1; then sha256sum -- "+shellQuote(path)+
@@ -409,7 +407,6 @@ func remoteHashEqual(host, path string, data []byte) bool {
 	return len(fields) > 0 && strings.EqualFold(fields[0], hex.EncodeToString(want[:]))
 }
 
-// uploadRemote writes data to path on host through SSH, atomically.
 // uploadRemote writes data to path on host through SSH, atomically.
 func uploadRemote(host, path string, data []byte, mode string) error {
 	tmp := path + ".tmp"

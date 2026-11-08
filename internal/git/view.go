@@ -351,20 +351,17 @@ func diffLineText(line string) string {
 }
 
 // hasProject reports whether the host has a project on disk.
-// hasProject reports whether the host has a project on disk.
 func hasProject(h Host) bool {
 	_, ok := h.ProjectDir()
 	return ok
 }
 
 // mustDir returns the project directory, or "".
-// mustDir returns the project directory, or "".
 func mustDir(h Host) string {
 	dir, _ := h.ProjectDir()
 	return dir
 }
 
-// iconButton is a borderless icon button of the page header.
 // iconButton is a borderless icon button of the page header.
 func iconButton(c *ui.Context, k *theme.Colors, name, label string, size, iconSize float32) ui.Element {
 	b := ui.Box(c).Size(size, size).Center().Radius(theme.Radius).

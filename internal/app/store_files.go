@@ -68,7 +68,6 @@ func (s *store) uniqueRel(folder, name string, copyMode bool) string {
 }
 
 // splitExt separates a file name's extension for a numbered sibling.
-// splitExt separates a file name's extension for a numbered sibling.
 func splitExt(name string) (stem, ext string) {
 	ext = filepath.Ext(name)
 	stem = strings.TrimSuffix(name, ext)
@@ -78,7 +77,6 @@ func splitExt(name string) (stem, ext string) {
 	return stem, ext
 }
 
-// fileName keeps a typed name a single file name.
 // fileName keeps a typed name a single file name.
 func fileName(name, fallback string) string {
 	name = strings.TrimSpace(name)

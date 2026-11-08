@@ -61,7 +61,6 @@ func (f *assetFile) localPath() string {
 }
 
 // image decodes the picture once, on the frame that first shows it.
-// image decodes the picture once, on the frame that first shows it.
 func (f *assetFile) image() (ui.ImageSource, error) {
 	f.once.Do(func() {
 		data, err := os.ReadFile(f.localPath())
@@ -75,7 +74,6 @@ func (f *assetFile) image() (ui.ImageSource, error) {
 }
 
 // text is the note as it stands, including edits not yet saved.
-// text is the note as it stands, including edits not yet saved.
 func (n *note) text() string {
 	if n.buf != nil {
 		return n.buf.String()
@@ -83,7 +81,6 @@ func (n *note) text() string {
 	return n.Saved
 }
 
-// dirty reports whether the note has edits that are not on disk.
 // dirty reports whether the note has edits that are not on disk.
 func (n *note) dirty() bool { return n.buf != nil && n.buf.Modified() }
 

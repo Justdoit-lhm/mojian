@@ -133,7 +133,6 @@ func (a *app) filePasteSource() (pasteSource, error) {
 }
 
 // pasteInto copies or moves the clipboard's files into the folder rel.
-// pasteInto copies or moves the clipboard's files into the folder rel.
 func (a *app) pasteInto(rel string) {
 	if a.store == nil {
 		return

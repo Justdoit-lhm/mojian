@@ -159,7 +159,6 @@ func (a *app) endTerminalPane(p *pane, kill bool) {
 }
 
 // endTerminal ends a session when its pane is closed by the user.
-// endTerminal ends a session when its pane is closed by the user.
 func (a *app) endTerminal(t *termTab) {
 	if t == nil || t.SID == "" {
 		return

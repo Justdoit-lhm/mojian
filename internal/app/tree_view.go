@@ -87,7 +87,6 @@ func (a *app) sidebarSearch(c *ui.Context, k *colors) {
 }
 
 // treeChildren draws the children of n, and a draft that goes in it.
-// treeChildren draws the children of n, and a draft that goes in it.
 func (a *app) treeChildren(c *ui.Context, k *colors, n *fileNode, depth int) {
 	if n == nil {
 		return
@@ -104,7 +103,6 @@ func (a *app) treeChildren(c *ui.Context, k *colors, n *fileNode, depth int) {
 	}
 }
 
-// treeFolder draws a folder and, when open, its children.
 // treeFolder draws a folder and, when open, its children.
 func (a *app) treeFolder(c *ui.Context, k *colors, n *fileNode, depth int) {
 	if n == nil {
@@ -151,7 +149,6 @@ func (a *app) treeFolder(c *ui.Context, k *colors, n *fileNode, depth int) {
 	})
 }
 
-// treeFile draws one text file in the tree.
 // treeFile draws one text file in the tree.
 func (a *app) treeFile(c *ui.Context, k *colors, n *fileNode, depth int) {
 	if n.Note == nil && n.Asset == nil {
@@ -206,7 +203,6 @@ func (a *app) treeFile(c *ui.Context, k *colors, n *fileNode, depth int) {
 	})
 }
 
-// treeRowKeys gives a focused row the keyboard commands of the Explorer.
 // treeRowKeys gives a focused row the keyboard commands of the Explorer.
 func (a *app) treeRowKeys(row ui.Element, rel string) {
 	if row.Shortcut(0, ui.KeyF2) {
@@ -273,7 +269,6 @@ func (a *app) treeDraftRow(c *ui.Context, k *colors, depth int, dir bool) {
 }
 
 // emptyTree is shown for a project or folder with no text files yet.
-// emptyTree is shown for a project or folder with no text files yet.
 func (a *app) emptyTree(c *ui.Context, k *colors) {
 	ui.Column(c).Padding(18, 8).Gap(8).Center().Children(func() {
 		ui.Icon(c, icons.Icon("file-plus")).Size(20, 20).TextColor(k.TextFaint)
@@ -292,7 +287,6 @@ func (a *app) emptyTree(c *ui.Context, k *colors) {
 	})
 }
 
-// searchResults lists the files matching the search field.
 // searchResults lists the files matching the search field.
 func (a *app) searchResults(c *ui.Context, k *colors) {
 	notes := a.filteredNotes()

@@ -203,6 +203,7 @@ func (a *app) closeWorkspaces() {
 	}
 	a.remotes = nil
 	a.remotePickHost = ""
+	a.remoteOpening = false
 }
 
 func closeWorkspaceTerminals(ws *workspace) {

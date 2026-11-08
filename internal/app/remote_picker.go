@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"mojian/internal/icons"
+	"mojian/internal/motion"
 	"mojian/internal/session"
 
 	"github.com/egoist/mygo/ui"
@@ -27,6 +28,7 @@ func (a *app) openRemotePicker(host string) {
 	if a.remoteBusy {
 		return
 	}
+	a.remoteOpening = false
 	if err := a.saveNow(); err != nil {
 		a.fail(fmt.Errorf("could not save the open project: %w", err))
 		return
@@ -68,7 +70,7 @@ func (a *app) openRemotePicker(host string) {
 				return
 			}
 			if rc != nil {
-				a.remotes[host] = rc
+				a.installRemoteConn(rc)
 				a.remotePickHost = host
 			} else {
 				a.remotePickHost = ""
@@ -87,7 +89,6 @@ func (a *app) openRemotePicker(host string) {
 }
 
 // pickerRemote is the server whose folders the project picker shows.
-// pickerRemote is the server whose folders the project picker shows.
 func (a *app) pickerRemote() *remoteConn {
 	if a.remotePickHost != "" {
 		return a.remotes[a.remotePickHost]
@@ -97,9 +98,10 @@ func (a *app) pickerRemote() *remoteConn {
 
 // dropPickerRemote closes a connection made only for the picker. The
 // open project's server is left alone.
-// dropPickerRemote closes a connection made only for the picker. The
-// open project's server is left alone.
 func (a *app) dropPickerRemote() {
+	if a.remoteOpening {
+		return
+	}
 	a.remotePicker = false
 	a.remoteDirsBusy = false
 	a.remoteDirsSeq++
@@ -154,6 +156,7 @@ func (a *app) remotePickerModal(c *ui.Context, k *colors) {
 					path := strings.TrimSpace(a.remoteQuery)
 					if path != "" {
 						a.remotePicker = false
+						a.remoteOpening = true
 						a.later(func() { a.openRemoteProjectAsync(a.remoteHost, path) })
 					}
 				}
@@ -196,13 +199,11 @@ func (a *app) remotePickerModal(c *ui.Context, k *colors) {
 			})
 		})
 	})
-	if !a.remotePicker {
+	if !a.remotePicker && !a.remoteOpening {
 		a.dropPickerRemote()
 	}
 }
 
-// loadRemoteDirs reads a folder's subfolders away from the UI, with a
-// small spinner inside the picker.
 // loadRemoteDirs reads a folder's subfolders away from the UI, with a
 // small spinner inside the picker.
 func (a *app) loadRemoteDirs(path string) {
@@ -242,10 +243,16 @@ func (a *app) serverChip(c *ui.Context, k *colors) {
 	label := a.remoteName()
 	chip := ui.Row(c).Gap(6).Padding(3, 8, 3, 6).Radius(radius).AlignItems(ui.Center).
 		Cursor(ui.CursorPointer).Role(ui.RoleButton).Label("Switch server: " + label).
-		Tooltip("Server  " + nativeKeys("⇧⌘L")).MaxWidth(170).Shrink(0).ClipX()
+		Tooltip("Server  " + nativeKeys("⇧⌘L")).MaxWidth(170).Shrink(0).ClipX().
+		Transition(motion.Colors)
 	if chip.Hovered() || a.serverOpen {
 		chip.Background(k.Hover)
 	}
+	drop := float32(0)
+	if a.serverOpen {
+		drop = 1
+	}
+	drop = chip.AnimateTo("server-menu", drop, motion.PopoverIn)
 	if chip.Clicked() {
 		a.serverOpen = !a.serverOpen
 	}
@@ -257,7 +264,8 @@ func (a *app) serverChip(c *ui.Context, k *colors) {
 	})
 	ui.PopoverBase(c, chip, &a.serverOpen, func(panel ui.Element) {
 		panel.Width(280).Padding(9).Radius(radius).Background(k.Panel).
-			Border(1, k.PanelBorder).Shadow(0, 12, 32, 0, k.ShadowFocused).Gap(1)
+			Border(1, k.PanelBorder).Shadow(0, 12, 32, 0, k.ShadowFocused).Gap(1).
+			Translate(0, -4*(1-drop)).Opacity(0.45 + 0.55*drop)
 		ui.Text(c, "SERVERS").FontSize(10).FontWeight(650).TextColor(k.TextFaint).Padding(4, 8)
 		a.serverRow(c, k, "", "Local")
 		for _, h := range a.hosts {

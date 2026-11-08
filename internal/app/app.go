@@ -47,6 +47,7 @@ type app struct {
 	projectOpen    bool
 	projectPicker  bool
 	remotePickHost string // the host a picker connection was made for
+	remoteOpening  bool   // a picked project is about to open
 	remoteProjects []remoteProject
 	// fileClip is the app's own clipboard: absolute local paths, or paths
 	// relative to a remote project (fileClipRemote). A cut is a one-shot

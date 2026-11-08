@@ -10,6 +10,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"mojian/internal/icons"
+	"mojian/internal/motion"
 )
 
 // projectName is the last part of the open project's path.
@@ -146,10 +147,16 @@ func (a *app) projectChip(c *ui.Context, k *colors) {
 	}
 	chip := ui.Row(c).Gap(7).Padding(3, 8, 3, 6).Radius(radius).AlignItems(ui.Center).
 		Cursor(ui.CursorPointer).Role(ui.RoleButton).Label("Switch project: " + a.projectName()).
-		Tooltip(a.projectPath() + "  " + nativeKeys("⌘O")).MaxWidth(230).Shrink(0).ClipX()
+		Tooltip(a.projectPath() + "  " + nativeKeys("⌘O")).MaxWidth(230).Shrink(0).ClipX().
+		Transition(motion.Colors)
 	if chip.Hovered() || a.projectOpen {
 		chip.Background(k.Hover)
 	}
+	drop := float32(0)
+	if a.projectOpen {
+		drop = 1
+	}
+	drop = chip.AnimateTo("project-menu", drop, motion.PopoverIn)
 	if chip.Clicked() && !a.store.isMemory() {
 		a.projectOpen = !a.projectOpen
 	}
@@ -164,7 +171,8 @@ func (a *app) projectChip(c *ui.Context, k *colors) {
 	}
 	ui.PopoverBase(c, chip, &a.projectOpen, func(panel ui.Element) {
 		panel.Width(304).Padding(9).Radius(radius).Background(k.Panel).Border(1, k.PanelBorder).
-			Shadow(0, 12, 32, 0, k.ShadowFocused).Gap(1)
+			Shadow(0, 12, 32, 0, k.ShadowFocused).Gap(1).
+			Translate(0, -4*(1-drop)).Opacity(0.45 + 0.55*drop)
 		if a.remotePath != "" {
 			a.remoteProjectRows(c, k)
 			ui.Divider(c)

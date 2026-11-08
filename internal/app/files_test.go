@@ -189,7 +189,7 @@ func TestTerminalPaneAndSharedLimit(t *testing.T) {
 	if tt.HasText("zsh") || tt.HasText("1/4") {
 		t.Fatalf("the terminal still has a shell tab: %q", tt.Texts())
 	}
-	if err := tt.Click("Split Right"); err != nil {
+	if err := tt.Click("Split Right Terminal"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()

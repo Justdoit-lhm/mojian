@@ -6,6 +6,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -73,9 +74,29 @@ func TestMarkdownPreviewKeepsHeaderButtonsWhenUnfocused(t *testing.T) {
 func countText(texts []string, want string) int {
 	n := 0
 	for _, text := range texts {
-		if text == want {
+		if strings.HasPrefix(text, want) {
 			n++
 		}
 	}
 	return n
+}
+
+func TestEveryPaneKeepsHeaderButtonsWhenUnfocused(t *testing.T) {
+	registerFonts()
+	a := newProjectApp(t)
+	a.openNote(a.store.byRelPath("Reading notes.md"))
+	first := a.tab().Focus
+	a.splitWith(a.store.byRelPath("Welcome.md"))
+	tt := ui.NewTester(a.view, 1100, 700)
+	tt.Frame()
+	tt.Frame()
+	if a.tab().Focus == first {
+		t.Fatal("the first pane still has the focus")
+	}
+	if got := countText(tt.Texts(), "Close Pane"); got != 2 {
+		t.Fatalf("close buttons: %d, want 2", got)
+	}
+	if got := countText(tt.Texts(), "Split Right"); got != 2 {
+		t.Fatalf("split buttons: %d, want 2", got)
+	}
 }

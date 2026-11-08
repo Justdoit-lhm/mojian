@@ -66,6 +66,10 @@ var (
 		Position:  true,
 	}
 
+	// PopoverIn is the spring of a title-bar menu dropping in from just
+	// above its anchor, so the menu feels attached to the chip.
+	PopoverIn = ui.Animation{Spring: ui.SpringOptions{Duration: 180 * time.Millisecond}}
+
 	// Colors makes hover faces catch up with the pointer.
 	Colors = ui.ElementTransition{
 		Duration: colorDuration,

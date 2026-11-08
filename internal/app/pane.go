@@ -84,7 +84,6 @@ func (a *app) paneCardMode(c *ui.Context, k *colors, t *tab, p *pane, overlay bo
 	card.Background(bg).Border(borderW, border).
 		Shadow(0, 1, 2, 0, shadow).
 		Shadow(0, 6, 22, -2, shadow)
-	hovered := card.Hovered()
 	width, height := card.Bounds().W, card.Bounds().H
 	overZone := dropNone
 	overTarget := false
@@ -97,7 +96,7 @@ func (a *app) paneCardMode(c *ui.Context, k *colors, t *tab, p *pane, overlay bo
 		}
 	}
 	card.Children(func() {
-		a.paneHeader(c, k, t, p, focused, hovered, width, overlay)
+		a.paneHeader(c, k, t, p, width, overlay)
 		body := ui.Box(c).Grow(1).MinHeight(0).Padding(0, 0, 6, 0)
 		body.Children(func() {
 			if p.Note == nil && p.Asset == nil && p.Term == nil {
@@ -211,7 +210,6 @@ func (a *app) paneCardMode(c *ui.Context, k *colors, t *tab, p *pane, overlay bo
 }
 
 // movePaneTo drops from on the named edge of to and inserts it there.
-// movePaneTo drops from on the named edge of to and inserts it there.
 func (a *app) movePaneTo(t *tab, from, to *pane, zone paneDrop) {
 	if t == nil || t != a.tab() || !t.movePane(from, to, zone) {
 		return
@@ -222,7 +220,6 @@ func (a *app) movePaneTo(t *tab, from, to *pane, zone paneDrop) {
 	a.invalidate()
 }
 
-// dropZoneAt divides a pane into a middle and four edges.
 // dropZoneAt divides a pane into a middle and four edges.
 func dropZoneAt(x, y, w, h float32) paneDrop {
 	if w <= 0 || h <= 0 {
@@ -242,7 +239,6 @@ func dropZoneAt(x, y, w, h float32) paneDrop {
 	}
 }
 
-// dropIndicator paints the edge that will take the dragged pane.
 // dropIndicator paints the edge that will take the dragged pane.
 func (a *app) dropIndicator(c *ui.Context, k *colors, zone paneDrop) {
 	bar := ui.Box(c.Key("drop-indicator")).Absolute().PassThrough().
@@ -314,7 +310,6 @@ type fileChoice struct {
 }
 
 // paneChoices lists the files a blank pane can open, filtered by q.
-// paneChoices lists the files a blank pane can open, filtered by q.
 func (a *app) paneChoices(q string) []fileChoice {
 	if a.store == nil {
 		return nil
@@ -374,7 +369,7 @@ func paneName(p *pane) string {
 // buttons.
 // paneHeader draws a note's icon, title, its unsaved dot, and its
 // buttons.
-func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hovered bool, width float32, overlay bool) {
+func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, width float32, overlay bool) {
 	compact := width > 0 && width < 230
 	name := "New Pane"
 	ic := icons.Icon("file-plus")
@@ -390,6 +385,12 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hov
 	btn, isize := float32(26), float32(16)
 	if compact {
 		hpad, hgap, btn, isize = 4, 5, 21, 13
+	}
+	// With more than one pane on screen, name each action's accessible
+	// label after its pane, so the four visible button sets stay distinct.
+	suffix := ""
+	if len(t.panes()) > 1 {
+		suffix = " " + name
 	}
 	h := ui.Row(c).Height(headerH).Padding(0, 6, 0, hpad).Gap(hgap).
 		AlignItems(ui.Center).MinWidth(0)
@@ -444,7 +445,7 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hov
 			if p.Preview {
 				glyph, label = "pencil", "Edit"
 			}
-			if !overlay && iconButton(c, k, glyph, label, btn, isize).Tooltip(label).Clicked() {
+			if !overlay && iconButton(c, k, glyph, label+suffix, btn, isize).Tooltip(label).Clicked() {
 				p.Preview = !p.Preview
 				if p.Preview {
 					a.focusReq = nil
@@ -454,28 +455,21 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hov
 				a.changed()
 			}
 		}
-		// A preview has no editor to take the focus or show a caret, so
-		// its controls stay visible even when another pane has the focus.
-		preview := p.Asset != nil || p.Note != nil && p.Preview
-		show := focused || hovered || preview
-		actions := ui.Row(c).Gap(1).AlignItems(ui.Center)
+		actions := ui.Row(c).Gap(1).AlignItems(ui.Center).Shrink(0)
 		if overlay {
 			// Keep the buttons visible while the copy fades, but let no
 			// click reach them.
 			actions.Disabled(true)
 		}
 		actions.Children(func() {
-			if !show {
-				return
-			}
-			if iconButton(c, k, "columns-2", "Split Right", btn, isize).
+			if iconButton(c, k, "columns-2", "Split Right"+suffix, btn, isize).
 				Tooltip(a.tip("Split Right", cmdSplitRight)).Clicked() {
 				a.later(func() {
 					t.Focus = p
 					a.splitFocusedSide(splitRight)
 				})
 			}
-			if iconButton(c, k, "rows-2", "Split Down", btn, isize).
+			if iconButton(c, k, "rows-2", "Split Down"+suffix, btn, isize).
 				Tooltip(a.tip("Split Down", cmdSplitDown)).Clicked() {
 				a.later(func() {
 					t.Focus = p
@@ -486,11 +480,11 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hov
 			if t.Zoom == p {
 				zoom, label = "minimize-2", "Unzoom"
 			}
-			if iconButton(c, k, zoom, label, btn, isize).Tooltip(a.tip(label, cmdZoom)).Clicked() {
+			if iconButton(c, k, zoom, label+suffix, btn, isize).Tooltip(a.tip(label, cmdZoom)).Clicked() {
 				t.Focus = p
 				a.toggleZoom()
 			}
-			if iconButton(c, k, "x", "Close Pane", btn, isize+1).
+			if iconButton(c, k, "x", "Close Pane"+suffix, btn, isize+1).
 				Tooltip(a.tip("Close Pane", cmdClosePane)).Clicked() {
 				a.laterPane(p)
 			}
@@ -498,8 +492,6 @@ func (a *app) paneHeader(c *ui.Context, k *colors, t *tab, p *pane, focused, hov
 	})
 }
 
-// laterPane closes the pane after the frame that shows it, so the tab and
-// its siblings are not changed while they build.
 // laterPane closes the pane after the frame that shows it, so the tab and
 // its siblings are not changed while they build.
 func (a *app) laterPane(p *pane) {

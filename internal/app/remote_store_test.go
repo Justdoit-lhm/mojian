@@ -222,3 +222,47 @@ func TestRemoteAssetCacheUsesContentHash(t *testing.T) {
 		t.Fatalf("second cache: %q, %v", data, err)
 	}
 }
+
+func TestRemoteProjectCacheSwitchKeepsStoresAndConnection(t *testing.T) {
+	client, done := startTestSessionServer(t, t.TempDir())
+	defer client.Close()
+	defer func() { _ = client.Shutdown(); <-done }()
+	rootA, rootB := t.TempDir(), t.TempDir()
+	for _, root := range []string{rootA, rootB} {
+		if err := os.WriteFile(filepath.Join(root, "a.md"), []byte("# A\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sA, err := openServerStore(client, rootA, t.TempDir(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sB, err := openServerStore(client, rootB, t.TempDir(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyA := workspaceKeyRemote("buildbox", rootA)
+	keyB := workspaceKeyRemote("buildbox", rootB)
+	wsA := &workspace{key: keyA, store: sA, serverAlias: "buildbox", remotePath: rootA, openDirs: map[string]bool{}}
+	wsB := &workspace{key: keyB, store: sB, serverAlias: "buildbox", remotePath: rootB, openDirs: map[string]bool{}}
+	rc := &remoteConn{host: "buildbox", client: client}
+	a := &app{
+		workspace:  wsA,
+		workspaces: map[string]*workspace{keyA: wsA, keyB: wsB},
+		remotes:    map[string]*remoteConn{"buildbox": rc},
+	}
+	a.openRemoteProjectAsync("buildbox", rootB)
+	if a.workspace != wsB || a.store != sB {
+		t.Fatal("switching to the cached project reopened it")
+	}
+	if a.remotes["buildbox"] != rc {
+		t.Fatal("switching projects dropped the connection")
+	}
+	a.openRemoteProjectAsync("buildbox", rootA)
+	if a.workspace != wsA || a.store != sA {
+		t.Fatal("switching back reopened the project")
+	}
+	if a.remotes["buildbox"] != rc {
+		t.Fatal("switching back dropped the connection")
+	}
+}

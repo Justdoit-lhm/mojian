@@ -64,7 +64,6 @@ func (a *app) cancelTreeDraft() {
 }
 
 // submitTreeDraft creates the named file or folder, or renames the target.
-// submitTreeDraft creates the named file or folder, or renames the target.
 func (a *app) submitTreeDraft() {
 	d := a.treeDraft
 	if d == nil || a.store == nil {
@@ -129,7 +128,6 @@ func (a *app) submitTreeDraft() {
 	a.invalidate()
 }
 
-// editorShape is what decides an editor's line numbers and wrapping.
 // editorShape is what decides an editor's line numbers and wrapping.
 func editorShape(path string) string {
 	lang := ""
