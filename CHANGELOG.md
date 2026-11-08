@@ -7,6 +7,8 @@
   rate-limited API or a brief Gateway Timeout no longer fails the check.
 - The README opens with the real window and walks through the Explorer,
   Open File, panes, terminals, remote servers and Settings.
+- The README header carries an Awesome MyGo listing badge beside release,
+  license and platform badges in the ink, paper and vermilion palette.
 
 ## 0.2.2
 

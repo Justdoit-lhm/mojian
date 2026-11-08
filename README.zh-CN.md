@@ -3,7 +3,11 @@
 <p align="center"><em>字落于纸，工具退于幕后。</em></p>
 
 <p align="center">
-  macOS 13+ &nbsp;·&nbsp; Linux amd64/arm64 &nbsp;·&nbsp; MyGo 原生界面 &nbsp;·&nbsp; 无 WebView &nbsp;·&nbsp; 无 cgo
+  <a href="https://awesomemygo.dev/apps/mojian"><img src="https://awesomemygo.dev/badge.svg" alt="Listed on Awesome MyGo"></a>
+  <a href="https://github.com/ox0pine/mojian/releases"><img src="https://img.shields.io/github/v/release/ox0pine/mojian?style=flat-square&amp;labelColor=1F1B16&amp;color=D24A2B" alt="最新版本"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/ox0pine/mojian?style=flat-square&amp;labelColor=1F1B16&amp;color=1F1B16" alt="MIT 许可证"></a>
+  <img src="https://img.shields.io/badge/platform-macOS%2013%2B%20%C2%B7%20Linux-1F1B16?style=flat-square&amp;labelColor=1F1B16" alt="macOS 13+ 与 Linux">
+  <img src="https://img.shields.io/badge/UI-native%20%C2%B7%20no%20webview%20%C2%B7%20no%20cgo-1F1B16?style=flat-square&amp;labelColor=1F1B16" alt="原生界面，无 WebView，无 cgo">
 </p>
 
 <p align="center">
@@ -18,7 +22,16 @@
 
 墨间是一款直接打开普通文件夹的纯文本编辑器。没有资料库、索引、数据库，也不需要账号：项目就是你选择的文件夹，笔记就是磁盘上的文件。编辑内容先留在内存，保存时才写入。
 
-一个标签页是由多个平铺窗格组成的工作区。每个窗格可以编辑文件、预览图片或 PDF，也可以运行终端。界面由 [MyGo](https://mygo.egoist.dev) 绘制为原生 UI：macOS 使用 Metal，Linux 使用 GTK 3。没有 WebView、没有 Electron，也没有 JavaScript 构建流程。
+一个标签页是由多个平铺窗格组成的工作区。每个窗格可以编辑文件、预览图片或 PDF，也可以运行终端。界面由 [MyGo](https://mygo.egoist.dev) 绘制为原生 UI：macOS 使用 Metal，Linux 使用 GTK 3。
+
+一眼看清：
+
+- **文件夹，而不是数据库。** 没有导入、索引或同步，文件树就是磁盘上的目录。
+- **标签页即工作区。** 每个标签页是一棵二叉拆分树，装着编辑器、查看器和终端。
+- **终端退出后仍在。** shell 运行在独立的会话服务器里，重新打开墨间就会接回。
+- **Git 就在同一窗口。** 工作区变更与 diff 紧挨着它们描述的文件。
+- **远端目录，就地编辑。** 文件、Git 和终端都在 SSH 主机上运行。
+- **单个 Go 二进制。** 没有 Electron、没有 WebView、没有 cgo，也没有 JavaScript 构建流程。
 
 ## 安装
 
@@ -62,7 +75,7 @@ macOS 用 `Cmd+O`，Linux 用 `Ctrl+O` 打开文件夹。项目徽标切换最�
 
 ### 标签页与窗格
 
-`Cmd+T` / `Ctrl+T` 新建标签页。标签页内部是一棵二叉拆分树：`Shift+Cmd+D` / `Shift+Cmd+E` 向右或向下拆分，`Option+Cmd` / `Ctrl+Alt` 加方向键向左或向上拆分。拖动窗格标题到另一个窗格的边缘，即可把窗格放到那里。`Option` / `Alt` 加方向键在窗格之间移动焦点；`Shift+Cmd+M` / `Ctrl+Shift+M` 放大当前窗格。
+`Cmd+T` / `Ctrl+T` 新建标签页。标签页内部是一棵二叉拆分树：`Shift+Cmd+D` / `Shift+Cmd+E` 向右或向下拆分，`Option+Cmd` / `Ctrl+Alt` 加方向键向左或向上拆分。拖动窗格标题到另一个窗格的边缘，即可把窗格放到那里。`Option` / `Alt` 加方向键在窗格之间移动焦点；`Option+Shift` / `Alt+Shift` 加方向键移动当前窗格本身；`Shift+Cmd+M` / `Ctrl+Shift+M` 放大当前窗格。
 
 双击标签页可重命名，双击窗格标题可放大，右键标签页可打开菜单。关闭窗格时，相邻窗格立刻占据空间，关闭的卡片会在原位置淡出。
 
@@ -80,9 +93,11 @@ Markdown 窗格可在源码与预览之间切换；设置 › 编辑器可以让
 
 `Cmd+S` / `Ctrl+S` 原子写入所有未保存的笔记；关闭窗口时也会保存未提交的修改。
 
-## Git、命令面板与设置
+## Git
 
 `Shift+Cmd+G` / `Ctrl+Shift+G` 打开工作区页面：左侧是相对 `HEAD` 的变更状态，右侧是带行号栏的 diff。暂存、未暂存和未跟踪的改动都会列出。
+
+## 命令面板与设置
 
 `Shift+Cmd+P` / `Ctrl+Shift+P` 用模糊匹配搜索命令、文件和标签页。`Cmd+,` / `Ctrl+,` 打开设置窗口：通用、外观、编辑器、终端、Shell、通知、快捷键、主机、Git、高级、更新。搜索可以按名称或关键词找到任意设置项，`Cmd+F` 聚焦搜索框。窗口默认跟随系统外观，也可在「视图 › 外观」中覆盖。
 
@@ -170,6 +185,10 @@ go tool mygo build -platform linux/amd64,linux/arm64
 ## 设计
 
 墨 `#1F1B16`，纸 `#FBF7EF`，朱砂 `#D24A2B`。墨间的识别里几乎一切都是纸上的墨，只有光标保留朱砂，那是页面唯一提高的声音。标志与导出文件见 [`logos/README.md`](logos/README.md)。
+
+## 许可证
+
+MIT，详见 [`LICENSE`](LICENSE)。
 
 ## 致谢
 
