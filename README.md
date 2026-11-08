@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="logos/png/mojian-logo-horizontal-1600.png" alt="Mojian" width="400">
-</p>
-
 <h1 align="center">Mojian · 墨间</h1>
 
 <p align="center"><em>Words on paper. The tool steps back.</em></p>
@@ -15,32 +11,19 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshot.png" alt="A Markdown note open in Mojian" width="960">
+  <img src="docs/screenshot.png" alt="Mojian with an editor, a pane choosing a file, and two terminals in one tab" width="1200">
 </p>
-<p align="center"><sub>A folder on the left, a note in front, and nothing else asking for attention.</sub></p>
 
 ## What Mojian is
 
-Mojian is a quiet plain-text editor that works on ordinary folders. There
-is no library, index, database or account: a project is the folder you
-opened, and a note is the file on disk.
+Mojian is a plain-text editor that opens ordinary folders. There is no
+library, index, database or account: a project is the folder you chose,
+and a note is the file on disk. Edits stay in memory until you save.
 
-A tab holds tiled panes. A pane can edit a file, preview an image or PDF,
-or — on macOS and Linux — run a terminal. The window is drawn by
-[MyGo](https://mygo.egoist.dev) as native UI: Metal on macOS, GTK 3 on
-Linux. There is no webview, no Electron and no
-JavaScript build.
-
-The Chinese name 墨间 (mò jiān) is ink, and the space it needs. The tool
-steps behind the paper, the file stays in front of you, and the pace of
-writing stays yours.
-
-## Platform support
-
-| Platform | Requirements | Release | Editor, Explorer, Git | Terminal, SSH, remote projects |
-|---|---|---|---|---|
-| macOS 13+ | Apple Silicon or Intel | `.dmg` | Yes | Yes |
-| Linux amd64 / arm64 | GTK 3 | `.deb`, `.tar.gz` | Yes | Yes |
+A tab is a workspace of tiled panes. A pane can edit a file, preview an
+image or PDF, or run a terminal. The window is native UI drawn by
+[MyGo](https://mygo.egoist.dev): Metal on macOS, GTK 3 on Linux. There is
+no webview, no Electron, and no JavaScript build.
 
 ## Install
 
@@ -64,7 +47,7 @@ Install the Debian package:
 sudo apt install ./mojian_<version>_<arch>.deb
 ```
 
-Or install the archive per user without root: put `install.sh` and
+Or install per user without root: put `install.sh` and
 `mojian-<version>-linux-<arch>.tar.gz` in one folder, then run:
 
 ```sh
@@ -73,69 +56,69 @@ sh install.sh
 
 The Linux app needs GTK 3 and a desktop session.
 
-## The editor
+## The window
 
-### A project is a folder
+The top bar is the whole application: server and project at the left, the
+open tab in the middle, and Explorer, split, terminal, new-tab and Settings
+buttons at the right. Settings opens a separate window.
 
-`Cmd+O` on macOS or `Ctrl+O` on Linux opens any folder. The
-chips at the top left switch between recent projects; on macOS and Linux
-they also switch between local and server projects. Each project keeps its
-own tabs, panes and recent files. With no project chosen, the first launch
-opens `~/Documents/Mojian` and leaves a welcome note when the folder is
-empty.
+Each pane has its own header. It shows the file, picture or terminal, and
+keeps split, zoom and close buttons visible whether the pane has focus or
+not. Empty panes are useful: splitting opens one with an inline file search,
+so the next file appears where you are looking.
 
-### Writing comes first
+### Projects and the Explorer
 
-Edits stay in memory until you save. `Cmd+S` / `Ctrl+S` writes atomically,
-and unsaved work is written when the window closes. Syntax highlighting
-covers Python, JavaScript, TypeScript, Go, Rust, C and C++, Swift, Kotlin,
-Ruby, JSON, YAML, TOML, SQL, HTML, CSS, Markdown and more. Code keeps line
-numbers; prose wraps.
+`Cmd+O` on macOS or `Ctrl+O` on Linux opens a folder. The project chip
+switches between recent projects, and the server chip switches between
+Local and configured hosts. Each project keeps its own tabs, panes and
+recent files. With no project chosen, the first launch opens
+`~/Documents/Mojian` and leaves a welcome note when the folder is empty.
 
-Markdown panes switch between source and preview from the header, and
-Settings › Editor can render new `.md` files by default. Images, including
-SVG, open in a contained viewer; PDFs render page by page when `pdftoppm`
-is installed, with a Quick Look first page on macOS.
-
-### Tabs, panes and the Explorer
-
-A tab is a workspace made of panes. A split opens an empty pane with an
-inline file search. Drag a pane by its header onto another pane's edge to
-insert it there, or use `Option+Shift` / `Alt+Shift` and the arrows.
-`Option` / `Alt` and the arrows move pane focus. `Shift+Cmd+M` on macOS or
-`Ctrl+Shift+M` on Linux zooms the focused pane.
-
-`Shift+Cmd+B` / `Ctrl+Shift+B` toggles the Explorer. Its search field
-filters files, and **Open File** (`Shift+Cmd+O` / `Ctrl+Shift+O`) opens a
-picker over every file in the project: type to filter, then press Enter or
-click a file to open it in the active tab. The Explorer creates files and folders;
-right-click offers open, rename, duplicate, copy, cut, copy path, reveal
-and move to trash; folders and empty space accept paste. Generated trees
+`Shift+Cmd+B` / `Ctrl+Shift+B` shows or hides the Explorer. Its search field
+filters the tree. **Open File** (`Shift+Cmd+O` / `Ctrl+Shift+O`) searches
+every file in the project: type to filter, then press Enter or click a file.
+The tree creates files and folders; right-click offers open, rename,
+duplicate, copy, cut, copy path, reveal and move to trash. Generated folders
 such as `.git`, `node_modules`, `dist` and `build` stay out of sight.
 
-### Terminals and servers (macOS and Linux)
+### Tabs and panes
 
-`Shift+Cmd+T` / `Ctrl+Shift+T` opens a real terminal at the project root.
-On macOS and Linux, local projects and their terminals run through the
-same detached session server: quitting Mojian detaches the shells and
-reopening reattaches them, and saves, file operations and Git use the same
-server. `Shift+Cmd+L` / `Ctrl+Shift+L` opens an SSH terminal to a host
-from Settings › Hosts.
+`Cmd+T` / `Ctrl+T` opens a tab. A tab holds a binary split tree: split
+right or down with `Shift+Cmd+D` / `Shift+Cmd+E`, or left and up with
+`Option+Cmd` / `Ctrl+Alt` and the arrows. Drag a pane by its header onto
+another pane's edge to put it there. `Option` / `Alt` and the arrows move
+focus between panes; `Shift+Cmd+M` / `Ctrl+Shift+M` zooms the focused pane.
 
-Add a host in Settings › Hosts, then use **Set Up Server** on its row to
-upload `mojian-server` and `libghostty-vt` to `~/.local/share/mojian` and
-check that it answers; the result stays in the row. Choose the host from
-the server chip to work on a folder in place: the Explorer lists the
-host's files, a file is read when it opens, and saves and file operations
-write straight back. Git runs on the host too. A project once opened stays
-loaded, so switching back restores its tabs and terminals without reading
-it again. The remote server and its
-terminals stay alive when the SSH connection or Mojian disconnects; each
-terminal remembers the server that owns it, and `mojian-server -stop` ends
-a server explicitly. No root, no listening port and no system service are
-installed.
+Double-click a tab to rename it, double-click a pane header to zoom it, and
+right-click a tab for its menu. Closing a pane lets its neighbor take the
+space at once; the closed card fades back over its old place.
 
-### Git and the command palette
+### Terminal
+
+`Shift+Cmd+T` / `Ctrl+Shift+T` opens a terminal at the project root. A
+terminal is a pane like any other: split it, move it, zoom it or close it.
+On macOS and Linux, terminals run in a detached session server, so quitting
+Mojian leaves the shells alive and reopening attaches them again.
+
+`Shift+Cmd+L` / `Ctrl+Shift+L` opens an SSH terminal to a host from
+Settings › Hosts.
+
+## Writing and previewing
+
+Code keeps line numbers; prose wraps. Syntax highlighting covers Python,
+JavaScript, TypeScript, Go, Rust, C and C++, Swift, Kotlin, Ruby, JSON,
+YAML, TOML, SQL, HTML, CSS, Markdown and more.
+
+Markdown panes switch between source and preview from the pane header, and
+Settings › Editor can render new `.md` files by default. Images, including
+SVG, open in a contained viewer. PDFs render page by page when `pdftoppm`
+is installed, with a Quick Look first page on macOS.
+
+`Cmd+S` / `Ctrl+S` writes every unsaved note atomically. Unsaved work is
+also written when the window closes.
+
+## Git, palette and Settings
 
 `Shift+Cmd+G` / `Ctrl+Shift+G` shows the working tree against `HEAD`:
 statuses on the left, a two-gutter diff on the right. Staged, unstaged and
@@ -143,18 +126,34 @@ untracked work are all included.
 
 `Shift+Cmd+P` / `Ctrl+Shift+P` searches commands, files and tabs with fuzzy
 matching. `Cmd+,` / `Ctrl+,` opens Settings: General, Appearance, Editor,
-Terminal, Shell, Notifications, Keyboard, Hosts, Git, Advanced and
-Updates. Its search finds any preference by name or keyword, and
-`Cmd+F` focuses it. The window follows the system appearance by default;
-View › Appearance overrides it.
+Terminal, Shell, Notifications, Keyboard, Hosts, Git, Advanced and Updates.
+Its search finds any preference by name or keyword, and `Cmd+F` focuses the
+search field. The window follows the system appearance by default; View ›
+Appearance overrides it.
 
-### Updates
+## Remote servers
+
+Add a host in Settings › Hosts, then choose **Set Up Server** on its row.
+Mojian uploads `mojian-server` and `libghostty-vt` to
+`~/.local/share/mojian` on the host and checks that the server answers. No
+root, no listening port and no system service are installed.
+
+Choose the host from the server chip to work on a folder in place: the
+Explorer lists the host's files, a file is read when it opens, and saves
+and file operations write straight back. Git runs on the host too. A
+project once opened stays loaded, so switching back restores its tabs and
+terminals without reading it again.
+
+The remote server and its terminals stay alive when the SSH connection or
+Mojian disconnects. Each terminal remembers the server that owns it, and
+`mojian-server -stop` ends a server explicitly.
+
+## Updates
 
 Settings › Updates checks the latest signed release on GitHub. **Check for
 Updates** reports when the app is current or offers a newer version;
 **Install Update** downloads it and verifies its signature; **Restart to
-Update** applies a staged update and relaunches Mojian. The check never
-blocks the editor.
+Update** applies a staged update and relaunches Mojian.
 
 Self-updates need a writable installation: the macOS app bundle or the
 per-user Linux archive. A `.deb` installed in `/opt` is updated by its
@@ -176,7 +175,7 @@ The in-app labels follow the platform. This table shows both spellings.
 | New tab | `⌘T` | `Ctrl+T` |
 | Close pane / tab | `⌘W` / `⇧⌘W` | `Ctrl+W` / `Ctrl+Shift+W` |
 | Next / previous tab | `⌃⇥` / `⌃⇧⇥` | `Ctrl+Tab` / `Ctrl+Shift+Tab` |
-| Show tab 1–9 | `⌘1…⌘9` | `Ctrl+1…Ctrl+9` |
+| Show tab 1-9 | `⌘1…⌘9` | `Ctrl+1…Ctrl+9` |
 | Split right / down | `⇧⌘D` / `⇧⌘E` | `Ctrl+Shift+D` / `Ctrl+Shift+E` |
 | Split left / up | `⌥⌘←` / `⌥⌘↑` | `Ctrl+Alt+Left` / `Ctrl+Alt+Up` |
 | Focus neighboring pane | `⌥` + arrows | `Alt` + arrows |
@@ -191,8 +190,7 @@ The in-app labels follow the platform. This table shows both spellings.
 
 These are the defaults; Settings › Keyboard rebinds them, resets a command
 or unbinds it. Terminal and SSH shortcuts are available on macOS and Linux
-only. Double-click a tab to rename it; double-click a pane header to zoom it.
-Right-click a tab for its menu.
+only.
 
 ## Build from source
 
@@ -215,8 +213,8 @@ go tool mygo build -platform linux/amd64,linux/arm64
 ```
 
 The output lives under `build/<os>-<arch>/`. macOS produces `.app` and
-`.dmg`; Linux produces `.tar.gz` and `.deb`. MyGo is pinned as a Go tool in `go.mod`, so the first
-`go tool mygo` downloads the exact version.
+`.dmg`; Linux produces `.tar.gz` and `.deb`. MyGo is pinned as a Go tool in
+`go.mod`, so the first `go tool mygo` downloads the exact version.
 
 `go tool mygo dev -web` opens the interface in a browser, with files kept
 in memory. After changing the session protocol or `cmd/mojian-server`,
@@ -240,7 +238,7 @@ Each release contains:
 ## Design
 
 Ink `#1F1B16`, paper `#FBF7EF`, vermilion `#D24A2B`. In Mojian's identity
-almost everything is ink on paper; only the cursor keeps the vermilion —
+almost everything is ink on paper; only the cursor keeps the vermilion,
 the one voice the page raises. Marks and exports live in
 [`logos/README.md`](logos/README.md).
 

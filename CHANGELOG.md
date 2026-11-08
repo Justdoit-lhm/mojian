@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.3
+
+- Settings › Updates reads the latest release manifest directly from the
+  release download URL and retries GitHub's transient 5xx answers, so a
+  rate-limited API or a brief Gateway Timeout no longer fails the check.
+- The README opens with the real window and walks through the Explorer,
+  Open File, panes, terminals, remote servers and Settings.
+
 ## 0.2.2
 
 - Double-clicking a tab's name and typing a new one keeps the text on the

@@ -169,6 +169,7 @@ func Run() {
 		prefs:     defaultPrefs(),
 	}
 	go warmSessionServer()
+	useGitHubUpdates()
 	mygo.App.SetMenu(a.menu())
 	mygo.App.WhenReady(a.open)
 	mygo.App.OnActivate(func(hasVisibleWindows bool) {
