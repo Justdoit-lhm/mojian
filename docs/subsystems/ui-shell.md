@@ -8,6 +8,7 @@ window, the error banner and command dispatch from menu, palette and keyboard.
 
 ## Source of truth
 
+- [`main.go`](../../main.go) — the command line, `detachFromTerminal`, and the `app.Run` entry.
 - [`internal/app/app.go`](../../internal/app/app.go) — `app`, `Run`, `open`, `initialStore`,
   `later`, `runPending`, `changed`, `scheduleLayoutSave`, `persistLayout`, `fail`.
 - [`internal/app/view.go`](../../internal/app/view.go) — `(*app).view`, the window root:
@@ -29,17 +30,22 @@ window, the error banner and command dispatch from menu, palette and keyboard.
 
 ## Runtime path
 
-1. MyGo delivers input, `Window.Update` or `Invalidate`, and calls `(*app).view` again. The view
+1. `main` validates the command line and, when standard input is a terminal, `detachFromTerminal`
+   re-runs the binary in its own session and exits the parent: the shell returns at once, and
+   closing the terminal or pressing Ctrl+C does not end the window. A launch without a terminal
+   (Finder, LaunchServices) stays in place, `mygo dev` keeps its child attached, and the detached
+   copy appends stdout and stderr to `app.log` under `session.Dir()`.
+2. MyGo delivers input, `Window.Update` or `Invalidate`, and calls `(*app).view` again. The view
    builds a new element tree every frame from the fields on `*app`; nothing is cached between
    frames.
-2. An action mutates `app` directly. When the mutation would change a collection the current frame
+3. An action mutates `app` directly. When the mutation would change a collection the current frame
    is still iterating (add or close a tab or pane), the action wraps it in `a.later(fn)`;
    `runPending` calls those closures once the frame is done.
-3. `a.changed()` marks the layout dirty, records `lastChange` and arms a 700 ms `time.AfterFunc`.
+4. `a.changed()` marks the layout dirty, records `lastChange` and arms a 700 ms `time.AfterFunc`.
    `persistLayout` writes through `saveLayout` only after 550 ms without another change; file
    contents are written only by an explicit save.
-4. `a.invalidate()` requests a redraw of both windows after a state change made outside the view.
-5. `a.fail(err)` stores the message in `a.err`, which the root view renders as the error banner.
+5. `a.invalidate()` requests a redraw of both windows after a state change made outside the view.
+6. `a.fail(err)` stores the message in `a.err`, which the root view renders as the error banner.
 
 ## Contracts and failure behavior
 

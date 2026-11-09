@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.10
+
+- `mojian .` from a terminal returns the prompt at once: the app re-runs
+  itself in its own session after checking the command line, so closing
+  the terminal or pressing Ctrl+C no longer ends the window or reaches
+  its process group. A launch without a terminal, as from Finder or
+  LaunchServices, stays in place, and `mygo dev` keeps its child attached
+  because its live reload watches that child. The detached window has no
+  terminal left for its errors, so its standard output and error go to
+  `app.log` in the data directory.
+
 ## 0.2.9
 
 - The Appearance page offers ten color themes: Petal, the look Mojian has

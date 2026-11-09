@@ -57,6 +57,12 @@ func main() {
 			_ = os.Setenv("MOJIAN_DIR", dir)
 		}
 	}
+	// A launch from a terminal leaves it: re-run in our own session so the
+	// shell returns at once and closing the terminal or pressing Ctrl+C no
+	// longer ends the window. Errors from here on go to app.log.
+	if detachFromTerminal() {
+		return
+	}
 	app.Run(startup)
 }
 

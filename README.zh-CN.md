@@ -68,6 +68,8 @@ mojian ~/git/abc/README.md      # 文件，其所在文件夹成为项目
 
 文件会在该项目已保存布局的当前窗格中打开。应用包内的可执行文件位于 `Mojian.app/Contents/MacOS/Mojian`；把它链接为 `mojian` 即可使用上面的命令，`mojian --help` 查看用法。
 
+从终端启动后命令会立即返回：结束终端或按 Ctrl+C 不再影响已打开的窗口。由 Finder 等无终端方式启动时保持原样；脱离终端后的窗口错误写入数据目录下的 `app.log`。
+
 「打开文件夹」选择器会列出通过符号链接指向的文件夹，**Cancel** 左侧的 **Hidden folders** 开关会显示以点开头的隐藏文件夹。
 
 首次启动且未选择项目时，墨间会打开 `~/Documents/Mojian`；文件夹为空时留下一张欢迎笔记。
