@@ -4,9 +4,11 @@ package testutil
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -25,17 +27,82 @@ type envSet struct {
 
 // mygoNative finds the libghostty-vt MyGo downloaded for the real user, so
 // a sandboxed test binary loads it instead of fetching it again into a
-// temporary home where nothing is cached.
+// temporary home where nothing is cached. MyGo's cache keeps one folder per
+// platform, so a machine that once built both architectures holds both
+// files; take the one built for this one, or a test loads the other and
+// fails to link.
 func mygoNative() string {
 	cache, err := os.UserCacheDir()
 	if err != nil {
 		return ""
 	}
 	matches, err := filepath.Glob(filepath.Join(cache, "mygo", "natives", "*", "libghostty-vt.*"))
-	if err != nil || len(matches) == 0 {
+	if err != nil {
+		return ""
+	}
+	return pickNative(matches)
+}
+
+// pickNative chooses among the cached libraries: the one built for this
+// machine when the cache holds several, and otherwise the first, so a
+// machine MyGo reads nothing for still hands over what it has.
+func pickNative(matches []string) string {
+	for _, m := range matches {
+		if nativeArch(m) == runtime.GOARCH {
+			return m
+		}
+	}
+	if len(matches) == 0 {
 		return ""
 	}
 	return matches[0]
+}
+
+// nativeArch reads the architecture a shared library was built for from its
+// header: Mach-O's cputype or ELF's machine. A universal binary, which
+// holds several, matches this process's architecture; a file of neither
+// kind, or of a kind not read here, matches nothing.
+func nativeArch(path string) string {
+	data := make([]byte, 64)
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	n, _ := io.ReadFull(f, data)
+	f.Close()
+	data = data[:n]
+	if len(data) < 20 {
+		return ""
+	}
+	be := func(o int) uint32 {
+		return uint32(data[o])<<24 | uint32(data[o+1])<<16 | uint32(data[o+2])<<8 | uint32(data[o+3])
+	}
+	le := func(o int) uint32 {
+		return uint32(data[o]) | uint32(data[o+1])<<8 | uint32(data[o+2])<<16 | uint32(data[o+3])<<24
+	}
+	switch {
+	case be(0) == 0xcafebabe, le(0) == 0xcafebabe, be(0) == 0xcafebabf:
+		// A universal binary loads on every architecture it carries.
+		return runtime.GOARCH
+	case le(0) == 0xfeedfacf || le(0) == 0xfeedface: // Mach-O, 64- or 32-bit
+		switch le(4) {
+		case 0x0100000c, 12: // CPU_TYPE_ARM64, CPU_TYPE_ARM
+			return "arm64"
+		case 0x01000007, 7: // CPU_TYPE_X86_64, CPU_TYPE_X86
+			return "amd64"
+		}
+	case be(0) == 0x7f454c46: // ELF, whose header is little-endian here
+		if data[4] != 2 || data[5] != 1 { // ELFCLASS64, ELFDATA2LSB
+			return ""
+		}
+		switch uint16(data[18]) | uint16(data[19])<<8 {
+		case 0xb7: // EM_AARCH64
+			return "arm64"
+		case 0x3e: // EM_X86_64
+			return "amd64"
+		}
+	}
+	return ""
 }
 
 // Main gives a test binary a home of its own: HOME, USERPROFILE, the XDG
