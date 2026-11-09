@@ -197,6 +197,41 @@ func (a *app) closeRemoteProject(host, path string) {
 	a.invalidate()
 }
 
+// lastLoadedProjectOn returns the most recently opened project on host
+// that is still in the workspace cache. The remembered list puts the
+// latest first, so choosing a server after working on another project
+// resumes the one that was left open.
+func (a *app) lastLoadedProjectOn(host string) (remoteProject, bool) {
+	a.initWorkspaces()
+	for _, p := range a.remoteProjects() {
+		if p.Host != host || p.Path == "" {
+			continue
+		}
+		if a.workspaces[workspaceKeyRemote(host, p.Path)] != nil {
+			return p, true
+		}
+	}
+	return remoteProject{}, false
+}
+
+// switchToServer is the server chip's choice: it resumes host's loaded
+// project instead of asking for a folder again, and opens the folder
+// picker only when nothing on that server is loaded. Choosing the server
+// that is already on screen still opens the picker, so another folder on
+// it can be opened.
+func (a *app) switchToServer(host string) {
+	if host == "" {
+		return
+	}
+	if a.serverAlias != host {
+		if p, ok := a.lastLoadedProjectOn(host); ok {
+			a.openRemoteProjectAsync(p.Host, p.Path)
+			return
+		}
+	}
+	a.openRemotePicker(host)
+}
+
 // openRemoteProjectAsync opens a remote project away from the UI thread,
 // with a loading state. A project already in the workspace cache switches
 // at once, without connecting again.

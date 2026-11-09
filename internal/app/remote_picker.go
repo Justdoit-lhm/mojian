@@ -339,7 +339,7 @@ func (a *app) serverRow(c *ui.Context, k *colors, host, label string) {
 				}
 			})
 		} else {
-			a.later(func() { a.openRemotePicker(host) })
+			a.later(func() { a.switchToServer(host) })
 		}
 	}
 	row.Children(func() {

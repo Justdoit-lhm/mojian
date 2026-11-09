@@ -340,6 +340,6 @@ func (a *app) selectServer(host string) {
 		if a.settingsWin != nil {
 			a.settingsWin.Close()
 		}
-		a.openRemotePicker(host)
+		a.switchToServer(host)
 	})
 }

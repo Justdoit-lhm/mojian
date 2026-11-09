@@ -60,9 +60,12 @@ the host list and connection pool the app keeps.
   race exit instead of binding a second socket.
 - Remote connections are pooled by host and kept while a loaded project uses them, and after
   `Set Up Server` until the last project on that host is removed (`closeRemoteProject`); `CloseAll`
-  ends them at quit. A kept connection opens the folder picker at once, without the window-wide
-  loading card, using the home cached in `remoteHomes`. A dead control channel is dropped by
-  `remoteForHost` and dialed again on the next use.
+  ends them at quit. Choosing a server that is not the one on screen resumes its most recently
+  opened project when that workspace is still cached, so switching to Local and back keeps the tabs,
+  terminals and layout; only when nothing on the host is loaded does it open the folder picker, at
+  once and without the window-wide loading card, using the home cached in `remoteHomes`. Choosing
+  the server already on screen opens the picker, so another folder on it can be opened. A dead
+  control channel is dropped by `remoteForHost` and dialed again on the next use.
 - Settings › Hosts is the only host source; the app does not scan `~/.ssh/config`.
 - Opening a remote project runs off the UI thread behind the loading card, so an unreachable host
   cannot block the window.

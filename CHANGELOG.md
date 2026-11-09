@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.13
+
+- Choosing a server in the server chip or Settings › Hosts now returns to
+  the project still loaded on that host, tabs and terminals included,
+  instead of showing the folder picker again after a switch to Local. The
+  picker still opens when nothing on the host is loaded, or when the
+  server is already on screen.
+
 ## 0.2.12
 
 - The default Petal theme is rebuilt around one surface tint: porcelain
