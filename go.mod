@@ -7,7 +7,7 @@ tool github.com/egoist/mygo/cmd/mygo
 require (
 	github.com/auron-labs/mygo-mcp v0.1.0
 	github.com/creack/pty v1.1.21
-	github.com/egoist/mygo v0.7.4
+	github.com/egoist/mygo v0.8.3
 	golang.org/x/sys v0.48.0
 )
 

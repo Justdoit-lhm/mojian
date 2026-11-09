@@ -11,7 +11,7 @@ import (
 func (a *app) settingsHostsPage(c *ui.Context, k *colors) {
 	a.settings.NoticeLine(c, k)
 	a.settings.Section(c, k, "ADD HOST", func() {
-		row := ui.Column(c).Key("host-add").Padding(10, 16).Gap(6).Radius(6)
+		row := ui.Column(c.Key("host-add")).Padding(10, 16).Gap(6).Radius(6)
 		if a.settings.Hits["Address"] {
 			row.Background(k.PanelSel)
 		}
@@ -93,7 +93,7 @@ func (a *app) hostSettingsRow(c *ui.Context, k *colors, host, label, detail stri
 		a.hostEditRow(c, k, host, label)
 		return
 	}
-	outer := ui.Column(c).Key("server-" + host + "-" + label)
+	outer := ui.Column(c.Key("server-" + host + "-" + label))
 	if selected {
 		outer.Background(k.PanelSel).Radius(6)
 	}

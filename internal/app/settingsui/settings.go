@@ -214,7 +214,7 @@ func (u *UI) settingsRail(c *ui.Context, k *colors) {
 
 func (u *UI) settingsNavRow(c *ui.Context, k *colors, i int, cat settings.Category) {
 	sel := i == u.Cat
-	row := ui.Row(c).Key("settings-nav-"+strconv.Itoa(i)).Height(34).Padding(0, 9).
+	row := ui.Row(c.Key("settings-nav-"+strconv.Itoa(i))).Height(34).Padding(0, 9).
 		Gap(9).Radius(radius).AlignItems(ui.Center).Cursor(ui.CursorPointer).
 		Role(ui.RoleButton).Label(cat.Title)
 	switch {
@@ -298,7 +298,7 @@ func (u *UI) settingsSection(c *ui.Context, k *colors, title string, fn func()) 
 	u.Rows = 0
 	ui.Column(c).Gap(8).FillWidth().Children(func() {
 		if title != "" {
-			head := ui.Row(c).Key("group-"+title).Padding(2, 2).Radius(5)
+			head := ui.Row(c.Key("group-"+title)).Padding(2, 2).Radius(5)
 			if u.Hits[title] {
 				head.Background(k.PanelSel)
 			}
@@ -320,7 +320,7 @@ func (u *UI) settingRow(c *ui.Context, k *colors, title, detail string, control 
 	if u.Rows > 1 {
 		ui.Divider(c).Margin(0, 16)
 	}
-	row := ui.Row(c).Key("row-"+title+"-"+strconv.Itoa(u.Rows)).
+	row := ui.Row(c.Key("row-"+title+"-"+strconv.Itoa(u.Rows))).
 		MinHeight(56).Padding(0, 16).Gap(18).AlignItems(ui.Center).Radius(6)
 	if u.Hits[title] {
 		row.Background(k.PanelSel)
@@ -365,7 +365,7 @@ func (u *UI) settingsChoiceRow(c *ui.Context, k *colors, key, title string, valu
 			Gap(2).Role(ui.RoleRadioGroup).Label(title).Children(func() {
 			for n, label := range labels {
 				n, label := n, label
-				b := ui.Row(c).Key(key+"-"+strconv.Itoa(n)).Padding(5, 12).
+				b := ui.Row(c.Key(key+"-"+strconv.Itoa(n))).Padding(5, 12).
 					Radius(radius).Cursor(ui.CursorPointer).Role(ui.RoleRadio).
 					Label(label).Selected(n == current)
 				switch {
@@ -411,7 +411,7 @@ func (u *UI) settingsInfoRow(c *ui.Context, k *colors, title, value string) {
 	if u.Rows > 1 {
 		ui.Divider(c).Margin(0, 16)
 	}
-	row := ui.Row(c).Key("info-"+title).MinHeight(44).Padding(0, 16).Gap(18).
+	row := ui.Row(c.Key("info-"+title)).MinHeight(44).Padding(0, 16).Gap(18).
 		AlignItems(ui.Center).Radius(6)
 	if u.Hits[title] {
 		row.Background(k.PanelSel)

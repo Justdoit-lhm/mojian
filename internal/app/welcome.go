@@ -57,7 +57,7 @@ func (a *app) emptyState(c *ui.Context, k *colors, vw, vh float32) {
 							if i > 0 {
 								ui.Divider(c)
 							}
-							row := ui.Row(c).Key("welcome:"+n.Rel).Height(40).Padding(0, 14).
+							row := ui.Row(c.Key("welcome:"+n.Rel)).Height(40).Padding(0, 14).
 								Gap(9).AlignItems(ui.Center).Cursor(ui.CursorPointer).
 								Role(ui.RoleButton).Label(n.Title)
 							if row.Hovered() {

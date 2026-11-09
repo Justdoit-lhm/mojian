@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.7
+
+- MyGo moves to v0.8.3. Markdown previews now read GitHub's alerts,
+  mentions and issue references, an unfocused window fades its accent as
+  native apps do, and a keyed list or settings row is built with its key
+  already set, so its state stays with the row as the view rebuilds.
+- Terminal panes take the upstream fixes: a program's synchronized output
+  shows after a second even when it never ends it, CJK punctuation keeps
+  its cells, Option-E sends Esc e, and a full-screen repaint costs less of
+  the main thread.
+- Remote hosts get the rebuilt server and the same terminal fixes on
+  their next setup; the session protocol and the libghostty library are
+  unchanged.
+
 ## 0.2.6
 
 - Every tab keeps its close button visible, including the first and only

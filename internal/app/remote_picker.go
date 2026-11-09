@@ -175,7 +175,7 @@ func (a *app) remotePickerModal(c *ui.Context, k *colors) {
 						continue
 					}
 					d := d
-					row := ui.Row(c).Key(d.Rel).Height(34).Padding(0, 10).MarginY(2).
+					row := ui.Row(c.Key(d.Rel)).Height(34).Padding(0, 10).MarginY(2).
 						Gap(8).Radius(radius).Cursor(ui.CursorPointer).Role(ui.RoleButton).
 						Label("Open " + d.Rel)
 					if row.Hovered() {
@@ -282,7 +282,7 @@ func (a *app) serverChip(c *ui.Context, k *colors) {
 
 func (a *app) serverRow(c *ui.Context, k *colors, host, label string) {
 	selected := a.serverAlias == host
-	row := ui.Row(c).Key("server:"+host).Height(36).Padding(0, 8).Gap(8).
+	row := ui.Row(c.Key("server:"+host)).Height(36).Padding(0, 8).Gap(8).
 		Radius(radius).Cursor(ui.CursorPointer).Role(ui.RoleButton).Label("Server " + label)
 	if selected {
 		row.Background(k.PanelSel)
@@ -323,7 +323,7 @@ func (a *app) remoteProjectRows(c *ui.Context, k *colors) {
 			continue
 		}
 		p := p
-		row := ui.Row(c).Key("remote:"+p.Host+":"+p.Path).Height(39).Padding(0, 8).
+		row := ui.Row(c.Key("remote:"+p.Host+":"+p.Path)).Height(39).Padding(0, 8).
 			Gap(8).Radius(radius).Cursor(ui.CursorPointer).Role(ui.RoleButton).
 			Label(p.Path)
 		if p.Path == a.remotePath {

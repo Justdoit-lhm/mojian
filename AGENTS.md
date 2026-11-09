@@ -153,7 +153,7 @@ To add a fixture, register it in `cmd/harness/main.go` and add its factory in `c
 
 ## Runtime/Tooling Preferences
 
-- **Go 1.27.3**, module `mojian`. No cgo anywhere (`mygo build` and `tools/build-remote.sh` set `CGO_ENABLED=0`); keep it that way. MyGo `v0.7.4` — check the pinned source at `$(go list -m -f '{{.Dir}}' github.com/egoist/mygo)` before using an API, especially `ui/doc.go` and the widget's implementation comments.
+- **Go 1.27.3**, module `mojian`. No cgo anywhere (`mygo build` and `tools/build-remote.sh` set `CGO_ENABLED=0`); keep it that way. MyGo `v0.8.3` — check the pinned source at `$(go list -m -f '{{.Dir}}' github.com/egoist/mygo)` before using an API, especially `ui/doc.go` and the widget's implementation comments.
 - No linter or formatter config exists; `gofmt` and `go vet` are the standard. `go tool mygo vet .` additionally rejects stored UI build values and goroutine captures.
 - Build output is `build/<os>-<arch>/`; `/build/`, `/.mygo/` and the root `mojian` binary are gitignored. Do not commit them.
 - `internal/remotebin/*.so` and `internal/remotebin/mojian-server-linux-*` are build artifacts embedded by `go:embed`; regenerate with `tools/build-remote.sh`, never hand-edit.

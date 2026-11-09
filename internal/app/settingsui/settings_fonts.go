@@ -82,7 +82,7 @@ func (u *UI) fontPicker(c *ui.Context, k *colors) {
 				if u.FontPickFor == 1 {
 					def = "System monospace · default"
 				}
-				row := ui.Row(c).Key("picker-default").Height(34).Padding(0, 10).Gap(8).
+				row := ui.Row(c.Key("picker-default")).Height(34).Padding(0, 10).Gap(8).
 					Radius(radius).Cursor(ui.CursorPointer).Role(ui.RoleButton).Label(def)
 				if current == "" {
 					row.Background(k.PanelSel)
@@ -109,7 +109,7 @@ func (u *UI) fontPicker(c *ui.Context, k *colors) {
 						continue
 					}
 					shown++
-					row := ui.Row(c).Key("picker-"+f.Name).Height(34).Padding(0, 10).Gap(8).
+					row := ui.Row(c.Key("picker-"+f.Name)).Height(34).Padding(0, 10).Gap(8).
 						Radius(radius).Cursor(ui.CursorPointer).Role(ui.RoleButton).
 						Label(f.Name)
 					if f.Name == current {

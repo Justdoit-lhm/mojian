@@ -103,7 +103,7 @@ func (a *app) sshPicker(c *ui.Context, k *colors) {
 					if label == "" {
 						label = h.Address
 					}
-					row := ui.Row(c).Key(h.Address).Height(40).Padding(0, 10).Gap(9).
+					row := ui.Row(c.Key(h.Address)).Height(40).Padding(0, 10).Gap(9).
 						Radius(radius).Cursor(ui.CursorPointer).Role(ui.RoleButton).
 						Label(label + " " + h.Address)
 					if i == a.sshSel {
