@@ -169,8 +169,10 @@ func (a *app) tip(label string, cmd *commands.Command) string {
 // iconButton is a borderless button of an icon, with a face on hover;
 // label names it for screen readers and its tooltip.
 func iconButton(c *ui.Context, k *colors, name, label string, size, iconSize float32) ui.Element {
-	b := ui.Box(c).Size(size, size).Center().Radius(radius).
-		Cursor(ui.CursorPointer).Role(ui.RoleButton).Label(label)
+	// ButtonBase carries the focus, Enter and Space, and the button role;
+	// only the look is ours.
+	b := ui.ButtonBase(c).Size(size, size).Radius(radius).
+		Cursor(ui.CursorPointer).Label(label)
 	if b.Pressed() {
 		b.Background(k.Pressed)
 	} else if b.Hovered() {

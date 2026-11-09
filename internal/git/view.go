@@ -98,39 +98,44 @@ func (p *Page) files(c *ui.Context, k *theme.Colors) {
 			})
 			return
 		}
-		ui.Scroll(c).Grow(1).MinHeight(0).Padding(6, 7).Children(func() {
-			for i, ch := range p.Changes {
-				i, ch := i, ch
-				selected := i == p.Sel
-				row := ui.Row(c.Key(fmt.Sprintf("git:%d", i))).Height(38).Padding(0, 7).
-					Gap(7).Radius(theme.Radius).AlignItems(ui.Center).Cursor(ui.CursorPointer).
-					Role(ui.RoleButton).Label(ch.Display).Tooltip(ch.Display + " — " + statusLabel(ch.Status)).
-					PopoverMenu(func(m *ui.Menu) { p.h.FileMenu(m, ch.Display) })
-				if selected {
-					row.Background(k.PanelSel)
-				} else if row.Hovered() {
-					row.Background(k.Hover)
-				}
-				if row.Clicked() {
-					p.Select(i)
-				}
-				if row.DoubleClicked() && p.h.HasPath(ch.Display) {
-					p.h.OpenPath(ch.Display)
-				}
-				row.Children(func() {
-					ui.Icon(c, icons.FileIcon(ch.Path)).Size(16, 16).TextColor(k.TextMuted)
-					ui.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {
-						ui.Text(c, filepath.Base(ch.Display)).FontSize(12).FontWeight(500).
-							TextColor(k.Text).SingleLine().Ellipsis("…")
-						if dir := filepath.Dir(ch.Display); dir != "." {
-							ui.Text(c, dir).FontSize(10.5).TextColor(k.TextFaint).
-								SingleLine().Ellipsis("…")
-						}
-					})
-					p.statusBadge(c, k, ch.Status)
-				})
+		p.list.Selected = &p.Sel
+		p.list.Key = func(i int) any { return p.Changes[i].Display }
+		openPath := ""
+		list := ui.List(c, &p.list, len(p.Changes), func(i int) {
+			ch := p.Changes[i]
+			row := ui.Row(c.Key(fmt.Sprintf("git:%d", i))).Height(38).Padding(0, 7).
+				Gap(7).Radius(theme.Radius).Cursor(ui.CursorPointer).
+				Label(ch.Display).Tooltip(ch.Display + " — " + statusLabel(ch.Status)).
+				PopoverMenu(func(m *ui.Menu) { p.h.FileMenu(m, ch.Display) })
+			fg, muted, icon := k.Text, k.TextFaint, k.TextMuted
+			if i == p.Sel {
+				fg = c.Theme().AccentText
+				muted, icon = fg.Alpha(0.9), fg.Alpha(0.9)
+			} else if row.Hovered() {
+				row.Background(k.Hover)
 			}
-		})
+			if row.DoubleClicked() && p.h.HasPath(ch.Display) {
+				openPath = ch.Display
+			}
+			row.Children(func() {
+				ui.Icon(c, icons.FileIcon(ch.Path)).Size(16, 16).TextColor(icon)
+				ui.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {
+					ui.Text(c, filepath.Base(ch.Display)).FontSize(12).FontWeight(500).
+						TextColor(fg).SingleLine().Ellipsis("…")
+					if dir := filepath.Dir(ch.Display); dir != "." {
+						ui.Text(c, dir).FontSize(10.5).TextColor(muted).
+							SingleLine().Ellipsis("…")
+					}
+				})
+				p.statusBadge(c, k, ch.Status)
+			})
+		}).Grow(1).MinHeight(0).Padding(6, 7)
+		if list.Changed() {
+			p.Select(p.Sel)
+		}
+		if openPath != "" {
+			p.h.OpenPath(openPath)
+		}
 	})
 }
 
@@ -212,8 +217,8 @@ func (p *Page) diffHeader(c *ui.Context, k *theme.Colors) {
 				TextColor(k.DiffDel).Shrink(0)
 		}
 		if p.h.HasPath(path) {
-			open := ui.Row(c).Padding(4, 9).Radius(theme.Radius).Cursor(ui.CursorPointer).
-				Role(ui.RoleButton).Label("Open File")
+			open := ui.ButtonBase(c).Padding(4, 9).Radius(theme.Radius).
+				Cursor(ui.CursorPointer).Label("Open File")
 			if open.Hovered() {
 				open.Background(k.Hover)
 			}
@@ -362,8 +367,8 @@ func mustDir(h Host) string {
 
 // iconButton is a borderless icon button of the page header.
 func iconButton(c *ui.Context, k *theme.Colors, name, label string, size, iconSize float32) ui.Element {
-	b := ui.Box(c).Size(size, size).Center().Radius(theme.Radius).
-		Cursor(ui.CursorPointer).Role(ui.RoleButton).Label(label)
+	b := ui.ButtonBase(c).Size(size, size).Radius(theme.Radius).
+		Cursor(ui.CursorPointer).Label(label)
 	if b.Pressed() {
 		b.Background(k.Pressed)
 	} else if b.Hovered() {

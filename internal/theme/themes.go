@@ -67,10 +67,10 @@ type wash struct {
 
 var washes = map[string]wash{
 	"petal": {
-		light:     [4]ui.Color{ui.Hex("#f6e7f6"), ui.Hex("#efe1e6"), ui.Hex("#eee0d3"), ui.Hex("#ece1bd")},
-		dark:      [4]ui.Color{ui.Hex("#2c2131"), ui.Hex("#231e27"), ui.Hex("#221f22"), ui.Hex("#2a2619")},
-		lightGlow: ui.RGBA(242, 214, 222, 0.35),
-		darkGlow:  ui.RGBA(80, 40, 60, 0.25),
+		light:     [4]ui.Color{ui.Hex("#f7f2f6"), ui.Hex("#f4eff4"), ui.Hex("#efeaf1"), ui.Hex("#e9e5ed")},
+		dark:      [4]ui.Color{ui.Hex("#241d25"), ui.Hex("#1f1a21"), ui.Hex("#1b181d"), ui.Hex("#18151a")},
+		lightGlow: ui.RGBA(235, 222, 232, 0.50),
+		darkGlow:  ui.RGBA(120, 72, 100, 0.18),
 		tone:      tone{Hue: 350, Tint: 1, Vivid: 0.95, Accent: 350},
 	},
 	"mist": {
@@ -319,7 +319,12 @@ func accentText(c ui.Color) ui.Color {
 // terminal uses, so code and shell agree.
 func EditorTheme(t *ui.Theme, id string, dark bool) *editor.Theme {
 	th := editor.DefaultTheme(t)
-	th.Background = ui.Transparent
+	// The pane card paints the surface around the text, so the editor must
+	// stay clear. A zero color means "unset" to editor resolve, which would
+	// fill it from the window theme and paint the window's paper (the
+	// gradient's bottom stop) over the card; alpha 0 with a set RGB is left
+	// alone and still paints nothing.
+	th.Background = ui.RGBA(255, 255, 255, 0)
 	th.ActiveLine = t.Text.Alpha(0.035)
 	th.InactiveSelection = t.Selection.Alpha(0.45)
 	if Resolve(id) == DefaultID {

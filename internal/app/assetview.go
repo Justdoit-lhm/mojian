@@ -262,8 +262,8 @@ func (a *app) openButton(c *ui.Context, k *colors, p *pane) {
 	if runtime.GOOS == "js" {
 		return
 	}
-	b := ui.Row(c).Padding(4, 9).Radius(radius).Cursor(ui.CursorPointer).
-		Role(ui.RoleButton).Label("Open in Default App")
+	b := ui.ButtonBase(c).Padding(4, 9).Radius(radius).
+		Cursor(ui.CursorPointer).Label("Open in Default App")
 	if b.Hovered() {
 		b.Background(k.Hover)
 	}

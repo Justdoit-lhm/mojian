@@ -90,8 +90,8 @@ func (a *app) hostSettingsRow(c *ui.Context, k *colors, host, label, detail stri
 	outer.Children(func() {
 		row := ui.Row(c).MinHeight(48).Padding(0, 6).Gap(10).AlignItems(ui.Center)
 		row.Children(func() {
-			info := ui.Row(c).Grow(1).MinWidth(0).Gap(10).AlignItems(ui.Center).
-				Cursor(ui.CursorPointer).Role(ui.RoleButton).Label("Server " + label)
+			info := ui.ButtonBase(c).Grow(1).MinWidth(0).Gap(10).Justify(ui.Start).
+				Cursor(ui.CursorPointer).Label("Server " + label)
 			info.Children(func() {
 				ui.Icon(c, icons.Icon("server")).Size(16, 16).TextColor(k.TextMuted)
 				ui.Column(c).Grow(1).MinWidth(0).Children(func() {

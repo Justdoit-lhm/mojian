@@ -80,6 +80,7 @@ type Page struct {
 	Seq        int
 	DiffSeq    int
 	DiffScroll ui.ScrollState
+	list       ui.ListState
 
 	h      Host
 	runner Runner

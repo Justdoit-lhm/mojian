@@ -48,6 +48,7 @@ type UI struct {
 	FontPick    bool
 	FontPickFor int
 	FontSearch  string
+	FontList    ui.ListState
 	FontsOnce   sync.Once
 	Fonts       []ui.FontFamily
 }

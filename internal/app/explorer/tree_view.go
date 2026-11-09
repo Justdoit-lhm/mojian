@@ -272,8 +272,8 @@ func (u *UI) emptyTree(c *ui.Context, k *colors) {
 	ui.Column(c).Padding(18, 8).Gap(8).Center().Children(func() {
 		ui.Icon(c, icons.Icon("file-plus")).Size(20, 20).TextColor(k.TextFaint)
 		ui.Text(c, "No files here").FontSize(12.5).FontWeight(600).TextColor(k.TextMuted)
-		btn := ui.Row(c).Padding(5, 10).Radius(radius).Cursor(ui.CursorPointer).
-			Role(ui.RoleButton).Label("New File").Background(k.Hover)
+		btn := ui.ButtonBase(c).Padding(5, 10).Radius(radius).
+			Cursor(ui.CursorPointer).Label("New File").Background(k.Hover)
 		if btn.Hovered() {
 			btn.Background(k.Pressed)
 		}

@@ -26,6 +26,7 @@ func (u *UI) fontRow(c *ui.Context, k *colors, title, detail string, which int, 
 		}
 		if b.Clicked() {
 			u.FontPick, u.FontPickFor, u.FontSearch = true, which, ""
+			u.FontList = ui.ListState{}
 		}
 		b.Children(func() {
 			ui.Text(c, label).FontSize(12).TextColor(k.Text).SingleLine().
@@ -82,80 +83,66 @@ func (u *UI) fontPicker(c *ui.Context, k *colors) {
 			if u.FontPickFor == 1 {
 				current = u.TerminalFontFamily
 			}
-			ui.Scroll(c).Height(350).Padding(6).Children(func() {
-				shown := 0
-				def := "JetBrains Mono · default"
-				if u.FontPickFor == 1 {
-					def = "System monospace · default"
+			type fontChoice struct {
+				name       string
+				label      string
+				monospaced bool
+			}
+			def := "JetBrains Mono · default"
+			if u.FontPickFor == 1 {
+				def = "System monospace · default"
+			}
+			choices := []fontChoice{{label: def}}
+			for _, f := range u.installedFonts() {
+				if q != "" && !strings.Contains(strings.ToLower(f.Name), q) {
+					continue
 				}
-				row := ui.Row(c.Key("picker-default")).Height(32).Padding(0, 10).Gap(8).
-					Radius(8).Cursor(ui.CursorPointer).Role(ui.RoleButton).Label(def)
-				if current == "" {
+				choices = append(choices, fontChoice{name: f.Name, label: f.Name, monospaced: f.Monospaced})
+			}
+			picked, pick := false, ""
+			u.FontList.Key = func(i int) any { return choices[i].name }
+			ui.List(c, &u.FontList, len(choices), func(i int) {
+				ch := choices[i]
+				row := ui.Row(c.Key("picker-"+ch.name)).Height(32).Padding(0, 10).Gap(8).
+					Radius(8).Cursor(ui.CursorPointer).Label(ch.label)
+				if ch.name == current {
 					row.Background(k.PanelSel)
 				} else if row.Hovered() {
 					row.Background(k.Hover)
 				}
 				if row.Clicked() {
-					if u.FontPickFor == 1 {
-						u.TerminalFontFamily = ""
-					} else {
-						u.EditorFontFamily = ""
-					}
-					u.FontPick = false
-					u.saveSettings()
-					u.invalidate()
+					picked, pick = true, ch.name
 				}
 				row.Children(func() {
-					ui.Text(c, def).FontSize(13).TextColor(k.Text)
-					if current == "" {
+					text := ui.Text(c, ch.label).FontSize(13).TextColor(k.Text).
+						SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
+					if ch.name != "" {
+						text.Font(ch.name)
+					}
+					if ch.monospaced {
+						ui.Text(c, "Mono").FontSize(9).FontWeight(650).
+							TextColor(k.TextFaint).Padding(1, 4).Radius(radius).
+							Background(k.Hover).Shrink(0)
+					}
+					if ch.name == current {
 						ui.Spacer(c)
 						ui.Icon(c, icons.Icon("check")).Size(13, 13).TextColor(k.TextMuted)
 					}
 				})
-				shown++
-				for _, f := range u.installedFonts() {
-					f := f
-					if q != "" && !strings.Contains(strings.ToLower(f.Name), q) {
-						continue
-					}
-					shown++
-					row := ui.Row(c.Key("picker-"+f.Name)).Height(32).Padding(0, 10).Gap(8).
-						Radius(8).Cursor(ui.CursorPointer).Role(ui.RoleButton).
-						Label(f.Name)
-					if f.Name == current {
-						row.Background(k.PanelSel)
-					} else if row.Hovered() {
-						row.Background(k.Hover)
-					}
-					if row.Clicked() {
-						if u.FontPickFor == 1 {
-							u.TerminalFontFamily = f.Name
-						} else {
-							u.EditorFontFamily = f.Name
-						}
-						u.FontPick = false
-						u.saveSettings()
-						u.invalidate()
-					}
-					row.Children(func() {
-						ui.Text(c, f.Name).Font(f.Name).FontSize(13).
-							TextColor(k.Text).SingleLine().Ellipsis("…").
-							Shrink(1).MinWidth(0)
-						if f.Monospaced {
-							ui.Text(c, "Mono").FontSize(9).FontWeight(650).
-								TextColor(k.TextFaint).Padding(1, 4).Radius(radius).
-								Background(k.Hover).Shrink(0)
-						}
-						if f.Name == current {
-							ui.Spacer(c)
-							ui.Icon(c, icons.Icon("check")).Size(13, 13).TextColor(k.TextMuted)
-						}
-					})
+			}).Height(350).Padding(6)
+			if picked {
+				if u.FontPickFor == 1 {
+					u.TerminalFontFamily = pick
+				} else {
+					u.EditorFontFamily = pick
 				}
-				if shown == 0 {
-					ui.Text(c, "No matching font").FontSize(12).TextColor(k.TextFaint).Padding(14)
-				}
-			})
+				u.FontPick = false
+				u.saveSettings()
+				u.invalidate()
+			}
+			if q != "" && len(choices) == 1 {
+				ui.Text(c, "No matching font").FontSize(12).TextColor(k.TextFaint).Padding(14)
+			}
 		})
 	})
 }

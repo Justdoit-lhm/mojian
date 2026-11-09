@@ -61,13 +61,14 @@ func (a *app) openPalette() {
 	a.paletteOpen = true
 	a.paletteQuery = ""
 	a.paletteSel = 0
+	a.paletteList = ui.ListState{}
 	a.invalidate()
 }
 
 // paletteItem is a row of the command palette: a command, a file, or a tab.
 type paletteItem struct {
-	title, detail, keys, glyph string
-	run                        func()
+	id, title, detail, keys, glyph string
+	run                            func()
 }
 
 func (a *app) paletteItems() []paletteItem {
@@ -82,8 +83,8 @@ func (a *app) paletteItems() []paletteItem {
 			continue
 		}
 		c := c
-		items = append(items, paletteItem{title: c.Title, keys: a.commandKeys(c), glyph: c.Glyph,
-			run: func() { a.run(c) }})
+		items = append(items, paletteItem{id: "cmd:" + c.ID, title: c.Title,
+			keys: a.commandKeys(c), glyph: c.Glyph, run: func() { a.run(c) }})
 	}
 	if a.store != nil {
 		for _, n := range a.store.Sorted() {
@@ -91,7 +92,7 @@ func (a *app) paletteItems() []paletteItem {
 				continue
 			}
 			n := n
-			items = append(items, paletteItem{title: n.Title, detail: n.Rel, glyph: "file-text",
+			items = append(items, paletteItem{id: "note:" + n.Rel, title: n.Title, detail: n.Rel, glyph: "file-text",
 				run: func() {
 					a.openNote(n)
 					a.updateTitle()
@@ -112,7 +113,7 @@ func (a *app) paletteItems() []paletteItem {
 		if detail != "" {
 			tabDetail += " " + detail
 		}
-		items = append(items, paletteItem{title: name, detail: tabDetail, glyph: "layout-grid", keys: keys,
+		items = append(items, paletteItem{id: "tab:" + t.ID, title: name, detail: tabDetail, glyph: "layout-grid", keys: keys,
 			run: func() { a.selectTab(i); a.updateTitle() }})
 	}
 	return items
@@ -142,6 +143,7 @@ func (a *app) palette(c *ui.Context, k *colors) {
 	a.paletteSel = min(max(a.paletteSel, 0), max(len(items)-1, 0))
 	was := a.paletteOpen
 	reveal := false
+	chosen := -1
 	commandDialog(c, k, &a.paletteOpen, 560, 440, true, func() {
 		ui.Row(c).Padding(12, 16).Gap(10).AlignItems(ui.Center).
 			BorderWidth(0, 0, 1, 0).BorderColor(k.PanelBorder).Children(func() {
@@ -149,48 +151,57 @@ func (a *app) palette(c *ui.Context, k *colors) {
 			in := ui.TextInputBase(c, &a.paletteQuery).Grow(1).FontSize(15).
 				Placeholder("Type a command, or the name of a note…").AutoFocus()
 			if listNav(in, &a.paletteSel, len(items), &reveal) {
-				a.paletteOpen = false
-				items[a.paletteSel].run()
+				chosen = a.paletteSel
 			}
 		})
-		listH := float32(min(max(len(items), 1)*34+12, 384))
-		ui.Scroll(c).Height(listH).Padding(6).Children(func() {
-			if len(items) == 0 {
+		a.paletteList.Selected = &a.paletteSel
+		a.paletteList.Key = func(i int) any { return items[i].id }
+		list := ui.List(c, &a.paletteList, len(items), func(i int) {
+			it := items[i]
+			row := ui.Row(c.Key(i)).Height(34).Padding(0, 10).Gap(10).Radius(radius).
+				AlignItems(ui.Center).Cursor(ui.CursorPointer)
+			fg, muted, icon := k.Text, k.TextFaint, k.TextMuted
+			if i == a.paletteSel {
+				fg = c.Theme().AccentText
+				muted, icon = fg.Alpha(0.9), fg.Alpha(0.9)
+			} else if row.Hovered() {
+				row.Background(k.Hover)
+			}
+			if row.Clicked() {
+				chosen = i
+			}
+			row.Children(func() {
+				ui.Icon(c, icons.Icon(it.glyph)).Size(15, 15).TextColor(icon)
+				ui.Text(c, it.title).FontSize(13.5).FontWeight(500).TextColor(fg).
+					SingleLine().Ellipsis("…").Shrink(0.3).MinWidth(0)
+				if it.detail != "" {
+					ui.Text(c, it.detail).FontSize(13).TextColor(muted).
+						SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
+				}
+				ui.Spacer(c)
+				if it.keys != "" {
+					chipFg, chipBg := k.TextFaint, k.Hover
+					if i == a.paletteSel {
+						chipFg, chipBg = fg, fg.Alpha(0.16)
+					}
+					ui.Text(c, it.keys).FontSize(12).TextColor(chipFg).
+						Padding(2, 7).Radius(radius).Background(chipBg).Shrink(0)
+				}
+			})
+		}).MaxHeight(384).Padding(6)
+		if len(items) == 0 {
+			list.Children(func() {
 				ui.Text(c, "No matches").FontSize(13).TextColor(k.TextFaint).Padding(14)
-			}
-			for i, it := range items {
-				it := it
-				row := ui.Row(c.Key(i)).Height(34).Padding(0, 10).Gap(10).Radius(radius).
-					AlignItems(ui.Center).Cursor(ui.CursorPointer)
-				if i == a.paletteSel {
-					row.Background(k.PanelSel)
-					if reveal {
-						row.ScrollIntoView()
-					}
-				} else if row.Hovered() {
-					row.Background(k.Hover)
-				}
-				if row.Clicked() {
-					a.paletteOpen = false
-					it.run()
-				}
-				row.Children(func() {
-					ui.Icon(c, icons.Icon(it.glyph)).Size(15, 15).TextColor(k.TextMuted)
-					ui.Text(c, it.title).FontSize(13.5).FontWeight(500).TextColor(k.Text).
-						SingleLine().Ellipsis("…").Shrink(0.3).MinWidth(0)
-					if it.detail != "" {
-						ui.Text(c, it.detail).FontSize(13).TextColor(k.TextFaint).
-							SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
-					}
-					ui.Spacer(c)
-					if it.keys != "" {
-						ui.Text(c, it.keys).FontSize(12).TextColor(k.TextFaint).
-							Padding(2, 7).Radius(radius).Background(k.Hover).Shrink(0)
-					}
-				})
-			}
-		})
+			})
+		}
+		if reveal {
+			a.paletteList.ScrollIntoView(a.paletteSel)
+		}
 	})
+	if chosen >= 0 && chosen < len(items) {
+		a.paletteOpen = false
+		items[chosen].run()
+	}
 	if was && !a.paletteOpen {
 		if t := a.tab(); t != nil && a.focusReq == nil {
 			a.focusReq = t.editorPane()

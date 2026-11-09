@@ -53,16 +53,19 @@ func FileRow(c *ui.Context, k *theme.Colors, key any, title, rel string, selecte
 	row := ui.Row(c.Key(key)).Height(height).Padding(0, padX).Gap(gap).
 		Radius(theme.Radius).AlignItems(ui.Center).Cursor(ui.CursorPointer).
 		Role(ui.RoleButton).Label(title)
+	fg, muted, icon := k.Text, k.TextFaint, k.TextMuted
 	if selected {
-		row.Background(k.PanelSel)
+		// List paints the accent row; its text has to follow that face.
+		fg = c.Theme().AccentText
+		muted, icon = fg.Alpha(0.9), fg.Alpha(0.9)
 	} else if row.Hovered() {
 		row.Background(k.Hover)
 	}
 	row.Children(func() {
-		ui.Icon(c, icons.FileIcon(rel)).Size(15, 15).TextColor(k.TextMuted)
-		ui.Text(c, title).FontSize(titleSize).FontWeight(titleWeight).TextColor(k.Text).
+		ui.Icon(c, icons.FileIcon(rel)).Size(15, 15).TextColor(icon)
+		ui.Text(c, title).FontSize(titleSize).FontWeight(titleWeight).TextColor(fg).
 			SingleLine().Ellipsis("…").Shrink(0.3).MinWidth(0)
-		ui.Text(c, rel).FontSize(relSize).TextColor(k.TextFaint).
+		ui.Text(c, rel).FontSize(relSize).TextColor(muted).
 			SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
 	})
 	return row, row.Clicked()

@@ -15,7 +15,9 @@ import (
 const Radius = 10
 
 // The window's own colors, in light and dark windows. They are the
-// reference's: warm paper in the light, ink and moss in the dark.
+// default theme's: porcelain with a breath of rose in the light, a deep
+// neutral plum in the dark. The window leans to one tint; nothing in it
+// turns yellow or olive.
 type Colors struct {
 	// The window's background: a gradient from top through mid to bottom,
 	// and a tint toward the right.
@@ -40,31 +42,31 @@ type Colors struct {
 }
 
 var lightColors = Colors{
-	BgTop:    ui.Hex("#f6e7f6"),
-	BgMid:    ui.Hex("#efe1e6"),
-	BgLow:    ui.Hex("#eee0d3"),
-	BgBottom: ui.Hex("#ece1bd"),
-	BgTint:   ui.RGBA(242, 214, 222, 0.35),
+	BgTop:    ui.Hex("#f7f2f6"),
+	BgMid:    ui.Hex("#f4eff4"),
+	BgLow:    ui.Hex("#efeaf1"),
+	BgBottom: ui.Hex("#e9e5ed"),
+	BgTint:   ui.RGBA(235, 222, 232, 0.50),
 
-	Card:              ui.RGBA(255, 255, 255, 0.78),
-	CardFocused:       ui.RGBA(255, 255, 255, 0.97),
-	CardBorder:        ui.RGBA(255, 255, 255, 0.82),
+	Card:              ui.RGBA(255, 255, 255, 0.72),
+	CardFocused:       ui.RGBA(255, 255, 255, 0.96),
+	CardBorder:        ui.RGBA(255, 255, 255, 0.85),
 	CardBorderFocused: ui.RGBA(255, 255, 255, 1),
-	Shadow:            ui.RGBA(60, 40, 50, 0.07),
-	ShadowFocused:     ui.RGBA(60, 40, 50, 0.12),
+	Shadow:            ui.RGBA(48, 36, 48, 0.07),
+	ShadowFocused:     ui.RGBA(48, 36, 48, 0.12),
 
-	Text:      ui.Hex("#1d1d1f"),
-	TextMuted: ui.Hex("#636366"),
-	TextFaint: ui.Hex("#6f6f75"),
-	IconMuted: ui.Hex("#7c7c82"),
-	Hover:     ui.RGBA(0, 0, 0, 0.055),
-	Pressed:   ui.RGBA(0, 0, 0, 0.1),
+	Text:      ui.Hex("#1f1b20"),
+	TextMuted: ui.Hex("#66616a"),
+	TextFaint: ui.Hex("#75707a"),
+	IconMuted: ui.Hex("#807b84"),
+	Hover:     ui.RGBA(35, 24, 34, 0.05),
+	Pressed:   ui.RGBA(35, 24, 34, 0.09),
 
-	Accent: ui.Hex("#2563eb"),
+	Accent: ui.Hex("#a84e7c"),
 
-	Track:       ui.RGBA(255, 255, 255, 0.34),
-	TrackBorder: ui.RGBA(255, 255, 255, 0.45),
-	TabActive:   ui.RGBA(255, 255, 255, 0.97),
+	Track:       ui.RGBA(255, 255, 255, 0.38),
+	TrackBorder: ui.RGBA(255, 255, 255, 0.50),
+	TabActive:   ui.RGBA(255, 255, 255, 0.96),
 	TabInactive: ui.RGBA(255, 255, 255, 0.34),
 	TileRim:     ui.RGBA(255, 255, 255, 0.95),
 
@@ -74,39 +76,39 @@ var lightColors = Colors{
 	DiffDel:   ui.Hex("#cf222e"),
 	DiffHunk:  ui.Hex("#0969da"),
 
-	Panel:       ui.RGBA(252, 252, 253, 0.97),
-	Sheet:       ui.Hex("#fbfbfc"),
-	PanelBorder: ui.RGBA(0, 0, 0, 0.08),
-	PanelSel:    ui.RGBA(46, 111, 208, 0.12),
-	Backdrop:    ui.RGBA(30, 15, 25, 0.18),
+	Panel:       ui.RGBA(251, 249, 251, 0.97),
+	Sheet:       ui.Hex("#fbfafc"),
+	PanelBorder: ui.RGBA(28, 18, 28, 0.08),
+	PanelSel:    ui.RGBA(168, 78, 124, 0.12),
+	Backdrop:    ui.RGBA(28, 16, 26, 0.18),
 }
 
 var darkColors = Colors{
-	BgTop:    ui.Hex("#2c2131"),
-	BgMid:    ui.Hex("#231e27"),
-	BgLow:    ui.Hex("#221f22"),
-	BgBottom: ui.Hex("#2a2619"),
-	BgTint:   ui.RGBA(80, 40, 60, 0.25),
+	BgTop:    ui.Hex("#241d25"),
+	BgMid:    ui.Hex("#1f1a21"),
+	BgLow:    ui.Hex("#1b181d"),
+	BgBottom: ui.Hex("#18151a"),
+	BgTint:   ui.RGBA(120, 72, 100, 0.18),
 
-	Card:              ui.RGBA(24, 24, 28, 0.58),
-	CardFocused:       ui.RGBA(36, 36, 41, 0.95),
-	CardBorder:        ui.RGBA(255, 255, 255, 0.05),
+	Card:              ui.RGBA(25, 23, 28, 0.58),
+	CardFocused:       ui.RGBA(37, 35, 41, 0.95),
+	CardBorder:        ui.RGBA(255, 255, 255, 0.06),
 	CardBorderFocused: ui.RGBA(255, 255, 255, 0.14),
-	Shadow:            ui.RGBA(0, 0, 0, 0.25),
-	ShadowFocused:     ui.RGBA(0, 0, 0, 0.4),
+	Shadow:            ui.RGBA(0, 0, 0, 0.28),
+	ShadowFocused:     ui.RGBA(0, 0, 0, 0.45),
 
-	Text:      ui.Hex("#f2f2f7"),
-	TextMuted: ui.Hex("#aeaeb2"),
-	TextFaint: ui.Hex("#8e8e93"),
-	IconMuted: ui.Hex("#98989d"),
-	Hover:     ui.RGBA(255, 255, 255, 0.08),
-	Pressed:   ui.RGBA(255, 255, 255, 0.14),
+	Text:      ui.Hex("#f3f0f4"),
+	TextMuted: ui.Hex("#b1abb4"),
+	TextFaint: ui.Hex("#928c96"),
+	IconMuted: ui.Hex("#9c96a0"),
+	Hover:     ui.RGBA(255, 255, 255, 0.07),
+	Pressed:   ui.RGBA(255, 255, 255, 0.13),
 
-	Accent: ui.Hex("#3b82f6"),
+	Accent: ui.Hex("#e887b6"),
 
 	Track:       ui.RGBA(255, 255, 255, 0.06),
-	TrackBorder: ui.RGBA(255, 255, 255, 0.06),
-	TabActive:   ui.RGBA(255, 255, 255, 0.14),
+	TrackBorder: ui.RGBA(255, 255, 255, 0.07),
+	TabActive:   ui.RGBA(255, 255, 255, 0.13),
 	TabInactive: ui.RGBA(255, 255, 255, 0.04),
 	TileRim:     ui.RGBA(255, 255, 255, 0.22),
 
@@ -116,10 +118,10 @@ var darkColors = Colors{
 	DiffDel:   ui.Hex("#ff7b72"),
 	DiffHunk:  ui.Hex("#79c0ff"),
 
-	Panel:       ui.RGBA(38, 38, 42, 0.97),
-	Sheet:       ui.Hex("#1f1f23"),
-	PanelBorder: ui.RGBA(255, 255, 255, 0.1),
-	PanelSel:    ui.RGBA(108, 178, 255, 0.18),
+	Panel:       ui.RGBA(35, 32, 38, 0.97),
+	Sheet:       ui.Hex("#1c1a1f"),
+	PanelBorder: ui.RGBA(255, 255, 255, 0.10),
+	PanelSel:    ui.RGBA(232, 135, 182, 0.18),
 	Backdrop:    ui.RGBA(0, 0, 0, 0.45),
 }
 

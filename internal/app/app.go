@@ -78,10 +78,12 @@ type app struct {
 	remoteHost     string
 	remoteQuery    string
 	remoteDirs     []session.FileEntry
+	remoteList     ui.ListState
 	remoteErr      string
 	pickerPath     string
 	pickerInput    string
 	pickerEntries  []pickerEntry
+	pickerList     ui.ListState
 	pickerSel      int
 	pickerErr      string
 	pickerHidden   bool
@@ -91,6 +93,7 @@ type app struct {
 	sshPick  bool
 	sshQuery string
 	sshSel   int
+	sshList  ui.ListState
 
 	treeSearch ui.Handle
 	treeDraft  *treeDraft
@@ -113,10 +116,12 @@ type app struct {
 	paletteOpen  bool
 	paletteQuery string
 	paletteSel   int
+	paletteList  ui.ListState
 
 	quickOpen  bool
 	quickQuery string
 	quickSel   int
+	quickList  ui.ListState
 
 	rename      *tab
 	renameText  string

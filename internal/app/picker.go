@@ -29,6 +29,7 @@ func (a *app) openProjectPicker() {
 	a.projectPicker = true
 	a.pickerSel = -1
 	a.pickerErr = ""
+	a.pickerList = ui.ListState{}
 	start := ""
 	if a.store != nil && !a.store.IsMemory() {
 		start = a.store.Dir
@@ -264,44 +265,47 @@ func (a *app) pickerMain(c *ui.Context, k *colors) {
 			ui.Text(c, a.pickerErr).FontSize(11.5).TextColor(k.Danger).
 				SingleLine().Ellipsis("…")
 		}
-		list := ui.Scroll(c).Grow(1).MinHeight(0).Padding(0, 2)
-		list.Children(func() {
-			if len(a.pickerEntries) == 0 {
+		a.pickerList.Selected = &a.pickerSel
+		a.pickerList.Key = func(i int) any { return a.pickerEntries[i].Path }
+		openPath := ""
+		list := ui.List(c, &a.pickerList, len(a.pickerEntries), func(i int) {
+			e := a.pickerEntries[i]
+			selected := i == a.pickerSel
+			row := ui.Row(c.Key("pick:"+e.Path)).Height(32).Padding(0, 9).MarginY(2).
+				Gap(9).Radius(radius).AlignItems(ui.Center).Cursor(ui.CursorPointer).
+				Label(e.Name)
+			fg, icon := k.Text, k.TextMuted
+			if selected {
+				fg = c.Theme().AccentText
+				icon = fg.Alpha(0.9)
+			} else if row.Hovered() {
+				row.Background(k.Hover)
+			}
+			if selected {
+				row.ScrollIntoView()
+			}
+			row.Children(func() {
+				ui.Icon(c, icons.FolderIcon()).Size(15, 15).TextColor(icon)
+				ui.Text(c, e.Name).FontSize(12.5).TextColor(fg).
+					SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
+				ui.Spacer(c)
+				if row.Hovered() {
+					ui.Icon(c, icons.Icon("chevron-right")).Size(13, 13).TextColor(fg)
+				}
+			})
+		}).Grow(1).MinHeight(0).Padding(0, 2)
+		if len(a.pickerEntries) == 0 {
+			list.Children(func() {
 				ui.Text(c, "No subfolders").FontSize(12.5).TextColor(k.TextFaint).
 					Padding(10, 8)
-				return
-			}
-			for i, e := range a.pickerEntries {
-				i, e := i, e
-				selected := i == a.pickerSel
-				row := ui.Row(c.Key("pick:"+e.Path)).Height(32).Padding(0, 9).MarginY(2).
-					Gap(9).Radius(radius).AlignItems(ui.Center).Cursor(ui.CursorPointer).
-					Role(ui.RoleButton).Focusable().FocusRing(false).Label(e.Name)
-				if selected {
-					row.Background(k.PanelSel)
-				} else if row.Hovered() {
-					row.Background(k.Hover)
-				}
-				if row.Clicked() {
-					a.pickerSel = i
-				}
-				if row.DoubleClicked() || row.Shortcut(0, ui.KeyEnter) {
-					a.later(func() { a.setPickerPath(e.Path) })
-				}
-				if selected {
-					row.ScrollIntoView()
-				}
-				row.Children(func() {
-					ui.Icon(c, icons.FolderIcon()).Size(15, 15).TextColor(k.TextMuted)
-					ui.Text(c, e.Name).FontSize(12.5).TextColor(k.Text).
-						SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
-					ui.Spacer(c)
-					if row.Hovered() {
-						ui.Icon(c, icons.Icon("chevron-right")).Size(13, 13).TextColor(k.TextFaint)
-					}
-				})
-			}
-		})
+			})
+		}
+		if list.Submitted() && a.pickerSel >= 0 && a.pickerSel < len(a.pickerEntries) {
+			openPath = a.pickerEntries[a.pickerSel].Path
+		}
+		if openPath != "" {
+			a.later(func() { a.setPickerPath(openPath) })
+		}
 	})
 }
 
@@ -339,8 +343,8 @@ func (a *app) pickerFooter(c *ui.Context, k *colors) {
 }
 
 func (a *app) pickerButton(c *ui.Context, k *colors, label string, primary bool, fn func()) {
-	b := ui.Row(c).Padding(6, 14).Radius(radius).Cursor(ui.CursorPointer).
-		Role(ui.RoleButton).Label(label)
+	b := ui.ButtonBase(c).Padding(6, 14).Radius(radius).
+		Cursor(ui.CursorPointer).Label(label)
 	if primary {
 		b.Background(k.Text)
 		if b.Hovered() {

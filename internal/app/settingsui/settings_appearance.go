@@ -21,32 +21,31 @@ func (u *UI) settingsAppearancePage(c *ui.Context, k *colors) {
 	})
 	u.settingsSection(c, k, "THEME", func() {
 		dark := u.dark(c)
-		ui.Row(c).Padding(16).Gap(10).Wrap().Role(ui.RoleRadioGroup).Label("Theme").
-			Children(func() {
-				for _, ch := range theme.Choices {
-					u.themeTile(c, k, ch, dark)
-				}
-			})
+		ui.RadioGroup(c, func() {
+			for _, ch := range theme.Choices {
+				u.themeTile(c, k, ch, dark, &u.Theme)
+			}
+		}).Row().Wrap().Label("Theme")
 	})
 }
 
-// themeTile is one theme of the grid: a thumbnail of the window it makes,
-// its name under it, and a ring in its own accent while it is the one.
-func (u *UI) themeTile(c *ui.Context, k *colors, ch theme.Choice, dark bool) {
-	sel := theme.Resolve(u.Theme) == ch.ID
+// themeTile is one theme of the grid: a radio button whose face is a
+// thumbnail of the window it makes, its name under it, and a ring in its
+// own accent while it is the one.
+func (u *UI) themeTile(c *ui.Context, k *colors, ch theme.Choice, dark bool, chosen *string) ui.Element {
+	sel := theme.Resolve(*chosen) == ch.ID
 	tk := theme.Window(ch.ID, dark)
-	tile := ui.ButtonBase(c.Key("theme-" + ch.ID)).Width(132).Padding(6).
-		Radius(10).Role(ui.RoleRadio).AccessSelected(sel).
-		Label(ch.Name + " theme")
+	tile := ui.RadioBase(c.Key("theme-"+ch.ID), chosen, ch.ID).Width(132).Padding(6).
+		Radius(10).Label(ch.Name + " theme")
+	tile.OnChange(func() {
+		u.setTheme(*chosen)
+		u.saveSettings()
+		u.invalidate()
+	})
 	if sel {
 		tile.Border(2, tk.Accent)
 	} else {
 		tile.Border(2, ui.Transparent)
-	}
-	if tile.Clicked() && !sel {
-		u.setTheme(ch.ID)
-		u.saveSettings()
-		u.invalidate()
 	}
 	tile.Children(func() {
 		ui.Column(c).FillWidth().Gap(6).Children(func() {
@@ -62,4 +61,5 @@ func (u *UI) themeTile(c *ui.Context, k *colors, ch theme.Choice, dark bool) {
 				TextColor(col).TextAlign(ui.Center).FillWidth()
 		})
 	})
+	return tile
 }

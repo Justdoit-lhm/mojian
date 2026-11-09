@@ -238,7 +238,7 @@ func TestSettingsSearchShortcut(t *testing.T) {
 	if a.settings.Cat != settingsEditor {
 		t.Fatalf("page after Cmd+F and typing: %d", a.settings.Cat)
 	}
-	if err := tt.Click("Clear Search settings"); err != nil {
+	if err := tt.Click("Clear"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()

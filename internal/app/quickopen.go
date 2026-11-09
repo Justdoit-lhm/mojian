@@ -15,6 +15,7 @@ func (a *app) openQuickOpen() {
 	a.quickOpen = true
 	a.quickQuery = ""
 	a.quickSel = 0
+	a.quickList = ui.ListState{}
 	a.invalidate()
 }
 
@@ -37,6 +38,7 @@ func (a *app) quickOpenModal(c *ui.Context, k *colors) {
 	a.quickSel = min(max(a.quickSel, 0), max(len(choices)-1, 0))
 	was := a.quickOpen
 	reveal := false
+	chosen := -1
 	commandDialog(c, k, &a.quickOpen, 560, 440, false, func() {
 		ui.Row(c).Padding(12, 16).Gap(10).AlignItems(ui.Center).
 			BorderWidth(0, 0, 1, 0).BorderColor(k.PanelBorder).Children(func() {
@@ -44,29 +46,32 @@ func (a *app) quickOpenModal(c *ui.Context, k *colors) {
 			in := ui.TextInputBase(c, &a.quickQuery).Grow(1).FontSize(15).
 				Placeholder("Open a file…").Label("Open a file").AutoFocus()
 			if listNav(in, &a.quickSel, len(choices), &reveal) {
-				a.quickOpen = false
-				ch := choices[a.quickSel]
-				a.later(func() { a.quickOpenChoice(ch) })
+				chosen = a.quickSel
 			}
 		})
-		listH := float32(min(max(len(choices), 1)*34+12, 384))
-		ui.Scroll(c).Height(listH).Padding(6).Children(func() {
-			if len(choices) == 0 {
+		a.quickList.Selected = &a.quickSel
+		a.quickList.Key = func(i int) any { return choices[i].rel }
+		list := ui.List(c, &a.quickList, len(choices), func(i int) {
+			ch := choices[i]
+			_, clicked := fileChoiceRow(c, k, i, ch, i == a.quickSel, 34, 10, 10, 13.5, 13, 500)
+			if clicked {
+				chosen = i
+			}
+		}).MaxHeight(384).Padding(6)
+		if len(choices) == 0 {
+			list.Children(func() {
 				ui.Text(c, "No files match").FontSize(13).TextColor(k.TextFaint).Padding(14)
-			}
-			for i, ch := range choices {
-				i, ch := i, ch
-				row, clicked := fileChoiceRow(c, k, i, ch, i == a.quickSel, 34, 10, 10, 13.5, 13, 500)
-				if i == a.quickSel && reveal {
-					row.ScrollIntoView()
-				}
-				if clicked {
-					a.quickOpen = false
-					a.later(func() { a.quickOpenChoice(ch) })
-				}
-			}
-		})
+			})
+		}
+		if reveal {
+			a.quickList.ScrollIntoView(a.quickSel)
+		}
 	})
+	if chosen >= 0 && chosen < len(choices) {
+		a.quickOpen = false
+		ch := choices[chosen]
+		a.later(func() { a.quickOpenChoice(ch) })
+	}
 	if was && !a.quickOpen {
 		if t := a.tab(); t != nil && a.focusReq == nil {
 			a.focusReq = t.editorPane()

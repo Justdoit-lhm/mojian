@@ -19,6 +19,7 @@ func (a *app) openSSHPicker() {
 	}
 	a.sshQuery = ""
 	a.sshSel = 0
+	a.sshList = ui.ListState{}
 	a.closeModals()
 	a.sshPick = true
 	a.invalidate()
@@ -54,6 +55,7 @@ func (a *app) sshPicker(c *ui.Context, k *colors) {
 		}
 	}
 	a.sshSel = min(max(a.sshSel, 0), max(len(filtered)-1, 0))
+	connected := ""
 	commandDialog(c, k, &a.sshPick, 560, 460, true, func() {
 		ui.Column(c).Children(func() {
 			reveal := false
@@ -76,9 +78,7 @@ func (a *app) sshPicker(c *ui.Context, k *colors) {
 				in := ui.TextInputBase(c, &a.sshQuery).Grow(1).FontSize(13).
 					Placeholder("Search hosts…").AutoFocus()
 				if listNav(in, &a.sshSel, len(filtered), &reveal) {
-					host := filtered[a.sshSel]
-					a.sshPick = false
-					a.later(func() { a.connectSSH(host.Address) })
+					connected = filtered[a.sshSel].Address
 				}
 			})
 			if len(a.hosts()) == 0 {
@@ -96,43 +96,48 @@ func (a *app) sshPicker(c *ui.Context, k *colors) {
 				})
 				return
 			}
-			ui.Scroll(c).Height(float32(min(max(len(filtered)*44+12, 80), 340))).Padding(6).Children(func() {
-				for i, h := range filtered {
-					i, h := i, h
-					label := h.Name
-					if label == "" {
-						label = h.Address
-					}
-					row := ui.Row(c.Key(h.Address)).Height(40).Padding(0, 10).Gap(9).
-						Radius(radius).Cursor(ui.CursorPointer).Role(ui.RoleButton).
-						Label(label + " " + h.Address)
-					if i == a.sshSel {
-						row.Background(k.PanelSel)
-						if reveal {
-							row.ScrollIntoView()
-						}
-					} else if row.Hovered() {
-						row.Background(k.Hover)
-					}
-					if row.Clicked() {
-						a.sshPick = false
-						a.later(func() { a.connectSSH(h.Address) })
-					}
-					row.Children(func() {
-						ui.Icon(c, icons.Icon("server")).Size(14, 14).TextColor(k.TextMuted)
-						ui.Text(c, label).FontSize(12.5).FontWeight(550).TextColor(k.Text).
-							Shrink(0)
-						ui.Text(c, h.Address).FontSize(11).TextColor(k.TextFaint).
-							SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
-						if i == a.sshSel {
-							ui.Spacer(c)
-							ui.Text(c, "↵").FontSize(10).TextColor(k.TextFaint)
-						}
-					})
+			a.sshList.Selected = &a.sshSel
+			a.sshList.Key = func(i int) any { return filtered[i].Address }
+			ui.List(c, &a.sshList, len(filtered), func(i int) {
+				h := filtered[i]
+				label := h.Name
+				if label == "" {
+					label = h.Address
 				}
-			})
+				row := ui.Row(c.Key(h.Address)).Height(40).Padding(0, 10).Gap(9).
+					Radius(radius).Cursor(ui.CursorPointer).
+					Label(label + " " + h.Address)
+				fg, muted, icon := k.Text, k.TextFaint, k.TextMuted
+				if i == a.sshSel {
+					fg = c.Theme().AccentText
+					muted, icon = fg.Alpha(0.9), fg.Alpha(0.9)
+				} else if row.Hovered() {
+					row.Background(k.Hover)
+				}
+				if row.Clicked() {
+					connected = h.Address
+				}
+				row.Children(func() {
+					ui.Icon(c, icons.Icon("server")).Size(14, 14).TextColor(icon)
+					ui.Text(c, label).FontSize(12.5).FontWeight(550).TextColor(fg).
+						Shrink(0)
+					ui.Text(c, h.Address).FontSize(11).TextColor(muted).
+						SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
+					if i == a.sshSel {
+						ui.Spacer(c)
+						ui.Text(c, "↵").FontSize(10).TextColor(muted)
+					}
+				})
+			}).MaxHeight(340).Padding(6)
+			if reveal {
+				a.sshList.ScrollIntoView(a.sshSel)
+			}
 		})
 	})
+	if connected != "" {
+		a.sshPick = false
+		a.later(func() { a.connectSSH(connected) })
+	}
 }
 
 // sshArgs connects to a configured host address with the system ssh, so

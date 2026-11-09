@@ -155,8 +155,8 @@ func (a *app) projectChip(c *ui.Context, k *colors) {
 	if a.store == nil {
 		return
 	}
-	chip := ui.Row(c).Gap(7).Padding(3, 8, 3, 6).Radius(radius).AlignItems(ui.Center).
-		Cursor(ui.CursorPointer).Role(ui.RoleButton).Label("Switch project: " + a.projectName()).
+	chip := ui.ButtonBase(c).Gap(7).Padding(3, 8, 3, 6).Radius(radius).
+		Justify(ui.Start).Cursor(ui.CursorPointer).Label("Switch project: " + a.projectName()).
 		Tooltip(a.projectPath() + "  " + nativeKeys("⌘O")).MaxWidth(230).Shrink(0).ClipX().
 		Transition(motion.Colors)
 	if chip.Hovered() || a.projectOpen {
@@ -186,8 +186,8 @@ func (a *app) projectChip(c *ui.Context, k *colors) {
 		if a.remotePath != "" {
 			a.remoteProjectRows(c, k)
 			ui.Divider(c).Margin(6, 0)
-			row := ui.Row(c).Height(34).Padding(0, 8).Gap(8).Radius(radius).
-				AlignItems(ui.Center).Cursor(ui.CursorPointer).Role(ui.RoleButton).
+			row := ui.ButtonBase(c).Height(34).Padding(0, 8).Gap(8).Radius(radius).
+				Justify(ui.Start).Cursor(ui.CursorPointer).
 				Label("Open Remote Folder…")
 			if row.Hovered() {
 				row.Background(k.Hover)
@@ -212,8 +212,8 @@ func (a *app) projectChip(c *ui.Context, k *colors) {
 		}
 		if runtime.GOOS != "js" {
 			ui.Divider(c).Margin(6, 0)
-			row := ui.Row(c).Height(34).Padding(0, 8).Gap(8).Radius(radius).
-				AlignItems(ui.Center).Cursor(ui.CursorPointer).Role(ui.RoleButton).
+			row := ui.ButtonBase(c).Height(34).Padding(0, 8).Gap(8).Radius(radius).
+				Justify(ui.Start).Cursor(ui.CursorPointer).
 				Label("Open Folder…")
 			if row.Hovered() {
 				row.Background(k.Hover)
@@ -273,8 +273,8 @@ func (a *app) projectRowBase(c *ui.Context, k *colors, s projectRowSpec) {
 		row.Background(k.Hover)
 	}
 	row.Children(func() {
-		info := ui.Row(c).Grow(1).MinWidth(0).Gap(9).AlignItems(ui.Center).
-			Cursor(ui.CursorPointer).Role(ui.RoleButton).Label(s.label)
+		info := ui.ButtonBase(c).Grow(1).MinWidth(0).Gap(9).Justify(ui.Start).
+			Cursor(ui.CursorPointer).Label(s.label)
 		if info.Clicked() && s.open != nil {
 			s.open()
 		}

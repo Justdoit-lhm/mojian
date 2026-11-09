@@ -210,63 +210,51 @@ func appendUnique(list []string, s string) []string {
 }
 
 // settingsRail is the page list: a frosted card over the window, with the
-// one search field above it.
+// one search field above it and a source list of pages below.
 func (u *UI) settingsRail(c *ui.Context, k *colors) {
-	ui.Column(c).Width(216).Shrink(0).FillHeight().Padding(10).Gap(3).
+	ui.Column(c).Width(216).Shrink(0).FillHeight().Gap(3).
 		Background(k.Card).Border(1, k.CardBorder).Radius(radius).
 		Shadow(0, 8, 24, 0, k.Shadow).Clip().Children(func() {
-		search := u.settingsSearchField(c, k, "rail-search", &u.Query,
-			"Search settings", "Search settings…", &u.Search)
-		search.OnShortcut(0, ui.KeyEscape, func() {
-			u.Query = ""
-			u.Search.Focus(c)
-			u.invalidate()
+		ui.Box(c).FillWidth().Padding(10, 10, 0, 10).Children(func() {
+			search := u.settingsSearchField(c, k, "rail-search", &u.Query,
+				"Search settings", "Search settings…", &u.Search)
+			search.OnShortcut(0, ui.KeyEscape, func() {
+				u.Query = ""
+				u.Search.Focus(c)
+				u.invalidate()
+			})
 		})
-		for i, cat := range settings.Categories {
-			if !settingsCatAvailable(i) {
-				continue
-			}
-			if u.Found != nil {
-				if _, ok := u.Found[i]; !ok {
-					continue
-				}
-			}
-			u.settingsNavRow(c, k, i, cat)
-		}
 		if u.Found != nil && len(u.Found) == 0 {
 			ui.Text(c, "No settings match.").FontSize(12).TextColor(k.TextFaint).
 				Padding(10)
+			return
 		}
-	})
-}
-
-func (u *UI) settingsNavRow(c *ui.Context, k *colors, i int, cat settings.Category) {
-	sel := i == u.Cat
-	row := ui.Row(c.Key("settings-nav-"+strconv.Itoa(i))).Height(34).Padding(0, 10).
-		Gap(10).Radius(8).AlignItems(ui.Center).Cursor(ui.CursorPointer).
-		Role(ui.RoleButton).Label("Go to " + cat.Title)
-	switch {
-	case sel:
-		row.Background(k.PanelSel)
-	case row.Hovered():
-		row.Background(k.Hover)
-	}
-	if row.Clicked() && !sel {
-		u.Cat = i
-		u.stopRecording()
-		u.Notice = ""
-		u.ResetAsk = false
-		u.ScrollTop = true
-		u.invalidate()
-	}
-	row.Children(func() {
-		col := k.TextMuted
-		if sel {
-			col = k.Text
+		// A source list carries the pages with one Tab stop, the arrows and
+		// type-to-choose, and the tree role screen readers expect.
+		chosen := strconv.Itoa(u.Cat)
+		rail := ui.Sidebar(c, &chosen, func() {
+			for i, cat := range settings.Categories {
+				if !settingsCatAvailable(i) {
+					continue
+				}
+				if u.Found != nil {
+					if _, ok := u.Found[i]; !ok {
+						continue
+					}
+				}
+				ui.SidebarItem(c, strconv.Itoa(i), icons.Icon(cat.Glyph), cat.Title)
+			}
+		}).Grow(1).FillWidth().MinHeight(0).Background(k.Card)
+		if rail.Changed() {
+			if i, err := strconv.Atoi(chosen); err == nil && i != u.Cat {
+				u.Cat = i
+				u.stopRecording()
+				u.Notice = ""
+				u.ResetAsk = false
+				u.ScrollTop = true
+				u.invalidate()
+			}
 		}
-		ui.Icon(c, icons.Icon(cat.Glyph)).Size(15, 15).TextColor(col)
-		ui.Text(c, cat.Title).FontSize(13).FontWeight(500).TextColor(col).
-			SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
 	})
 }
 
@@ -351,41 +339,20 @@ func (u *UI) settingsPage(c *ui.Context, k *colors, cat int) {
 }
 
 // settingsSearchField draws the one search field Settings uses, binds it to
-// handle when non-nil, and returns its text input for autofocus and Changed.
+// handle when non-nil, and returns it for autofocus and Changed. SearchField
+// brings the magnifier, the clear button and the search field role; only its
+// face follows Settings' card.
 func (u *UI) settingsSearchField(c *ui.Context, k *colors, key string, value *string, label, placeholder string, handle *ui.Handle) ui.Element {
-	var input ui.Element
-	ui.Row(c).FillWidth().Height(30).Padding(0, 9).Gap(7).Radius(8).
-		Background(k.Hover).AlignItems(ui.Center).Children(func() {
-		ui.Icon(c, icons.Icon("search")).Size(13, 13).TextColor(k.TextFaint)
-		in := ui.TextInputBase(c, value).Grow(1).MinWidth(0).FontSize(12).
-			Placeholder(placeholder).Label(label)
-		if handle != nil {
-			in.Bind(handle)
-		}
-		if in.Changed() {
-			u.invalidate()
-		}
-		input = in
-		if *value == "" {
-			return
-		}
-		clear := ui.ButtonBase(c.Key(key+"-clear")).Size(18, 18).Radius(9).
-			Center().Label("Clear " + label)
-		if clear.Hovered() {
-			clear.Background(k.Pressed)
-		}
-		clear.Children(func() {
-			ui.Icon(c, icons.Icon("x")).Size(11, 11).TextColor(k.TextFaint)
-		})
-		if clear.Clicked() {
-			*value = ""
-			if handle != nil {
-				handle.Focus(c)
-			}
-			u.invalidate()
-		}
-	})
-	return input
+	in := ui.SearchField(c.Key(key), value).Grow(1).MinWidth(0).Height(30).
+		Padding(0, 9).Radius(8).Background(k.Hover).Border(0, ui.Transparent).
+		FontSize(12).Placeholder(placeholder).Label(label)
+	if handle != nil {
+		in.Bind(handle)
+	}
+	if in.Changed() {
+		u.invalidate()
+	}
+	return in
 }
 
 // settingsSection draws a titled group of rows in one card.
@@ -493,21 +460,18 @@ func (u *UI) settingsChoiceRow(c *ui.Context, k *colors, key, title, detail stri
 // settingsChoiceControl is the segmented control a row places at its end;
 // the selected index and the labels are read before it is built.
 func (u *UI) settingsChoiceControl(c *ui.Context, k *colors, key, label string, current int, labels []string, choose func(int)) {
-	ui.Row(c).Padding(3).Radius(8).Background(k.Hover).
-		Border(1, k.PanelBorder).Gap(2).Role(ui.RoleRadioGroup).
-		Label(label).Children(func() {
+	seg := ui.SegmentedBase(c, &current, len(labels))
+	seg.Track.Padding(3).Radius(8).Background(k.Hover).
+		Border(1, k.PanelBorder).Gap(2).Label(label)
+	seg.Track.Children(func() {
 		for n, text := range labels {
-			b := ui.Row(c.Key(key+"-"+strconv.Itoa(n))).Padding(4, 11).
-				Radius(6).Cursor(ui.CursorPointer).Role(ui.RoleRadio).
-				Label(text).AccessSelected(n == current)
+			c.Key(key + "-" + strconv.Itoa(n))
+			b := seg.Segment(n).Padding(4, 11).Radius(6).Cursor(ui.CursorPointer)
 			switch {
 			case n == current:
 				b.Background(k.CardFocused)
 			case b.Hovered():
-				b.Background(k.Hover)
-			}
-			if b.Clicked() {
-				choose(n)
+				b.Background(k.Pressed)
 			}
 			b.Children(func() {
 				col := k.TextMuted
@@ -518,6 +482,9 @@ func (u *UI) settingsChoiceControl(c *ui.Context, k *colors, key, label string, 
 			})
 		}
 	})
+	// OnChange commits the local the bound segments chose once the input
+	// has updated it, which Changed in the same pass cannot promise.
+	seg.Track.OnChange(func() { choose(current) })
 }
 
 func (u *UI) settingsSliderRow(c *ui.Context, k *colors, title, detail string, value func() float64, set func(float64), lo, hi float64, format string) {

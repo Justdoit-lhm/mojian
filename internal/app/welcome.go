@@ -57,9 +57,9 @@ func (a *app) emptyState(c *ui.Context, k *colors, vw, vh float32) {
 							if i > 0 {
 								ui.Divider(c)
 							}
-							row := ui.Row(c.Key("welcome:"+n.Rel)).Height(40).Padding(0, 14).
-								Gap(9).AlignItems(ui.Center).Cursor(ui.CursorPointer).
-								Role(ui.RoleButton).Label(n.Title)
+							row := ui.ButtonBase(c.Key("welcome:"+n.Rel)).Height(40).Padding(0, 14).
+								Gap(9).Justify(ui.Start).Cursor(ui.CursorPointer).
+								Label(n.Title)
 							if row.Hovered() {
 								row.Background(k.Hover)
 							}
@@ -85,8 +85,8 @@ func (a *app) emptyState(c *ui.Context, k *colors, vw, vh float32) {
 }
 
 func (a *app) welcomeAction(c *ui.Context, k *colors, glyph, title string, cmd *commands.Command, run func()) {
-	row := ui.Row(c).Height(42).Padding(0, 14).Gap(10).AlignItems(ui.Center).
-		Cursor(ui.CursorPointer).Role(ui.RoleButton).Label(title)
+	row := ui.ButtonBase(c).Height(42).Padding(0, 14).Gap(10).
+		Justify(ui.Start).Cursor(ui.CursorPointer).Label(title)
 	if row.Hovered() {
 		row.Background(k.Hover)
 	}

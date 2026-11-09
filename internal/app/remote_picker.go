@@ -33,6 +33,7 @@ func (a *app) openRemotePicker(host string) {
 	}
 	a.closeModals()
 	a.initWorkspaces()
+	a.remoteList = ui.ListState{}
 	cachedHome := a.remoteHomes[host]
 	existing := a.remoteForHost(host)
 	if existing != nil && cachedHome != "" {
@@ -190,14 +191,13 @@ func (a *app) remotePickerModal(c *ui.Context, k *colors) {
 					}
 				}
 			})
-			ui.Scroll(c).Grow(1).MinHeight(0).Padding(4, 6).Children(func() {
-				if a.remoteDirsBusy {
-					ui.Row(c).Padding(10, 10).Gap(8).AlignItems(ui.Center).Children(func() {
-						ui.Spinner(c).Size(14, 14).Label("Reading folders")
-						ui.Text(c, "Reading folders…").FontSize(12).TextColor(k.TextFaint)
-					})
-					return
-				}
+			if a.remoteDirsBusy {
+				ui.Row(c).Padding(10, 10).Gap(8).AlignItems(ui.Center).Children(func() {
+					ui.Spinner(c).Size(14, 14).Label("Reading folders")
+					ui.Text(c, "Reading folders…").FontSize(12).TextColor(k.TextFaint)
+				})
+			} else {
+				var shown []session.FileEntry
 				for _, d := range dirs {
 					if !d.Dir {
 						continue
@@ -205,27 +205,37 @@ func (a *app) remotePickerModal(c *ui.Context, k *colors) {
 					if q != "" && !strings.Contains(strings.ToLower(d.Rel), q) {
 						continue
 					}
-					d := d
+					shown = append(shown, d)
+				}
+				openRel := ""
+				a.remoteList.Key = func(i int) any { return shown[i].Rel }
+				list := ui.List(c, &a.remoteList, len(shown), func(i int) {
+					d := shown[i]
 					row := ui.Row(c.Key(d.Rel)).Height(34).Padding(0, 10).MarginY(2).
-						Gap(8).Radius(radius).Cursor(ui.CursorPointer).Role(ui.RoleButton).
+						Gap(8).Radius(radius).Cursor(ui.CursorPointer).
 						Label("Open " + d.Rel)
 					if row.Hovered() {
 						row.Background(k.Hover)
 					}
 					if row.Clicked() {
-						a.remoteQuery = d.Rel
-						a.loadRemoteDirs(d.Rel)
+						openRel = d.Rel
 					}
 					row.Children(func() {
 						ui.Icon(c, icons.FolderIcon()).Size(15, 15).TextColor(k.TextMuted)
 						ui.Text(c, filepath.Base(d.Rel)).FontSize(12.5).TextColor(k.Text).
 							SingleLine().Ellipsis("…")
 					})
+				}).Grow(1).MinHeight(0).Padding(4, 6)
+				if len(shown) == 0 {
+					list.Children(func() {
+						ui.Text(c, a.remoteErr).FontSize(12).TextColor(k.TextFaint).Padding(14)
+					})
 				}
-				if len(dirs) == 0 {
-					ui.Text(c, a.remoteErr).FontSize(12).TextColor(k.TextFaint).Padding(14)
+				if openRel != "" {
+					a.remoteQuery = openRel
+					a.loadRemoteDirs(openRel)
 				}
-			})
+			}
 		})
 	})
 	if !a.remotePicker && !a.remoteOpening {
@@ -270,8 +280,8 @@ func (a *app) loadRemoteDirs(path string) {
 
 func (a *app) serverChip(c *ui.Context, k *colors) {
 	label := a.remoteName()
-	chip := ui.Row(c).Gap(6).Padding(3, 8, 3, 6).Radius(radius).AlignItems(ui.Center).
-		Cursor(ui.CursorPointer).Role(ui.RoleButton).Label("Switch server: " + label).
+	chip := ui.ButtonBase(c).Gap(6).Padding(3, 8, 3, 6).Radius(radius).
+		Justify(ui.Start).Cursor(ui.CursorPointer).Label("Switch server: " + label).
 		Tooltip("Server  " + nativeKeys("⇧⌘S")).MaxWidth(170).Shrink(0).ClipX().
 		Transition(motion.Colors)
 	if chip.Hovered() || a.serverOpen {
@@ -313,8 +323,8 @@ func (a *app) serverChip(c *ui.Context, k *colors) {
 
 func (a *app) serverRow(c *ui.Context, k *colors, host, label string) {
 	selected := a.serverAlias == host
-	row := ui.Row(c.Key("server:"+host)).Height(36).Padding(0, 8).Gap(8).
-		Radius(radius).Cursor(ui.CursorPointer).Role(ui.RoleButton).Label("Server " + label)
+	row := ui.ButtonBase(c.Key("server:"+host)).Height(36).Padding(0, 8).Gap(8).
+		Radius(radius).Justify(ui.Start).Cursor(ui.CursorPointer).Label("Server " + label)
 	if selected {
 		row.Background(k.PanelSel)
 	} else if row.Hovered() {

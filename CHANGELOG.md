@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.2.12
+
+- The default Petal theme is rebuilt around one surface tint: porcelain
+  with a breath of rose in the light, a deep neutral plum in the dark.
+  The window no longer drifts from pink to yellow, or from plum to olive:
+  its gradient, cards, text, accent and terminal colors now belong to one
+  family, and a note's page is the card itself.
+- A note's editor no longer paints the window's paper behind itself. Its
+  background was left unset as transparent, which the editor resolves by
+  filling it from the window theme, so the page showed the gradient's
+  bottom stop instead of the pane card, and the default light window
+  looked yellow. The editor is clear again and the card shows through.
+- The command palette, quick open, the project, SSH and remote pickers,
+  the Git page, the Settings rail and font list, and the window's icon
+  and row buttons now use MyGo's list, sidebar, search-field and button
+  bases: one Tab stop per list, consistent arrows and type-to-choose,
+  hover and focus, and the roles screen readers expect.
+
 ## 0.2.11
 
 - Settings › Advanced gains a Shell command row: choose zsh or bash and
