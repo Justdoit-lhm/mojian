@@ -123,6 +123,15 @@ func Of(c *ui.Context) *Colors {
 	return &lightColors
 }
 
+// Palette returns the light or dark window palette, for previews that show
+// both before the user chooses.
+func Palette(dark bool) Colors {
+	if dark {
+		return darkColors
+	}
+	return lightColors
+}
+
 // PaintBackground paints the window's background below the cards.
 func PaintBackground(p *ui.Painter, r ui.Rect, k *Colors) {
 	h1, h2 := r.H*0.38, r.H*0.32

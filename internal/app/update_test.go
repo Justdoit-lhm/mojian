@@ -13,7 +13,7 @@ import (
 func TestSettingsUpdateActions(t *testing.T) {
 	registerFonts()
 	a := newProjectApp(t)
-	a.settings.Cat = settingsUpdates
+	a.settings.Cat = settingsAbout
 	tt := ui.NewTester(a.settingsWindowView, 900, 640)
 	tt.Frame()
 	if !tt.HasText("Check for Updates") {

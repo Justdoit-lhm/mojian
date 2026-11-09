@@ -56,7 +56,7 @@ func (u *UI) settingsRowSpec(c *ui.Context, k *colors, row settings.Row) {
 				u.setPrefBool(row.Pref, v)
 			})
 	case settings.Choice:
-		u.settingsChoiceRow(c, k, row.ID, row.Title,
+		u.settingsChoiceRow(c, k, row.ID, row.Title, row.Detail,
 			func() int { return u.prefChoice(row) },
 			func(i int) { u.setPrefChoice(row, i) }, row.Options)
 	case settings.Slider:
@@ -70,8 +70,9 @@ func (u *UI) settingsRowSpec(c *ui.Context, k *colors, row settings.Row) {
 			return
 		}
 		u.settingRow(c, k, row.Title, row.Detail, func() {
-			in := ui.TextInputBase(c, ptr).Width(230).FontSize(12).
-				Placeholder(row.Placeholder)
+			in := ui.TextInputBase(c, ptr).Width(240).Height(30).Padding(0, 9).
+				Radius(8).Background(k.Hover).FontSize(12).
+				Placeholder(row.Placeholder).Label(row.Title)
 			if in.Changed() {
 				u.saveSettings()
 				u.invalidate()
@@ -88,11 +89,12 @@ func (u *UI) settingsRowSpec(c *ui.Context, k *colors, row settings.Row) {
 func (u *UI) settingsInfoValue(id string) string {
 	switch id {
 	case "current-project":
-		return u.projectPath()
+		if path := u.projectPath(); path != "" {
+			return path
+		}
+		return "No project"
 	case "server":
 		return u.remoteName()
-	case "git-status":
-		return "Working tree against HEAD"
 	}
 	return ""
 }
@@ -163,11 +165,6 @@ func (u *UI) setPrefChoice(row settings.Row, i int) {
 	value := i
 	if len(row.Values) > 0 && i >= 0 && i < len(row.Values) {
 		value = row.Values[i]
-	}
-	if row.Pref == "Appearance" {
-		u.Appearance = value
-		u.syncAppearance()
-		return
 	}
 	u.setPrefInt(row.Pref, value)
 }

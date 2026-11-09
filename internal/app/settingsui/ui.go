@@ -23,24 +23,25 @@ type UI struct {
 	Host
 	*prefs.Prefs
 
-	Cat        int
-	Found      map[int]bool
-	Hits       map[string]bool
-	Reveal     string
-	Revealed   string
-	Scroll     ui.ScrollState
-	ScrollTop  bool
-	Rows       int
-	IndexCache []settingsEntry
-	IndexDirty bool
-	Search     ui.Handle
-	Notice     string
-	Recording  string
-	RecordRef  ui.Handle
-	RecordSeen bool
-	KeyFilter  string
-	ResetAsk   bool
-	Query      string
+	Cat          int
+	Found        map[int]bool
+	Hits         map[string]bool
+	Reveal       string
+	Revealed     string
+	Scroll       ui.ScrollState
+	ScrollTop    bool
+	Rows         int
+	IndexCache   []settingsEntry
+	IndexDirty   bool
+	Search       ui.Handle
+	Notice       string
+	Recording    string
+	RecordRef    ui.Handle
+	RecordSeen   bool
+	KeyFilter    string
+	KeyFilterRef ui.Handle
+	ResetAsk     bool
+	Query        string
 
 	FontPick    bool
 	FontPickFor int
@@ -130,11 +131,14 @@ func terminalsSupported() bool { return platform.TerminalsSupported() }
 
 // settingsCatAvailable hides the pages of features the platform lacks.
 func settingsCatAvailable(cat int) bool {
+	if cat < 0 || cat >= len(settings.Categories) {
+		return false
+	}
 	if platform.TerminalsSupported() {
 		return true
 	}
 	switch cat {
-	case settings.Terminal, settings.Shell, settings.Notifications, settings.Hosts:
+	case settings.Terminal, settings.Hosts:
 		return false
 	}
 	return true
@@ -191,16 +195,12 @@ func (u *UI) installAvailableUpdate()                    { u.InstallAvailableUpd
 func (u *UI) restartForUpdate()                          { u.RestartForUpdate() }
 func (u *UI) settingsHostsPage(c *ui.Context, k *colors) { u.SettingsHostsPage(c, k) }
 
-// Section, InfoRow and NoticeLine are the primitives the app's Hosts page
-// uses while it stays in internal/app.
+// Section and Note are the primitives the app's Hosts page uses while it
+// stays in internal/app.
 func (u *UI) Section(c *ui.Context, k *colors, title string, fn func()) {
 	u.settingsSection(c, k, title, fn)
 }
 
-func (u *UI) InfoRow(c *ui.Context, k *colors, title, value string) {
-	u.settingsInfoRow(c, k, title, value)
-}
-
-func (u *UI) NoticeLine(c *ui.Context, k *colors) {
-	u.settingsNoticeLine(c, k)
+func (u *UI) Note(c *ui.Context, k *colors, text string) {
+	u.settingsNote(c, k, text)
 }

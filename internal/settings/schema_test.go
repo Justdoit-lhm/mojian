@@ -7,6 +7,40 @@ import (
 	"mojian/internal/prefs"
 )
 
+// TestSettingsTableNamesEachPreferenceOnce keeps every preference on one
+// page: a second row for it is a second design for the same setting.
+func TestSettingsTableNamesEachPreferenceOnce(t *testing.T) {
+	seen := map[string]string{}
+	for _, row := range Rows {
+		if row.Pref == "" {
+			continue
+		}
+		if other, ok := seen[row.Pref]; ok {
+			t.Fatalf("%s and %s both edit %s", other, row.ID, row.Pref)
+		}
+		seen[row.Pref] = row.ID
+	}
+	prefsType := reflect.TypeOf(prefs.Prefs{})
+	for i := range prefsType.NumField() {
+		name := prefsType.Field(i).Name
+		if _, ok := seen[name]; !ok {
+			t.Fatalf("no row edits %s", name)
+		}
+	}
+}
+
+// TestSettingsCategoriesUseDistinctGlyphs keeps the rail readable: two
+// pages with one picture look like one page.
+func TestSettingsCategoriesUseDistinctGlyphs(t *testing.T) {
+	seen := map[string]string{}
+	for _, cat := range Categories {
+		if other, ok := seen[cat.Glyph]; ok {
+			t.Fatalf("%s and %s both use %s", other, cat.Title, cat.Glyph)
+		}
+		seen[cat.Glyph] = cat.Title
+	}
+}
+
 func TestSettingsTableMatchesPreferences(t *testing.T) {
 	prefsType := reflect.TypeOf(prefs.Prefs{})
 	ids := map[string]bool{}

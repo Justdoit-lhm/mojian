@@ -12,16 +12,14 @@ import (
 )
 
 const (
-	settingsGeneral       = settings.General
-	settingsAppearance    = settings.Appearance
-	settingsEditor        = settings.Editor
-	settingsTerminal      = settings.Terminal
-	settingsShell         = settings.Shell
-	settingsNotifications = settings.Notifications
-	settingsKeyboard      = settings.Keyboard
-	settingsHosts         = settings.Hosts
-	settingsGit           = settings.Git
-	settingsUpdates       = settings.Updates
+	settingsGeneral    = settings.General
+	settingsAppearance = settings.Appearance
+	settingsEditor     = settings.Editor
+	settingsTerminal   = settings.Terminal
+	settingsKeyboard   = settings.Keyboard
+	settingsHosts      = settings.Hosts
+	settingsAdvanced   = settings.Advanced
+	settingsAbout      = settings.About
 )
 
 // settingsEntry is one thing Settings' search finds: the page, the label
@@ -78,7 +76,8 @@ func (u *UI) WindowView(c *ui.Context) {
 		paintBackground(p, r, k)
 	}).Children(func() {
 		u.settingsTitleBar(c, k)
-		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
+		ui.Row(c).Grow(1).MinHeight(0).Padding(12).Gap(12).
+			AlignItems(ui.Stretch).Children(func() {
 			u.settingsRail(c, k)
 			u.settingsContent(c, k)
 		})
@@ -150,6 +149,7 @@ func (u *UI) prepareSettingsSearch() {
 		for i := range settings.Categories {
 			if _, ok := found[i]; ok && settingsCatAvailable(i) {
 				u.Cat = i
+				u.ScrollTop = true
 				break
 			}
 		}
@@ -158,7 +158,7 @@ func (u *UI) prepareSettingsSearch() {
 	if len(labels) > 0 {
 		key := q + "\x00" + strconv.Itoa(u.Cat)
 		if u.Revealed != key {
-			u.Revealed, u.Reveal = key, labels[0]
+			u.Revealed, u.Reveal = key, u.firstFind(u.Cat, labels, q)
 		}
 	}
 	hits := make(map[string]bool, len(labels))
@@ -166,6 +166,38 @@ func (u *UI) prepareSettingsSearch() {
 		hits[l] = true
 	}
 	u.Hits = hits
+}
+
+// firstFind is the find a search brings into view: the one it names
+// exactly when there is one, so "shell" lands on the Shell row rather
+// than on the SHELL heading, and the first row otherwise.
+func (u *UI) firstFind(cat int, labels []string, query string) string {
+	sections := map[string]bool{}
+	for _, row := range settings.Rows {
+		if row.Cat == cat && row.Section != "" {
+			sections[row.Section] = true
+		}
+	}
+	exact, first := "", ""
+	for _, label := range labels {
+		if sections[label] {
+			continue
+		}
+		if first == "" {
+			first = label
+		}
+		if strings.EqualFold(label, query) {
+			exact = label
+			break
+		}
+	}
+	switch {
+	case exact != "":
+		return exact
+	case first != "":
+		return first
+	}
+	return labels[0]
 }
 
 func appendUnique(list []string, s string) []string {
@@ -177,22 +209,18 @@ func appendUnique(list []string, s string) []string {
 	return append(list, s)
 }
 
+// settingsRail is the page list: a frosted card over the window, with the
+// one search field above it.
 func (u *UI) settingsRail(c *ui.Context, k *colors) {
-	ui.Column(c).Width(214).Shrink(0).FillHeight().Padding(10, 12).
-		Gap(2).BorderWidth(0, 0, 0, 1).BorderColor(k.PanelBorder).Children(func() {
-		ui.Row(c).Height(30).Margin(0, 2, 8, 2).Padding(0, 8).Gap(6).Radius(radius).
-			Background(k.Hover).AlignItems(ui.Center).Children(func() {
-			ui.Icon(c, icons.Icon("search")).Size(13, 13).TextColor(k.TextFaint)
-			search := ui.TextInputBase(c, &u.Query).Bind(&u.Search).Grow(1).
-				FontSize(12).Placeholder("Search settings…").Label("Search settings")
-			search.OnShortcut(0, ui.KeyEscape, func() {
-				u.Query = ""
-				u.Search.Focus(c)
-				u.invalidate()
-			})
-			if search.Changed() {
-				u.invalidate()
-			}
+	ui.Column(c).Width(216).Shrink(0).FillHeight().Padding(10).Gap(3).
+		Background(k.Card).Border(1, k.CardBorder).Radius(radius).
+		Shadow(0, 8, 24, 0, k.Shadow).Clip().Children(func() {
+		search := u.settingsSearchField(c, k, "rail-search", &u.Query,
+			"Search settings", "Search settings…", &u.Search)
+		search.OnShortcut(0, ui.KeyEscape, func() {
+			u.Query = ""
+			u.Search.Focus(c)
+			u.invalidate()
 		})
 		for i, cat := range settings.Categories {
 			if !settingsCatAvailable(i) {
@@ -206,17 +234,17 @@ func (u *UI) settingsRail(c *ui.Context, k *colors) {
 			u.settingsNavRow(c, k, i, cat)
 		}
 		if u.Found != nil && len(u.Found) == 0 {
-			ui.Text(c, "No settings match.").FontSize(11.5).TextColor(k.TextFaint).
-				Padding(8, 10)
+			ui.Text(c, "No settings match.").FontSize(12).TextColor(k.TextFaint).
+				Padding(10)
 		}
 	})
 }
 
 func (u *UI) settingsNavRow(c *ui.Context, k *colors, i int, cat settings.Category) {
 	sel := i == u.Cat
-	row := ui.Row(c.Key("settings-nav-"+strconv.Itoa(i))).Height(34).Padding(0, 9).
-		Gap(9).Radius(radius).AlignItems(ui.Center).Cursor(ui.CursorPointer).
-		Role(ui.RoleButton).Label(cat.Title)
+	row := ui.Row(c.Key("settings-nav-"+strconv.Itoa(i))).Height(34).Padding(0, 10).
+		Gap(10).Radius(8).AlignItems(ui.Center).Cursor(ui.CursorPointer).
+		Role(ui.RoleButton).Label("Go to " + cat.Title)
 	switch {
 	case sel:
 		row.Background(k.PanelSel)
@@ -237,11 +265,13 @@ func (u *UI) settingsNavRow(c *ui.Context, k *colors, i int, cat settings.Catego
 			col = k.Text
 		}
 		ui.Icon(c, icons.Icon(cat.Glyph)).Size(15, 15).TextColor(col)
-		ui.Text(c, cat.Title).FontSize(12.5).FontWeight(500).TextColor(col).
+		ui.Text(c, cat.Title).FontSize(13).FontWeight(500).TextColor(col).
 			SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
 	})
 }
 
+// settingsContent is the page column: its header, the window's notice and
+// the page's own sections, inside one scroll.
 func (u *UI) settingsContent(c *ui.Context, k *colors) {
 	if u.ScrollTop {
 		u.Scroll.Y = 0
@@ -249,8 +279,8 @@ func (u *UI) settingsContent(c *ui.Context, k *colors) {
 	}
 	ui.Column(c).Grow(1).MinWidth(0).MinHeight(0).FillHeight().Children(func() {
 		ui.Scroll(c).Grow(1).MinHeight(0).TrackScroll(&u.Scroll).Children(func() {
-			ui.Column(c).MaxWidth(680).FillWidth().AlignSelf(ui.Center).
-				Padding(24, 30, 44, 30).Gap(24).Children(func() {
+			ui.Column(c).MaxWidth(660).FillWidth().AlignSelf(ui.Center).
+				Padding(22, 24, 40, 24).Gap(20).Children(func() {
 				cat := u.Cat
 				if !settingsCatAvailable(cat) {
 					cat = settingsGeneral
@@ -259,46 +289,118 @@ func (u *UI) settingsContent(c *ui.Context, k *colors) {
 					u.settingsNoResults(c, k)
 					return
 				}
+				u.settingsPageHeader(c, k, settings.Categories[cat])
+				u.settingsNotice(c, k)
 				u.settingsPage(c, k, cat)
 			})
 		})
 	})
 }
 
+// settingsPageHeader names the page and says what it holds.
+func (u *UI) settingsPageHeader(c *ui.Context, k *colors, cat settings.Category) {
+	ui.Column(c).Gap(3).Children(func() {
+		ui.Text(c, cat.Title).FontSize(20).FontWeight(650).TextColor(k.Text)
+		ui.Text(c, cat.Detail).FontSize(12.5).TextColor(k.TextMuted).LineHeight(1.35)
+	})
+}
+
+// settingsNotice is the window's one line about what just happened; the
+// pages never draw their own.
+func (u *UI) settingsNotice(c *ui.Context, k *colors) {
+	if u.Notice == "" {
+		return
+	}
+	ui.Row(c).Padding(8, 12).Radius(8).Background(k.Hover).Gap(8).
+		AlignItems(ui.Center).Children(func() {
+		ui.Box(c).Size(6, 6).Radius(3).Background(k.Attention).Shrink(0)
+		ui.Text(c, u.Notice).FontSize(12).TextColor(k.Attention).Grow(1).MinWidth(0)
+	})
+}
+
 func (u *UI) settingsNoResults(c *ui.Context, k *colors) {
-	ui.Column(c).Gap(10).Padding(24, 0).AlignItems(ui.Center).Children(func() {
+	ui.Column(c).Gap(10).Padding(56, 0).AlignItems(ui.Center).Children(func() {
 		ui.Icon(c, icons.Icon("search")).Size(22, 22).TextColor(k.TextFaint)
 		ui.Text(c, "No settings match “"+u.Query+"”.").FontSize(12.5).
+			TextColor(k.TextFaint).TextAlign(ui.Center)
+		ui.Text(c, "No other setting uses that word.").FontSize(11.5).
 			TextColor(k.TextFaint).TextAlign(ui.Center)
 	})
 }
 
 func (u *UI) settingsPage(c *ui.Context, k *colors, cat int) {
 	switch cat {
-	case settingsGeneral, settingsAppearance, settingsEditor, settingsTerminal, settingsNotifications:
+	case settingsGeneral, settingsEditor:
 		u.settingsGenericPage(c, k, cat)
-	case settingsShell:
+	case settingsTerminal:
 		u.settingsGenericPage(c, k, cat)
 		u.settingsNote(c, k, "Remote projects use the shell on the server, not this path.")
+	case settingsAppearance:
+		u.settingsAppearancePage(c, k)
 	case settingsKeyboard:
 		u.settingsKeyboardPage(c, k)
 	case settingsHosts:
 		u.settingsHostsPage(c, k)
-	case settingsGit:
-		u.settingsGenericPage(c, k, cat)
-		u.settingsNote(c, k, "Open the page with "+nativeKeys("⌃⇧G")+", or the Git button in the title bar.")
-	case settingsUpdates:
-		u.settingsUpdatesPage(c, k)
-	default:
+	case settingsAdvanced:
 		u.settingsAdvancedPage(c, k)
+	case settingsAbout:
+		u.settingsAboutPage(c, k)
+	default:
+		u.settingsGenericPage(c, k, settingsGeneral)
 	}
 }
 
+// settingsSearchField draws the one search field Settings uses, binds it to
+// handle when non-nil, and returns its text input for autofocus and Changed.
+func (u *UI) settingsSearchField(c *ui.Context, k *colors, key string, value *string, label, placeholder string, handle *ui.Handle) ui.Element {
+	var input ui.Element
+	ui.Row(c).FillWidth().Height(30).Padding(0, 9).Gap(7).Radius(8).
+		Background(k.Hover).AlignItems(ui.Center).Children(func() {
+		ui.Icon(c, icons.Icon("search")).Size(13, 13).TextColor(k.TextFaint)
+		in := ui.TextInputBase(c, value).Grow(1).MinWidth(0).FontSize(12).
+			Placeholder(placeholder).Label(label)
+		if handle != nil {
+			in.Bind(handle)
+		}
+		if in.Changed() {
+			u.invalidate()
+		}
+		input = in
+		if *value == "" {
+			return
+		}
+		clear := ui.ButtonBase(c.Key(key+"-clear")).Size(18, 18).Radius(9).
+			Center().Label("Clear " + label)
+		if clear.Hovered() {
+			clear.Background(k.Pressed)
+		}
+		clear.Children(func() {
+			ui.Icon(c, icons.Icon("x")).Size(11, 11).TextColor(k.TextFaint)
+		})
+		if clear.Clicked() {
+			*value = ""
+			if handle != nil {
+				handle.Focus(c)
+			}
+			u.invalidate()
+		}
+	})
+	return input
+}
+
+// settingsSection draws a titled group of rows in one card.
 func (u *UI) settingsSection(c *ui.Context, k *colors, title string, fn func()) {
+	u.settingsSectionAction(c, k, title, nil, fn)
+}
+
+// settingsSectionAction is settingsSection with a control at the end of
+// the group's heading, such as Restore Defaults.
+func (u *UI) settingsSectionAction(c *ui.Context, k *colors, title string, action func(), fn func()) {
 	u.Rows = 0
 	ui.Column(c).Gap(8).FillWidth().Children(func() {
 		if title != "" {
-			head := ui.Row(c.Key("group-"+title)).Padding(2, 2).Radius(5)
+			head := ui.Row(c.Key("group-" + title)).MinHeight(24).Padding(2).
+				AlignItems(ui.Center).Gap(8).Radius(5)
 			if u.Hits[title] {
 				head.Background(k.PanelSel)
 			}
@@ -306,37 +408,57 @@ func (u *UI) settingsSection(c *ui.Context, k *colors, title string, fn func()) 
 				head.ScrollIntoView()
 			}
 			head.Children(func() {
-				ui.Text(c, title).FontSize(10).FontWeight(650).TextColor(k.TextFaint)
+				ui.Text(c, title).FontSize(11).FontWeight(650).
+					TextColor(k.TextMuted).LetterSpacing(0.5)
+				if action != nil {
+					ui.Spacer(c)
+					action()
+				}
 			})
 		}
-		panel := ui.Column(c).FillWidth().Background(k.Card).Border(1, k.CardBorder).
-			Radius(radius).Clip()
-		panel.Children(fn)
+		ui.Column(c).FillWidth().Background(k.CardFocused).
+			Border(1, k.CardBorderFocused).Radius(radius).
+			Shadow(0, 1, 3, 0, k.Shadow).Clip().Children(fn)
 	})
 }
 
 func (u *UI) settingRow(c *ui.Context, k *colors, title, detail string, control func()) {
+	u.settingRowFrame(c, k, title, detail, false, control)
+}
+
+// settingRowMono is settingRow with the detail set as a path: one line,
+// cut with an ellipsis, and the whole of it in a tooltip.
+func (u *UI) settingRowMono(c *ui.Context, k *colors, title, detail string, control func()) {
+	u.settingRowFrame(c, k, title, detail, true, control)
+}
+
+func (u *UI) settingRowFrame(c *ui.Context, k *colors, title, detail string, mono bool, control func()) {
 	u.Rows++
 	if u.Rows > 1 {
 		ui.Divider(c).Margin(0, 16)
 	}
 	row := ui.Row(c.Key("row-"+title+"-"+strconv.Itoa(u.Rows))).
-		MinHeight(56).Padding(0, 16).Gap(18).AlignItems(ui.Center).Radius(6)
+		MinHeight(52).Padding(0, 16).Gap(16).AlignItems(ui.Center)
 	if u.Hits[title] {
-		row.Background(k.PanelSel)
+		row.Background(k.PanelSel).Radius(8)
 	}
 	if u.Reveal == title {
 		row.ScrollIntoView()
 	}
 	row.Children(func() {
 		ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
-			ui.Text(c, title).FontSize(12.5).FontWeight(550).TextColor(k.Text)
-			if detail != "" {
-				ui.Text(c, detail).FontSize(11.5).TextColor(k.TextFaint).LineHeight(1.35)
+			ui.Text(c, title).FontSize(13).FontWeight(500).TextColor(k.Text)
+			switch {
+			case detail == "":
+			case mono:
+				ui.Text(c, detail).FontSize(11.5).TextColor(k.TextMuted).
+					Font(noteFont.Family).SingleLine().Ellipsis("…").Tooltip(detail)
+			default:
+				ui.Text(c, detail).FontSize(11.5).TextColor(k.TextMuted).LineHeight(1.35)
 			}
 		})
 		if control != nil {
-			ui.Row(c).Shrink(0).Gap(8).AlignItems(ui.Center).Children(control)
+			ui.Row(c).Shrink(0).Gap(10).AlignItems(ui.Center).Children(control)
 		}
 	})
 }
@@ -358,19 +480,19 @@ func (u *UI) settingsSwitchRow(c *ui.Context, k *colors, title, detail string, g
 
 // settingsChoiceRow is a row with a segmented control, whose index is
 // value's and whose choice is set's.
-func (u *UI) settingsChoiceRow(c *ui.Context, k *colors, key, title string, value func() int, set func(int), labels []string) {
-	u.settingRow(c, k, title, "", func() {
+func (u *UI) settingsChoiceRow(c *ui.Context, k *colors, key, title, detail string, value func() int, set func(int), labels []string) {
+	u.settingRow(c, k, title, detail, func() {
 		current := value()
-		ui.Row(c).Padding(3).Radius(radius).Background(k.Track).Border(1, k.TrackBorder).
-			Gap(2).Role(ui.RoleRadioGroup).Label(title).Children(func() {
+		ui.Row(c).Padding(3).Radius(8).Background(k.Hover).
+			Border(1, k.PanelBorder).Gap(2).Role(ui.RoleRadioGroup).
+			Label(title).Children(func() {
 			for n, label := range labels {
-				n, label := n, label
-				b := ui.Row(c.Key(key+"-"+strconv.Itoa(n))).Padding(5, 12).
-					Radius(radius).Cursor(ui.CursorPointer).Role(ui.RoleRadio).
-					Label(label).Selected(n == current)
+				b := ui.Row(c.Key(key+"-"+strconv.Itoa(n))).Padding(4, 11).
+					Radius(6).Cursor(ui.CursorPointer).Role(ui.RoleRadio).
+					Label(label).AccessSelected(n == current)
 				switch {
 				case n == current:
-					b.Background(k.PanelSel)
+					b.Background(k.CardFocused)
 				case b.Hovered():
 					b.Background(k.Hover)
 				}
@@ -395,9 +517,9 @@ func (u *UI) settingsSliderRow(c *ui.Context, k *colors, title, detail string, v
 	u.settingRow(c, k, title, detail, func() {
 		v := value()
 		before := v
-		ui.Text(c, fmt.Sprintf(format, v)).FontSize(11.5).TextColor(k.TextMuted).
-			Width(44).TextAlign(ui.End).Shrink(0)
-		ui.Slider(c, &v, lo, hi).Width(160).Label(title)
+		ui.Text(c, fmt.Sprintf(format, v)).FontSize(12).TextColor(k.TextMuted).
+			Width(52).TextAlign(ui.End).Shrink(0)
+		ui.Slider(c, &v, lo, hi).Width(180).Label(title)
 		if v != before {
 			set(v)
 			u.saveSettingsSoon()
@@ -411,34 +533,25 @@ func (u *UI) settingsInfoRow(c *ui.Context, k *colors, title, value string) {
 	if u.Rows > 1 {
 		ui.Divider(c).Margin(0, 16)
 	}
-	row := ui.Row(c.Key("info-"+title)).MinHeight(44).Padding(0, 16).Gap(18).
-		AlignItems(ui.Center).Radius(6)
+	row := ui.Row(c.Key("info-"+title)).MinHeight(46).Padding(0, 16).Gap(16).
+		AlignItems(ui.Center)
 	if u.Hits[title] {
-		row.Background(k.PanelSel)
+		row.Background(k.PanelSel).Radius(8)
 	}
 	if u.Reveal == title {
 		row.ScrollIntoView()
 	}
 	row.Children(func() {
-		ui.Text(c, title).FontSize(12.5).TextColor(k.Text).Shrink(0)
+		ui.Text(c, title).FontSize(13).TextColor(k.Text).Shrink(0)
 		ui.Spacer(c)
-		ui.Text(c, value).FontSize(11.5).TextColor(k.TextFaint).SingleLine().
-			Ellipsis("…").MaxWidth(280).Shrink(0).TextAlign(ui.End)
+		ui.Text(c, value).FontSize(12).TextColor(k.TextMuted).SingleLine().
+			Ellipsis("…").MaxWidth(360).Shrink(1).MinWidth(0).
+			TextAlign(ui.End).Tooltip(value)
 	})
 }
 
 func (u *UI) settingsNote(c *ui.Context, k *colors, text string) {
 	ui.Text(c, text).FontSize(11.5).TextColor(k.TextFaint).LineHeight(1.4).Padding(0, 2)
-}
-
-func (u *UI) settingsNoticeLine(c *ui.Context, k *colors) {
-	if u.Notice == "" {
-		return
-	}
-	ui.Row(c).Gap(8).AlignItems(ui.Center).Padding(0, 2).Children(func() {
-		ui.Box(c).Size(6, 6).Radius(3).Background(k.Attention).Shrink(0)
-		ui.Text(c, u.Notice).FontSize(11.5).TextColor(k.Attention).Grow(1).MinWidth(0)
-	})
 }
 
 func settingsButton(c *ui.Context, label string, primary bool) ui.Element {

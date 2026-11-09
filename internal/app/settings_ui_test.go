@@ -78,7 +78,7 @@ func TestSettingsTogglesWriteTheSettingBack(t *testing.T) {
 	if !a.EditorSoftWrap {
 		t.Fatal("Soft wrap code did not turn on")
 	}
-	a.settings.Cat = settingsGit
+	a.settings.Cat = settingsGeneral
 	tt.Frame()
 	if a.NoGitAutoRefresh {
 		t.Fatal("git refresh started off")
@@ -235,6 +235,17 @@ func TestSettingsSearchShortcut(t *testing.T) {
 	if a.settings.Cat != settingsEditor {
 		t.Fatalf("page after Cmd+F and typing: %d", a.settings.Cat)
 	}
+	if err := tt.Click("Clear Search settings"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	tt.Frame()
+	if a.settings.Query != "" {
+		t.Fatalf("the clear button kept the query: %q", a.settings.Query)
+	}
+	tt.Type("line numbers")
+	tt.Frame()
+	tt.Frame()
 	tt.Key(0, ui.KeyEscape)
 	tt.Frame()
 	tt.Frame()
@@ -297,10 +308,7 @@ func TestSettingsTableRendersEveryGenericRow(t *testing.T) {
 	registerFonts()
 	a := newProjectApp(t)
 	tt := ui.NewTester(a.settingsWindowView, 900, 1600)
-	for _, cat := range []int{
-		settingsGeneral, settingsAppearance, settingsEditor,
-		settingsTerminal, settingsShell, settingsNotifications, settingsGit,
-	} {
+	for _, cat := range []int{settingsGeneral, settingsEditor, settingsTerminal} {
 		a.settings.Cat = cat
 		tt.Frame()
 		for _, row := range settings.Rows {
@@ -311,6 +319,84 @@ func TestSettingsTableRendersEveryGenericRow(t *testing.T) {
 				t.Fatalf("page %q is missing row %q: %q", settings.Categories[cat].Title, row.Title, tt.Texts())
 			}
 		}
+	}
+}
+
+func TestSettingsAppearanceThemes(t *testing.T) {
+	registerFonts()
+	a := newProjectApp(t)
+	a.settings.Cat = settingsAppearance
+	tt := ui.NewTester(a.settingsWindowView, 900, 640)
+	tt.Frame()
+	for _, label := range []string{"System", "Light", "Dark"} {
+		if !tt.HasText(label) {
+			t.Fatalf("the appearance page is missing %q: %q", label, tt.Texts())
+		}
+	}
+	if err := tt.Click("Dark theme"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.Appearance != 2 {
+		t.Fatalf("appearance after the dark tile: %d", a.Appearance)
+	}
+	if err := tt.Click("System theme"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.Appearance != 0 {
+		t.Fatalf("appearance after the system tile: %d", a.Appearance)
+	}
+}
+
+// TestSettingsPagesHaveHeaders checks that every page names itself, which
+// is what the content shell draws above the page's own sections.
+func TestSettingsPagesHaveHeaders(t *testing.T) {
+	registerFonts()
+	a := newProjectApp(t)
+	tt := ui.NewTester(a.settingsWindowView, 900, 640)
+	for cat, category := range settings.Categories {
+		if !terminalsSupported() && (cat == settingsTerminal || cat == settingsHosts) {
+			continue
+		}
+		a.settings.Cat = cat
+		tt.Frame()
+		if !tt.HasText(category.Detail) {
+			t.Fatalf("%s has no header: %q", category.Title, tt.Texts())
+		}
+	}
+}
+
+// TestSettingsSearchMergedPages checks the pages the shell and
+// notifications moved to: one search finds the Editor and Terminal faces
+// and leaves Appearance with the theme alone. About also matches, on the
+// Fonts row of its SYSTEM card.
+func TestSettingsSearchMergedPages(t *testing.T) {
+	registerFonts()
+	a := newProjectApp(t)
+	a.settings.Cat = settingsAppearance
+	tt := ui.NewTester(a.settingsWindowView, 900, 640)
+	tt.Frame()
+	a.settings.Query = "shell"
+	tt.Frame()
+	tt.Frame()
+	if a.settings.Cat != settingsTerminal {
+		t.Fatalf("page after searching shell: %d", a.settings.Cat)
+	}
+	if !tt.HasText("Shell") {
+		t.Fatalf("terminal page after searching shell: %q", tt.Texts())
+	}
+	a.settings.Query = ""
+	tt.Frame()
+	tt.Frame()
+	a.settings.Query = "font"
+	tt.Frame()
+	tt.Frame()
+	if !a.settings.Found[settingsEditor] || !a.settings.Found[settingsTerminal] {
+		t.Fatalf("font did not find both faces: %v", a.settings.Found)
+	}
+	if a.settings.Found[settingsAppearance] {
+		t.Fatalf("appearance still has a font row: %v", a.settings.Found)
 	}
 }
 

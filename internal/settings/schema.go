@@ -20,13 +20,10 @@ const (
 	Appearance
 	Editor
 	Terminal
-	Shell
-	Notifications
 	Keyboard
 	Hosts
-	Git
 	Advanced
-	Updates
+	About
 )
 
 type Category struct {
@@ -38,17 +35,14 @@ type Category struct {
 
 // Categories is the rail, in order.
 var Categories = []Category{
-	{"General", "Startup and projects", "settings", "startup restore tabs project server"},
-	{"Appearance", "Theme and interface text", "file-text", "theme light dark appearance look color font size"},
+	{"General", "Startup, project and working tree", "settings", "startup restore tabs project server git working tree refresh"},
+	{"Appearance", "How Mojian looks", "palette", "theme light dark appearance look colors"},
 	{"Editor", "Type, writing and Markdown", "pencil", "editor code font line height tab wrap markdown active line indent brackets scroll"},
-	{"Terminal", "Type, input and scrollback", "square-terminal", "terminal shell font cursor blink scrollback clipboard option alt"},
-	{"Shell", "The program new terminals run", "square-terminal", "shell login command zsh bash fish"},
-	{"Notifications", "When a terminal wants attention", "bell", "notify bell exit attention sound"},
+	{"Terminal", "Type, input, notifications and the shell", "square-terminal", "terminal shell font cursor blink scrollback clipboard option alt notifications bell exit"},
 	{"Keyboard", "Shortcuts this app uses", "command", "keyboard shortcut keys hotkeys keybindings commands"},
-	{"Hosts", "SSH servers and recent projects", "server", "host server ssh remote project address"},
-	{"Git", "The working-tree page", "git-branch", "git changes diff status refresh worktree"},
-	{"Advanced", "Data and settings file", "settings", "advanced data settings file reset paths server"},
-	{"Updates", "Signed releases and restart", "refresh-cw", "updates update release download install restart"},
+	{"Hosts", "SSH servers and remote projects", "server", "host server ssh remote project address"},
+	{"Advanced", "Data, settings file and reset", "sliders-horizontal", "advanced data settings file reset paths server session socket"},
+	{"About", "Version, updates and system", "info", "about mojian version updates release install restart system fonts project"},
 }
 
 // Row is one setting, info line or action. Pref names an exported field
@@ -75,7 +69,7 @@ type Row struct {
 }
 
 // Rows are the pages' contents, in display order. Keyboard, Hosts,
-// Advanced and Updates paint custom controls; their rows still feed search
+// Advanced and About paint custom controls; their rows still feed search
 // and their section headers.
 var Rows = []Row{
 	// General
@@ -86,17 +80,15 @@ var Rows = []Row{
 		Words: "project folder path current", Kind: Info},
 	{ID: "server", Cat: General, Section: "PROJECT", Title: "Server",
 		Words: "server ssh local remote host", Kind: Info},
+	{ID: "git-refresh", Cat: General, Section: "WORKING TREE", Title: "Refresh when the window returns",
+		Detail: "Read the working tree again when the app regains focus.", Words: "git refresh focus auto worktree",
+		Kind: Toggle, Pref: "NoGitAutoRefresh", Invert: true},
 
-	// Appearance
-	{ID: "appearance", Cat: Appearance, Section: "THEME", Title: "Appearance",
-		Words: "theme appearance light dark system look", Kind: Choice, Pref: "Appearance",
+	// Appearance (the page paints the theme tiles; this row feeds search)
+	{ID: "appearance", Cat: Appearance, Section: "THEME", Title: "Theme",
+		Detail: "Light, dark or the system's.",
+		Words:  "theme appearance light dark system look", Kind: Choice, Pref: "Appearance",
 		Options: []string{"System", "Light", "Dark"}},
-	{ID: "appearance-text-size", Cat: Appearance, Section: "TEXT", Title: "Editor text size",
-		Detail: "The base size of source and prose.", Words: "font size editor text bigger smaller zoom",
-		Kind: Slider, Pref: "EditorFontSize", Min: 9, Max: 28, Format: "%.1f pt"},
-	{ID: "appearance-editor-font", Cat: Appearance, Section: "TEXT", Title: "Editor font",
-		Detail: "The face used by editors and previews.", Words: "font family editor typeface monospace",
-		Kind: Font, Pref: "EditorFontFamily", FontWhich: 0},
 
 	// Editor
 	{ID: "editor-font", Cat: Editor, Section: "TYPE", Title: "Editor font",
@@ -109,7 +101,7 @@ var Rows = []Row{
 		Detail: "Room for each line, as a multiple of the size.", Words: "line height leading spacing editor",
 		Kind: Slider, Pref: "EditorLineHeight", Min: 1.1, Max: 2.2, Format: "%.2f"},
 	{ID: "editor-tab-size", Cat: Editor, Section: "TYPE", Title: "Tab size",
-		Words: "tab size indent columns spaces", Kind: Choice, Pref: "EditorTabSize",
+		Detail: "Columns per tab.", Words: "tab size indent columns spaces", Kind: Choice, Pref: "EditorTabSize",
 		Options: []string{"2", "4", "8"}, Values: []int{2, 4, 8}},
 	{ID: "line-numbers", Cat: Editor, Section: "WRITING", Title: "Line numbers",
 		Detail: "Number the lines of code files; Markdown stays clean.", Words: "line numbers gutter code markdown",
@@ -158,86 +150,45 @@ var Rows = []Row{
 	{ID: "history-size", Cat: Terminal, Section: "SCROLLBACK", Title: "History size",
 		Detail: "Megabytes kept above the screen.", Words: "scrollback history size memory megabytes mb",
 		Kind: Slider, Pref: "TerminalScrollback", Min: 1, Max: 100, Format: "%.0f MB"},
-
-	// Shell
-	{ID: "shell-path", Cat: Shell, Section: "LOGIN SHELL", Title: "Shell",
+	{ID: "notify-bell", Cat: Terminal, Section: "NOTIFICATIONS", Title: "Notify on a bell",
+		Detail: "Show a notification when a background terminal rings its bell.", Words: "bell notify attention sound terminal",
+		Kind: Toggle, Pref: "NotifyBell"},
+	{ID: "notify-exit", Cat: Terminal, Section: "NOTIFICATIONS", Title: "Notify when a terminal exits",
+		Detail: "Show a notification when a background terminal finishes.", Words: "exit notify finish done terminal",
+		Kind: Toggle, Pref: "NotifyExit"},
+	{ID: "shell-path", Cat: Terminal, Section: "SHELL", Title: "Shell",
 		Detail: "Program new local terminals run; empty uses $SHELL.", Words: "shell login program zsh bash fish environment",
 		Kind: Text, Pref: "ShellPath", Placeholder: "$SHELL"},
 
-	// Notifications
-	{ID: "notify-bell", Cat: Notifications, Section: "TERMINAL", Title: "Notify on a bell",
-		Detail: "Show a notification when a background terminal rings its bell.", Words: "bell notify attention sound terminal",
-		Kind: Toggle, Pref: "NotifyBell"},
-	{ID: "notify-exit", Cat: Notifications, Section: "TERMINAL", Title: "Notify when a terminal exits",
-		Detail: "Show a notification when a background terminal finishes.", Words: "exit notify finish done terminal",
-		Kind: Toggle, Pref: "NotifyExit"},
-
 	// Keyboard (custom controls; rows feed search)
-	{ID: "shortcuts", Cat: Keyboard, Section: "SHORTCUTS", Title: "SHORTCUTS",
-		Words: "shortcuts keys keybindings hotkeys keyboard commands", Kind: Custom},
-	{ID: "tab-switching", Cat: Keyboard, Section: "TAB SWITCHING", Title: "TAB SWITCHING",
-		Words: "tab switching next previous keys", Kind: Custom},
 	{ID: "show-tab", Cat: Keyboard, Section: "TAB SWITCHING", Title: "Show tab",
 		Detail: "Go to a tab by its position.", Words: "tab number position shortcut", Kind: Custom},
 
 	// Hosts (custom controls; rows feed search)
-	{ID: "add-host", Cat: Hosts, Section: "ADD HOST", Title: "ADD HOST",
-		Words: "add host ssh server address", Kind: Custom},
-	{ID: "host-address", Cat: Hosts, Section: "ADD HOST", Title: "Address",
-		Words: "host ssh server address", Kind: Custom},
-	{ID: "servers", Cat: Hosts, Section: "SERVERS", Title: "SERVERS",
-		Words: "servers hosts ssh local remote", Kind: Custom},
 	{ID: "setup-server", Cat: Hosts, Section: "SERVERS", Title: "Set Up Server",
 		Words: "server setup install upload binaries", Kind: Custom},
-	{ID: "about-hosts", Cat: Hosts, Section: "ABOUT HOSTS", Title: "ABOUT HOSTS",
-		Words: "hosts remote server upload ssh", Kind: Custom},
-
-	// Git
-	{ID: "git-refresh", Cat: Git, Section: "CHANGES PAGE", Title: "Refresh when the window returns",
-		Detail: "Read the working tree again when the app regains focus.", Words: "git refresh focus auto worktree",
-		Kind: Toggle, Pref: "NoGitAutoRefresh", Invert: true},
-	{ID: "git-status", Cat: Git, Section: "ABOUT THE PAGE", Title: "Status",
-		Words: "git status working tree head", Kind: Info},
 
 	// Advanced (custom controls; rows feed search)
-	{ID: "data", Cat: Advanced, Section: "DATA", Title: "DATA",
-		Words: "data paths settings", Kind: Custom},
-	{ID: "settings-file", Cat: Advanced, Section: "DATA", Title: "Settings file",
+	{ID: "settings-file", Cat: Advanced, Section: "SETTINGS FILE", Title: "Settings file",
 		Words: "settings file json path", Kind: Custom},
-	{ID: "remote-project", Cat: Advanced, Section: "DATA", Title: "Remote project",
-		Words: "remote project path server", Kind: Custom},
-	{ID: "local-sessions", Cat: Advanced, Section: "DATA", Title: "Local sessions",
-		Words: "local sessions socket terminal", Kind: Custom},
-	{ID: "remote-server", Cat: Advanced, Section: "DATA", Title: "Remote server",
-		Words: "remote server socket ssh", Kind: Custom},
-	{ID: "settings-file-section", Cat: Advanced, Section: "SETTINGS FILE", Title: "SETTINGS FILE",
-		Words: "settings file open reveal json", Kind: Custom},
 	{ID: "reveal-settings", Cat: Advanced, Section: "SETTINGS FILE", Title: "Reveal",
 		Words: "reveal show finder settings file", Kind: Custom},
 	{ID: "open-settings", Cat: Advanced, Section: "SETTINGS FILE", Title: "Open",
 		Words: "open settings file json editor", Kind: Custom},
-	{ID: "reset-settings", Cat: Advanced, Section: "SETTINGS FILE", Title: "Reset all settings",
+	{ID: "reset-settings", Cat: Advanced, Section: "RESET", Title: "Reset all settings",
 		Words: "reset defaults restore settings preferences", Kind: Custom},
-	{ID: "about", Cat: Advanced, Section: "MOJIAN", Title: "MOJIAN",
-		Words: "about mojian version credits", Kind: Custom},
-	{ID: "about-version", Cat: Advanced, Section: "MOJIAN", Title: "Version",
-		Words: "about version build", Kind: Custom},
-	{ID: "about-system", Cat: Advanced, Section: "MOJIAN", Title: "System",
-		Words: "about system os architecture", Kind: Custom},
-	{ID: "about-project", Cat: Advanced, Section: "MOJIAN", Title: "Project",
-		Words: "about project folder", Kind: Custom},
-	{ID: "about-settings", Cat: Advanced, Section: "MOJIAN", Title: "Settings",
-		Words: "about settings path", Kind: Custom},
-	{ID: "about-fonts", Cat: Advanced, Section: "MOJIAN", Title: "Fonts",
-		Words: "about fonts installed", Kind: Custom},
 
-	// Updates (custom controls; rows feed search)
-	{ID: "updates", Cat: Updates, Section: "UPDATES", Title: "UPDATES",
-		Words: "updates release signed", Kind: Custom},
-	{ID: "check-updates", Cat: Updates, Section: "UPDATES", Title: "Check for Updates",
-		Detail: "Check the latest signed release on GitHub.", Words: "updates check release download", Kind: Custom},
-	{ID: "install-update", Cat: Updates, Section: "UPDATES", Title: "Install",
+	// About (custom controls; rows feed search)
+	{ID: "software-update", Cat: About, Section: "SOFTWARE UPDATE", Title: "Software Update",
+		Detail: "Check GitHub for a newer signed release.", Words: "updates check release download github", Kind: Custom},
+	{ID: "install-update", Cat: About, Section: "SOFTWARE UPDATE", Title: "Install",
 		Detail: "Download and install the release it finds.", Words: "updates install download", Kind: Custom},
-	{ID: "restart-update", Cat: Updates, Section: "UPDATES", Title: "Restart",
+	{ID: "restart-update", Cat: About, Section: "SOFTWARE UPDATE", Title: "Restart",
 		Detail: "Restart into the installed update.", Words: "updates restart install apply", Kind: Custom},
+	{ID: "about-system", Cat: About, Section: "SYSTEM", Title: "System",
+		Words: "about system os architecture", Kind: Custom},
+	{ID: "about-project", Cat: About, Section: "SYSTEM", Title: "Project",
+		Words: "about project folder path", Kind: Custom},
+	{ID: "about-fonts", Cat: About, Section: "SYSTEM", Title: "Fonts",
+		Words: "about fonts installed families", Kind: Custom},
 }

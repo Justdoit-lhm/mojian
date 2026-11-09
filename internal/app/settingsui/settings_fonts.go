@@ -19,17 +19,17 @@ func (u *UI) fontRow(c *ui.Context, k *colors, title, detail string, which int, 
 		}
 	}
 	u.settingRow(c, k, title, detail, func() {
-		b := ui.ButtonBase(c.Key("font-"+strconv.Itoa(which))).Padding(5, 10).Radius(radius).
-			Gap(7).Label(title + ": " + label)
+		b := ui.ButtonBase(c.Key("font-"+strconv.Itoa(which))).Height(30).
+			Padding(0, 10).Radius(8).Gap(7).Label(title + ": " + label)
 		if b.Hovered() {
-			b.Background(k.Pressed)
+			b.Background(k.Hover)
 		}
 		if b.Clicked() {
 			u.FontPick, u.FontPickFor, u.FontSearch = true, which, ""
 		}
 		b.Children(func() {
-			ui.Text(c, label).FontSize(11.5).TextColor(k.Text).SingleLine().
-				Ellipsis("…").MaxWidth(190)
+			ui.Text(c, label).FontSize(12).TextColor(k.Text).SingleLine().
+				Ellipsis("…").MaxWidth(200)
 			ui.Icon(c, icons.Icon("chevron-down")).Size(12, 12).TextColor(k.TextFaint)
 		})
 	})
@@ -65,11 +65,17 @@ func (u *UI) fontPicker(c *ui.Context, k *colors) {
 			Border(1, k.PanelBorder).
 			Shadow(0, 24, 60, -8, ui.RGBA(0, 0, 0, 0.28)).Clip()
 		ui.Column(c).Children(func() {
+			title := "Editor font"
+			if u.FontPickFor == 1 {
+				title = "Terminal font"
+			}
 			ui.Row(c).Padding(12, 14).Gap(9).AlignItems(ui.Center).
 				BorderWidth(0, 0, 1, 0).BorderColor(k.PanelBorder).Children(func() {
-				ui.Icon(c, icons.Icon("search")).Size(15, 15).TextColor(k.TextFaint)
-				ui.TextInputBase(c, &u.FontSearch).Grow(1).FontSize(13).
-					Placeholder("Search installed Fonts…").AutoFocus()
+				ui.Text(c, title).FontSize(13).FontWeight(600).TextColor(k.Text)
+			})
+			ui.Row(c).Padding(10, 12).Children(func() {
+				u.settingsSearchField(c, k, "font-search", &u.FontSearch,
+					"Search fonts", "Search installed fonts…", nil).AutoFocus()
 			})
 			q := strings.ToLower(strings.TrimSpace(u.FontSearch))
 			current := u.EditorFontFamily
@@ -82,8 +88,8 @@ func (u *UI) fontPicker(c *ui.Context, k *colors) {
 				if u.FontPickFor == 1 {
 					def = "System monospace · default"
 				}
-				row := ui.Row(c.Key("picker-default")).Height(34).Padding(0, 10).Gap(8).
-					Radius(radius).Cursor(ui.CursorPointer).Role(ui.RoleButton).Label(def)
+				row := ui.Row(c.Key("picker-default")).Height(32).Padding(0, 10).Gap(8).
+					Radius(8).Cursor(ui.CursorPointer).Role(ui.RoleButton).Label(def)
 				if current == "" {
 					row.Background(k.PanelSel)
 				} else if row.Hovered() {
@@ -101,6 +107,10 @@ func (u *UI) fontPicker(c *ui.Context, k *colors) {
 				}
 				row.Children(func() {
 					ui.Text(c, def).FontSize(13).TextColor(k.Text)
+					if current == "" {
+						ui.Spacer(c)
+						ui.Icon(c, icons.Icon("check")).Size(13, 13).TextColor(k.TextMuted)
+					}
 				})
 				shown++
 				for _, f := range u.installedFonts() {
@@ -109,8 +119,8 @@ func (u *UI) fontPicker(c *ui.Context, k *colors) {
 						continue
 					}
 					shown++
-					row := ui.Row(c.Key("picker-"+f.Name)).Height(34).Padding(0, 10).Gap(8).
-						Radius(radius).Cursor(ui.CursorPointer).Role(ui.RoleButton).
+					row := ui.Row(c.Key("picker-"+f.Name)).Height(32).Padding(0, 10).Gap(8).
+						Radius(8).Cursor(ui.CursorPointer).Role(ui.RoleButton).
 						Label(f.Name)
 					if f.Name == current {
 						row.Background(k.PanelSel)
@@ -135,6 +145,10 @@ func (u *UI) fontPicker(c *ui.Context, k *colors) {
 							ui.Text(c, "Mono").FontSize(9).FontWeight(650).
 								TextColor(k.TextFaint).Padding(1, 4).Radius(radius).
 								Background(k.Hover).Shrink(0)
+						}
+						if f.Name == current {
+							ui.Spacer(c)
+							ui.Icon(c, icons.Icon("check")).Size(13, 13).TextColor(k.TextMuted)
 						}
 					})
 				}

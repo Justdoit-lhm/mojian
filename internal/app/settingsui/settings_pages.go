@@ -13,34 +13,35 @@ import (
 )
 
 func (u *UI) settingsAdvancedPage(c *ui.Context, k *colors) {
-	u.settingsNoticeLine(c, k)
-	u.settingsSection(c, k, "DATA", func() {
-		u.settingsInfoRow(c, k, "Settings file", u.settingsPath())
-		if u.remotePath() != "" {
-			u.settingsInfoRow(c, k, "Remote project", u.serverAlias()+":"+u.remotePath())
-		}
-		if terminalsSupported() {
-			u.settingsInfoRow(c, k, "Local sessions", session.SocketPath())
-		}
-		if rc := u.activeRemote(); rc != nil {
-			u.settingsInfoRow(c, k, "Remote server", rc.Host+" · "+rc.Socket)
-		}
-	})
 	u.settingsSection(c, k, "SETTINGS FILE", func() {
-		u.settingRow(c, k, "Reveal", "Show settings.json in the file manager.", func() {
-			if settingsButton(c, "Reveal", false).Clicked() {
+		path, detail := u.settingsPath(), u.settingsPath()
+		if detail == "" {
+			detail = "Not saved yet"
+		}
+		u.settingRowMono(c, k, "Settings file", detail, func() {
+			reveal := settingsButton(c, "Reveal", false).Disabled(path == "")
+			if reveal.Clicked() {
 				u.saveSettings()
-				if u.settingsPath() != "" {
-					mygo.Shell.ShowItemInFolder(u.settingsPath())
-				}
+				mygo.Shell.ShowItemInFolder(path)
 			}
-		})
-		u.settingRow(c, k, "Open", "Open settings.json in the default editor.", func() {
-			if settingsButton(c, "Open", false).Clicked() {
+			if settingsButton(c, "Open", false).Disabled(path == "").Clicked() {
 				u.openSettingsFile()
 			}
 		})
 	})
+	if u.hasAdvancedData() {
+		u.settingsSection(c, k, "DATA", func() {
+			if terminalsSupported() {
+				u.settingsInfoRow(c, k, "Local sessions", session.SocketPath())
+			}
+			if u.remotePath() != "" {
+				u.settingsInfoRow(c, k, "Remote project", u.serverAlias()+":"+u.remotePath())
+			}
+			if rc := u.activeRemote(); rc != nil {
+				u.settingsInfoRow(c, k, "Remote server", rc.Host+" · "+rc.Socket)
+			}
+		})
+	}
 	u.settingsSection(c, k, "RESET", func() {
 		if !u.ResetAsk {
 			u.settingRow(c, k, "Reset all settings", "Restore the preferences of a new install; projects and servers stay.", func() {
@@ -61,7 +62,12 @@ func (u *UI) settingsAdvancedPage(c *ui.Context, k *colors) {
 			}
 		})
 	})
-	u.settingsAboutPage(c, k)
+}
+
+// hasAdvancedData reports whether any path on the DATA card is worth
+// showing: a session socket, a remote project, or a live remote server.
+func (u *UI) hasAdvancedData() bool {
+	return u.remotePath() != "" || u.activeRemote() != nil || terminalsSupported()
 }
 
 func (u *UI) openSettingsFile() {
@@ -88,9 +94,23 @@ func (u *UI) resetPreferences() {
 // ResetPreferences restores the defaults, for the app's reset command.
 func (u *UI) ResetPreferences() { u.resetPreferences() }
 
-func (u *UI) settingsUpdatesPage(c *ui.Context, k *colors) {
-	u.settingsSection(c, k, "UPDATES", func() {
-		u.settingRow(c, k, "Check for Updates", "Check the latest signed release on GitHub.", func() {
+// settingsAboutPage is the app's identity, its updates and the machine it
+// runs on.
+func (u *UI) settingsAboutPage(c *ui.Context, k *colors) {
+	u.settingsSection(c, k, "", func() {
+		ui.Column(c).Padding(18).Gap(6).Children(func() {
+			wordmark := "wordmark"
+			if c.Theme().Dark {
+				wordmark = "wordmark-reversed"
+			}
+			ui.Icon(c, icons.Brand(wordmark)).Size(150, 36).AlignSelf(ui.Start)
+			ui.Text(c, "A quiet text editor for plain files.").FontSize(12).
+				TextColor(k.TextMuted)
+			ui.Text(c, "Version "+appVersion()).FontSize(11.5).TextColor(k.TextFaint)
+		})
+	})
+	u.settingsSection(c, k, "SOFTWARE UPDATE", func() {
+		u.settingRow(c, k, "Software Update", "Check GitHub for a newer signed release.", func() {
 			busy := u.updateChecking() || u.updateInstalling()
 			check := ui.Button(c, "Check for Updates").Disabled(busy || u.updateReady())
 			if check.Clicked() {
@@ -116,28 +136,18 @@ func (u *UI) settingsUpdatesPage(c *ui.Context, k *colors) {
 	if msg := u.updateSummary(); msg != "" {
 		u.settingsNote(c, k, msg)
 	}
-	if u.updateError() != "" {
-		ui.Text(c, u.updateError()).FontSize(12).TextColor(k.Danger).Padding(0, 4)
+	if msg := u.updateError(); msg != "" {
+		ui.Text(c, msg).FontSize(12).TextColor(k.Danger).Padding(0, 4)
 	}
-}
-
-func (u *UI) settingsAboutPage(c *ui.Context, k *colors) {
-	u.settingsSection(c, k, "MOJIAN", func() {
-		ui.Row(c).Padding(12, 16).AlignItems(ui.Center).Children(func() {
-			wm := "wordmark"
-			if c.Theme().Dark {
-				wm = "wordmark-reversed"
-			}
-			ui.Icon(c, icons.Brand(wm)).Size(150, 36)
-		})
-		u.settingsInfoRow(c, k, "Version", appVersion())
+	u.settingsSection(c, k, "SYSTEM", func() {
 		u.settingsInfoRow(c, k, "System", runtime.GOOS+" · "+runtime.GOARCH)
 		project := "No project"
-		if u.store() != nil {
-			project = u.store().Dir
+		if u.projectPath() != "" {
+			project = u.projectPath()
 		}
 		u.settingsInfoRow(c, k, "Project", project)
-		u.settingsInfoRow(c, k, "Fonts", fmt.Sprintf("%d installed families", len(u.installedFonts())))
+		u.settingsInfoRow(c, k, "Fonts",
+			fmt.Sprintf("%d installed families", len(u.installedFonts())))
 	})
 }
 

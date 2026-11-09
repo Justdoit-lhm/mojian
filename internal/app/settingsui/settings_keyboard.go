@@ -10,29 +10,26 @@ import (
 )
 
 func (u *UI) settingsKeyboardPage(c *ui.Context, k *colors) {
-	u.settingsNoticeLine(c, k)
 	q := strings.ToLower(strings.TrimSpace(u.KeyFilter))
 	shown := 0
-	u.settingsSection(c, k, "SHORTCUTS", func() {
-		ui.Row(c).Padding(10, 16).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Row(c).Grow(1).Height(30).Padding(0, 8).Gap(6).Radius(radius).
-				Background(k.Hover).AlignItems(ui.Center).Children(func() {
-				ui.Icon(c, icons.Icon("search")).Size(13, 13).TextColor(k.TextFaint)
-				in := ui.TextInputBase(c, &u.KeyFilter).Grow(1).FontSize(12).
-					Placeholder("Filter shortcuts…")
-				if in.Changed() {
-					u.invalidate()
-				}
-			})
-			if len(u.shortcutKeys()) > 0 {
-				if settingsButton(c, "Restore Defaults", false).Clicked() {
-					u.stopRecording()
-					u.resetShortcuts()
-					u.Notice = ""
-					u.saveSettings()
-					u.refreshMenu()
-					u.invalidate()
-				}
+	u.settingsSectionAction(c, k, "SHORTCUTS", func() {
+		if len(u.shortcutKeys()) == 0 {
+			return
+		}
+		if settingsButton(c, "Restore Defaults", false).Clicked() {
+			u.stopRecording()
+			u.resetShortcuts()
+			u.Notice = ""
+			u.saveSettings()
+			u.refreshMenu()
+			u.invalidate()
+		}
+	}, func() {
+		ui.Row(c).Padding(10, 12).Children(func() {
+			in := u.settingsSearchField(c, k, "keys-filter", &u.KeyFilter,
+				"Filter shortcuts", "Filter shortcuts…", &u.KeyFilterRef)
+			if in.Changed() {
+				u.invalidate()
 			}
 		})
 		ui.Divider(c).Margin(0, 16)
@@ -151,9 +148,9 @@ func (u *UI) shortcutRow(c *ui.Context, k *colors, cmd Command) {
 				u.invalidate()
 			}
 		}
-		chip := ui.ButtonBase(c.Key("keys-"+cmd.ID)).Height(26).MinWidth(92).
-			Padding(0, 10).Radius(radius).Center().Background(k.Hover).
-			Label("Shortcut for " + label)
+		chip := ui.ButtonBase(c.Key("keys-"+cmd.ID)).Height(26).MinWidth(100).
+			Padding(0, 10).Radius(7).Center().Background(k.Hover).
+			Border(1, k.PanelBorder).Label("Shortcut for " + label)
 		switch {
 		case recording:
 			chip.Background(k.PanelSel)
