@@ -36,6 +36,11 @@ type app struct {
 	*workspace
 	prefs.Prefs
 
+	// startup is the project and file the command line named. It is
+	// consumed by the first open; later windows return to the project on
+	// screen.
+	startup Startup
+
 	win  *mygo.Window
 	tray *mygo.Tray
 
@@ -145,11 +150,12 @@ type app struct {
 	edTheme *editor.Theme
 }
 
-func Run() {
+func Run(startup Startup) {
 	registerFonts()
 	a := &app{
 		workspace: &workspace{},
 		Prefs:     prefs.Default(),
+		startup:   startup,
 	}
 	go warmSessionServer()
 	update.UseGitHub()
@@ -208,6 +214,11 @@ func (a *app) open() {
 		if len(a.shortcutKeys) > 0 {
 			mygo.App.SetMenu(a.menu())
 		}
+		if a.startup.Dir != "" {
+			// The command line chose a local project: the remote project
+			// of the last launch must not take its place.
+			a.serverAlias, a.remotePath = "", ""
+		}
 		if a.serverAlias != "" && a.remotePath != "" {
 			// Create the window first and connect behind the loading card,
 			// so an unreachable host cannot delay the launch.
@@ -242,6 +253,8 @@ func (a *app) open() {
 		} else if t := a.tab(); t != nil {
 			a.focusReq = t.editorPane()
 		}
+		a.openStartupFile()
+		a.startup = Startup{}
 		if n := a.currentNote(); n != nil {
 			a.revealInTree(n)
 		}
@@ -264,10 +277,14 @@ func (a *app) open() {
 	a.updateTitle()
 }
 
-// initialStore opens $MOJIAN_VAULT, else the project of the last launch,
-// else the default folder. The app's own project gets a welcome note; a
-// project the user chose does not.
+// initialStore opens the project the command line named, else
+// $MOJIAN_VAULT, else the project of the last launch, else the default
+// folder. The app's own project gets a welcome note; a project the user
+// chose does not.
 func (a *app) initialStore() (*store, error) {
+	if a.startup.Dir != "" {
+		return a.openLocalStore(a.startup.Dir)
+	}
 	if os.Getenv("MOJIAN_VAULT") != "" {
 		return a.openDefaultStore()
 	}

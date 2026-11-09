@@ -33,7 +33,7 @@ Frame conventions that keep this correct:
 
 | Path | Purpose |
 |---|---|
-| `main.go` | Entry point: `-server` runs the session server, otherwise `app.Run()`. |
+|`main.go`|Entry point: `-server` runs the session server; otherwise it reads the optional folder or file argument and calls `app.Run` with it.|
 |`cmd/mojian-server/`|The per-user server uploaded to SSH hosts. Never installed as a service.|
 |`cmd/harness/`|Dev-only MCP server (mygo-mcp) that renders the real views headlessly over disposable projects.|
 | `internal/app/` | The window in one package: shell, tabs, panes, Explorer, pickers, palette, Settings, file operations, SSH, asset viewers. |

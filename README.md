@@ -57,6 +57,16 @@ sh install.sh
 
 Press `Cmd+O` on macOS or `Ctrl+O` on Linux to open a folder. The project chip switches between recent projects, and the server chip switches between Local and configured SSH hosts. Each project keeps its own tabs, panes, and recent files.
 
+From a terminal, pass the project folder or a file:
+
+```sh
+mojian .                        # the current folder
+mojian ~/git/abc                # a project folder
+mojian ~/git/abc/README.md      # a file, with its folder as the project
+```
+
+The file opens in the focused pane of the project's saved layout. The app bundle's binary is `Mojian.app/Contents/MacOS/Mojian`: link it as `mojian` to use the name in these examples, and run `mojian --help` for the usage.
+
 On first launch, Mojian opens `~/Documents/Mojian` when no project is selected and leaves a welcome note if the folder is empty.
 
 The Explorer shows the folder as it exists on disk:

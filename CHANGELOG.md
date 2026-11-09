@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Mojian accepts a path on the command line: `mojian .` opens the
+  current folder, `mojian ~/git/abc` opens that project, and
+  `mojian ~/git/abc/README.md` opens the file with its folder as the
+  project. `mojian --help` prints the usage, and an unreadable path is
+  reported on stderr instead of silently opening the last project.
+
 ## 0.2.7
 
 - MyGo moves to v0.8.3. Markdown previews now read GitHub's alerts,

@@ -58,6 +58,16 @@ sh install.sh
 
 macOS 用 `Cmd+O`，Linux 用 `Ctrl+O` 打开文件夹。项目徽标切换最近项目，服务器徽标在本地与已配置的 SSH 主机之间切换。每个项目保留自己的标签页、窗格和最近文件。
 
+也可以在终端里直接指定项目文件夹或文件：
+
+```sh
+mojian .                        # 当前文件夹
+mojian ~/git/abc                # 项目文件夹
+mojian ~/git/abc/README.md      # 文件，其所在文件夹成为项目
+```
+
+文件会在该项目已保存布局的当前窗格中打开。应用包内的可执行文件位于 `Mojian.app/Contents/MacOS/Mojian`；把它链接为 `mojian` 即可使用上面的命令，`mojian --help` 查看用法。
+
 首次启动且未选择项目时，墨间会打开 `~/Documents/Mojian`；文件夹为空时留下一张欢迎笔记。
 
 文件树展示磁盘上真实存在的目录：
