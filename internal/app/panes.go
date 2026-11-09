@@ -280,7 +280,7 @@ func (a *app) openAsset(f *assetFile) {
 
 // closeTab closes a workspace.
 func (a *app) closeTab(t *tab) {
-	a.dropClosingPanes(t)
+	a.dropPaneOverlays(t)
 	i := -1
 	for j, x := range a.tabs {
 		if x == t {
@@ -335,6 +335,7 @@ func (a *app) closePane(p *pane) {
 	if t == nil {
 		return
 	}
+	a.unzoom(t)
 	rect := p.lastBounds
 	if a.quitting || len(t.panes()) <= 1 || rect.W <= 1 || rect.H <= 1 {
 		a.closePaneNow(t, p)
@@ -346,7 +347,7 @@ func (a *app) closePane(p *pane) {
 	// copy because the split node goes with the pane.
 	p.closing = true
 	p.closeStarted = false
-	a.closingPanes = append(a.closingPanes, &closingPane{p: p, t: t, rect: rect})
+	a.paneOverlays = append(a.paneOverlays, &paneOverlay{p: p, t: t, rect: rect, kind: paneCopyClosing})
 	if !t.closePane(p) {
 		a.closeTab(t)
 		return
@@ -366,34 +367,58 @@ func (a *app) tabOf(p *pane) *tab {
 	return nil
 }
 
-// finishClosingPane ends the pane's terminal and drops its overlay once
-// the close animation has rested.
-func (a *app) finishClosingPane(p *pane) {
-	if p == nil || !p.closing {
+// finishPaneOverlay drops a pane's copy once its fade has rested. A
+// closing pane ends here; a pane a zoom hid stays loaded.
+func (a *app) finishPaneOverlay(p *pane, kind paneCopy) {
+	if p == nil {
 		return
 	}
-	for i, cp := range a.closingPanes {
-		if cp.p != p {
-			continue
+	removed := false
+	for i, o := range a.paneOverlays {
+		if o.p == p && o.kind == kind {
+			a.paneOverlays = append(a.paneOverlays[:i], a.paneOverlays[i+1:]...)
+			removed = true
+			break
 		}
-		a.closingPanes = append(a.closingPanes[:i], a.closingPanes[i+1:]...)
-		break
+	}
+	if kind == paneCopyHidden {
+		if !removed {
+			return
+		}
+		p.hideStarted = false
+		a.invalidate()
+		return
+	}
+	if !p.closing {
+		return
 	}
 	a.endTerminalPane(p, true)
 	releaseAsset(p)
 	p.closing = false
+	p.closeStarted = false
 	a.reapRemotes()
 	a.changed()
 	a.invalidate()
 }
 
-// dropClosingPanes finishes the overlays of a tab that is going away.
-func (a *app) dropClosingPanes(t *tab) {
-	for _, cp := range append([]*closingPane(nil), a.closingPanes...) {
-		if t != nil && cp.t != t {
+// dropPaneOverlays finishes every copy a tab has, as the tab goes away or
+// another one is shown.
+func (a *app) dropPaneOverlays(t *tab) {
+	for _, o := range append([]*paneOverlay(nil), a.paneOverlays...) {
+		if t != nil && o.t != t {
 			continue
 		}
-		a.finishClosingPane(cp.p)
+		a.finishPaneOverlay(o.p, o.kind)
+	}
+}
+
+// dropHiddenOverlays drops the copies a zoom hid, without touching their
+// panes, when the zoom changes direction before the fade rests.
+func (a *app) dropHiddenOverlays(t *tab) {
+	for _, o := range append([]*paneOverlay(nil), a.paneOverlays...) {
+		if o.t == t && o.kind == paneCopyHidden {
+			a.finishPaneOverlay(o.p, paneCopyHidden)
+		}
 	}
 }
 
@@ -401,9 +426,10 @@ func (a *app) dropClosingPanes(t *tab) {
 // the tab when it was the last pane.
 func (a *app) closePaneNow(t *tab, p *pane) {
 	if p.closing {
-		a.finishClosingPane(p)
+		a.finishPaneOverlay(p, paneCopyClosing)
 		return
 	}
+	a.unzoom(t)
 	a.endTerminalPane(p, true)
 	releaseAsset(p)
 	if !t.closePane(p) {
@@ -422,13 +448,54 @@ func (a *app) toggleZoom() {
 		return
 	}
 	if t.Zoom == t.Focus {
-		t.Zoom = nil
+		a.unzoom(t)
 	} else {
-		t.Zoom = t.Focus
+		a.zoom(t, t.Focus)
 	}
 	a.focusReq = t.Focus
 	a.changed()
 	a.invalidate()
+}
+
+// zoom fills the tab with p. The panes it hides fade over their old
+// places, and the zoomed card, note or terminal, flies to the tab's box
+// through its Match; a terminal's grid settles at each width on the way.
+func (a *app) zoom(t *tab, p *pane) {
+	a.dropHiddenOverlays(t)
+	for _, other := range t.panes() {
+		if other == p {
+			continue
+		}
+		if r := other.lastBounds; r.W > 1 && r.H > 1 {
+			a.paneOverlays = append(a.paneOverlays, &paneOverlay{p: other, t: t, rect: r, kind: paneCopyHidden})
+		}
+	}
+	t.Zoom = p
+}
+
+// unzoom returns the split and fades in the panes the zoom hid. The
+// zoomed card flies back through its Match; its siblings fade in where
+// they showed.
+func (a *app) unzoom(t *tab) {
+	zoomed := t.Zoom
+	a.dropHiddenOverlays(t)
+	t.Zoom = nil
+	for _, p := range t.panes() {
+		if p == zoomed {
+			continue
+		}
+		p.enter, p.enterX, p.enterY = true, 0, 0
+	}
+}
+
+// clearZoom leaves the zoom without a fade, for a layout change that
+// moves the panes at once.
+func (a *app) clearZoom(t *tab) {
+	if t == nil || t.Zoom == nil {
+		return
+	}
+	a.dropHiddenOverlays(t)
+	t.Zoom = nil
 }
 
 func (a *app) cycleTab(delta int) {

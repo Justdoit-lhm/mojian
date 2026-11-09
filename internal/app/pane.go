@@ -14,13 +14,23 @@ import (
 
 // paneCard draws one file: a card with a header over its editor.
 func (a *app) paneCard(c *ui.Context, k *colors, t *tab, p *pane) ui.Element {
-	return a.paneCardMode(c, k, t, p, false)
+	return a.paneCardMode(c, k, t, p, paneInLayout)
 }
 
-// paneCardMode draws a pane in the layout, or a copy of one that is
-// closing over its old place. The copy takes no input and does not
-// animate its place: only its fade and slide-away run.
-func (a *app) paneCardMode(c *ui.Context, k *colors, t *tab, p *pane, overlay bool) ui.Element {
+// paneCopy is how a pane card is drawn: where the layout puts it, or as a
+// copy over the place it last showed, leaving the layout or hidden by a
+// zoom. A copy takes no input and does not animate its place: only its
+// fade runs.
+type paneCopy int
+
+const (
+	paneInLayout paneCopy = iota
+	paneCopyClosing
+	paneCopyHidden
+)
+
+func (a *app) paneCardMode(c *ui.Context, k *colors, t *tab, p *pane, mode paneCopy) ui.Element {
+	overlay := mode != paneInLayout
 	focused := t.Focus == p
 	card := ui.Column(c.Key(p.ID)).Radius(radius).Clip().MinWidth(0).MinHeight(0)
 	if overlay {
@@ -29,18 +39,17 @@ func (a *app) paneCardMode(c *ui.Context, k *colors, t *tab, p *pane, overlay bo
 		if b := card.Bounds(); b.W > 0 && b.H > 0 {
 			p.lastBounds = b
 		}
-		// A pane moved into another split comes from where it showed; its
-		// colors follow focus. Terminals skip the match so their grid is
-		// not laid out at every width on the way.
+		// A pane moved into another split comes from where it showed, and
+		// one a zoom shows comes from its split; its colors follow focus.
+		// A terminal flies too: its grid settles at each width on the way.
 		tr := motion.Pane
-		if p.Term == nil {
-			tr.Match = p.ID
-		}
+		tr.Match = p.ID
 		card.Transition(tr)
 	}
-	if p.enter {
-		// The split is new with the pane, so no Enter can run: start at
-		// the split's edge, transparent, and animate both here.
+	if mode == paneInLayout && p.enter {
+		// The split is new with the pane, or a zoom revealed it, so no
+		// Enter can run: start transparent, at the edge if it is new, and
+		// animate both here.
 		card.Jump("enter-alpha", 0)
 		card.Jump("enter-x", p.enterX)
 		card.Jump("enter-y", p.enterY)
@@ -48,7 +57,8 @@ func (a *app) paneCardMode(c *ui.Context, k *colors, t *tab, p *pane, overlay bo
 	}
 	ex := card.AnimateTo("enter-x", 0, motion.PaneSlide)
 	ey := card.AnimateTo("enter-y", 0, motion.PaneSlide)
-	if p.closing {
+	switch mode {
+	case paneCopyClosing:
 		if !p.closeStarted {
 			card.Jump("close-alpha", 1)
 			card.Jump("close-x", 0)
@@ -62,13 +72,25 @@ func (a *app) paneCardMode(c *ui.Context, k *colors, t *tab, p *pane, overlay bo
 			card.Opacity(o)
 		}
 		if card.Settled("close-alpha") && card.Settled("close-x") && card.Settled("close-y") {
-			a.later(func() { a.finishClosingPane(p) })
+			a.later(func() { a.finishPaneOverlay(p, paneCopyClosing) })
+		}
+	case paneCopyHidden:
+		if !p.hideStarted {
+			card.Jump("hide-alpha", 1)
+			p.hideStarted = true
+		}
+		o := card.AnimateTo("hide-alpha", 0, motion.Close)
+		if o < 1 {
+			card.Opacity(o)
+		}
+		if card.Settled("hide-alpha") {
+			a.later(func() { a.finishPaneOverlay(p, paneCopyHidden) })
 		}
 	}
 	if ex != 0 || ey != 0 {
 		card.Translate(ex, ey)
 	}
-	if !p.closing {
+	if mode == paneInLayout {
 		if o := card.AnimateTo("enter-alpha", 1, motion.FadeIn); o < 1 {
 			card.Opacity(o)
 		}
@@ -208,7 +230,11 @@ func (a *app) paneCardMode(c *ui.Context, k *colors, t *tab, p *pane, overlay bo
 
 // movePaneTo drops from on the named edge of to and inserts it there.
 func (a *app) movePaneTo(t *tab, from, to *pane, zone paneDrop) {
-	if t == nil || t != a.tab() || !t.movePane(from, to, zone) {
+	if t == nil || t != a.tab() {
+		return
+	}
+	a.clearZoom(t)
+	if !t.movePane(from, to, zone) {
 		return
 	}
 	t.Focus = from
@@ -491,10 +517,19 @@ func (a *app) laterPane(p *pane) {
 	a.later(func() { a.closePane(p) })
 }
 
-// closingPane is a pane that has left the layout and is fading over the
-// place it showed while the split closes under it.
-type closingPane struct {
+// paneOverlay is a copy of a pane card over the place it last showed: a
+// pane leaving the layout, or one a zoom hid. It outlives the card in the
+// layout only until its fade rests.
+type paneOverlay struct {
 	p    *pane
 	t    *tab
 	rect ui.Rect
+	kind paneCopy // paneCopyClosing or paneCopyHidden
+}
+
+// overlayKey is the identity of a pane's copy, so a closing copy and a
+// hidden copy never take one.
+type overlayKey struct {
+	id   string
+	kind paneCopy
 }

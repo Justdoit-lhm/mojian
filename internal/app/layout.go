@@ -27,6 +27,7 @@ type layoutTab struct {
 
 type layoutNode struct {
 	Vertical bool        `json:"vertical,omitempty"`
+	Share    float32     `json:"share,omitempty"`
 	A        *layoutNode `json:"a,omitempty"`
 	B        *layoutNode `json:"b,omitempty"`
 	Pane     *layoutPane `json:"pane,omitempty"`
@@ -70,6 +71,7 @@ func layoutNodeOf(n *node) *layoutNode {
 	}
 	return &layoutNode{
 		Vertical: n.Vertical,
+		Share:    n.Share,
 		A:        layoutNodeOf(n.A),
 		B:        layoutNodeOf(n.B),
 	}
@@ -172,7 +174,16 @@ func (a *app) restoreNode(ln *layoutNode, byID map[string]*pane) *node {
 	case right == nil:
 		return left
 	}
-	return &node{Vertical: ln.Vertical, A: left, B: right}
+	return &node{Vertical: ln.Vertical, Share: layoutShare(ln.Share), A: left, B: right}
+}
+
+// layoutShare reads a saved split share, giving layouts from before the
+// dividers half.
+func layoutShare(share float32) float32 {
+	if share <= 0 || share >= 100 {
+		return 50
+	}
+	return share
 }
 
 // restoreColumns turns the old grid into a split tree: columns side by
@@ -199,7 +210,7 @@ func joinNodes(ns []*node, vertical bool) *node {
 	}
 	root := ns[0]
 	for _, n := range ns[1:] {
-		root = &node{Vertical: vertical, A: root, B: n}
+		root = &node{Vertical: vertical, Share: 50, A: root, B: n}
 	}
 	return root
 }

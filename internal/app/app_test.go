@@ -555,3 +555,34 @@ func TestMiddleClickClosesTab(t *testing.T) {
 		t.Fatal("a primary click closed the tab")
 	}
 }
+
+func TestTabCloseButtonIsAlwaysVisible(t *testing.T) {
+	registerFonts()
+	a := newProjectApp(t)
+	tt := ui.NewTester(a.view, 1100, 700)
+	tt.Frame()
+	if len(a.tabs) != 1 {
+		t.Fatalf("tabs: %d", len(a.tabs))
+	}
+	if !tt.HasText("Close Tab") {
+		t.Fatalf("the only tab shows no close button: %q", tt.Texts())
+	}
+	name, detail := a.tab().label()
+	r, ok := tt.Find(name + " " + detail)
+	if !ok {
+		t.Fatalf("tab label %q not found", name)
+	}
+	tt.Move(r.X+r.W/2, r.Y+r.H/2)
+	tt.Frame()
+	if !tt.HasText("Close Tab") {
+		t.Fatalf("the close button disappeared on hover: %q", tt.Texts())
+	}
+	if err := tt.Click("Close Tab"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	tt.Frame()
+	if len(a.tabs) != 0 {
+		t.Fatalf("the only tab did not close: %d left", len(a.tabs))
+	}
+}

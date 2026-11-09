@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.2.6
+
+- Every tab keeps its close button visible, including the first and only
+  tab. The unsaved dot joins it only while there are edits, and the tab
+  grows by the dot's room then, so a clean short tab carries no blank
+  space beside its title. Closing the only tab leaves the empty workspace
+  as before.
+- Split panes are resizable: drag the gap between two panes, or focus the
+  divider and use the arrow keys; a double click splits evenly again.
+  Each split keeps its share in `layout.json`, and a divider stops at a
+  readable minimum as the window shrinks.
+- Zooming a pane animates both ways: the panes the zoom hides fade over
+  their old places and fade back in when the zoom ends, while the zoomed
+  card, file or terminal, flies to and from the tab's box.
+- Terminal panes no longer snap when the layout moves them: they follow
+  the same matched geometry as files when a pane zooms, splits, moves or
+  closes, settling their grid at each size on the way.
+
 ## 0.2.5
 
 - The project model (`Store`, `Note`, `Asset` and the file tree) moved to

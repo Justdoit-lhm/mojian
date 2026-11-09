@@ -99,7 +99,14 @@ func tabWidth(c *ui.Context, t *tab) float32 {
 	if n := len(t.panes()); n > 0 {
 		tiles = float32(tileW + tileStep*min(n-1, 2) + 2)
 	}
-	return min(max(6+tiles+9+w+9+18+10, tabMinW), tabMaxW)
+	// A tab reserves room for its close button, and for the unsaved dot
+	// only while it shows one: a clean, short tab should not carry blank
+	// space beside its title.
+	actions := float32(18)
+	if t.dirty() {
+		actions += 11
+	}
+	return min(max(6+tiles+9+w+9+actions+4, tabMinW), tabMaxW)
 }
 
 // tabLabel is the label of a tab: the name and, fainter, the detail.
@@ -147,7 +154,6 @@ func (a *app) tabItem(c *ui.Context, k *colors, i int, t *tab, width float32, wh
 	}
 	e.HandleInput(func(ev ui.InputEvent) bool { return a.tabMiddleClick(t, ev) })
 	e.ContextMenu(func(m *ui.Menu) { a.tabMenu(m, t) })
-	hovered := e.Hovered()
 	if whole {
 		e.Children(func() {
 			a.tiles(c, k, t)
@@ -159,28 +165,34 @@ func (a *app) tabItem(c *ui.Context, k *colors, i int, t *tab, width float32, wh
 			if !active {
 				nameColor = k.TextMuted
 			}
+			nameMax := width - 52
+			if t.dirty() {
+				nameMax -= 11
+			}
 			label := ui.Box(c).Grow(1).MinWidth(0).Height(18).ClipX()
 			label.Children(func() {
 				ui.Row(c).Gap(5).AlignItems(ui.Center).Children(func() {
 					ui.Text(c, name).FontSize(13).FontWeight(500).TextColor(nameColor).
-						SingleLine().Shrink(0).MaxWidth(max(width-52, 24))
+						SingleLine().Shrink(0).MaxWidth(max(nameMax, 24))
 					if detail != "" {
 						ui.Text(c, detail).FontSize(12).TextColor(detailColor).
 							SingleLine().Shrink(1).MinWidth(0)
 					}
 				})
 			})
-			switch {
-			case hovered && len(a.tabs) > 1:
+			// Every tab shows its close button; the unsaved dot joins it
+			// only while there are unsaved edits, and the tab's width
+			// grows by the dot's room then.
+			actions := ui.Row(c).Gap(4).AlignItems(ui.Center).Shrink(0)
+			actions.Children(func() {
+				if t.dirty() {
+					ui.Box(c).Size(7, 7).Radius(4).Background(k.Attention).Shrink(0).
+						Tooltip("Unsaved edits")
+				}
 				if iconButton(c, k, "x", "Close Tab", 18, 12).Tooltip("Close Tab").Clicked() {
 					a.later(func() { a.closeTab(t) })
 				}
-			case t.dirty():
-				ui.Box(c).Size(7, 7).Radius(4).Background(k.Attention).Margin(0, 5, 0, 5).
-					Tooltip("Unsaved edits")
-			default:
-				ui.Box(c).Size(7, 7).Shrink(0)
-			}
+			})
 		})
 	}
 }

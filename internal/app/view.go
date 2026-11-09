@@ -31,7 +31,7 @@ func (a *app) view(c *ui.Context) {
 				}
 				a.workspaceView(c, k)
 			})
-			a.closingPanesView(c, k)
+			a.paneOverlaysView(c, k)
 		})
 	if a.err != "" {
 		a.errorBanner(c, k)
@@ -50,23 +50,25 @@ func (a *app) view(c *ui.Context) {
 	a.updateTitle()
 }
 
-// closingPanesView draws the copies of panes that have left the layout
-// while their split closes under them.
-func (a *app) closingPanesView(c *ui.Context, k *colors) {
-	if len(a.closingPanes) == 0 {
+// paneOverlaysView draws the copies of panes that have left the layout
+// while their split closes under them, or that a zoom hid, over the
+// places the cards showed.
+func (a *app) paneOverlaysView(c *ui.Context, k *colors) {
+	if len(a.paneOverlays) == 0 {
 		return
 	}
 	active := a.tab()
-	for _, cp := range append([]*closingPane(nil), a.closingPanes...) {
-		cp := cp
-		if cp.t != active {
-			// Switching tabs ends a close that was still running.
-			a.later(func() { a.finishClosingPane(cp.p) })
+	for _, o := range append([]*paneOverlay(nil), a.paneOverlays...) {
+		o := o
+		if o.t != active {
+			// Switching tabs ends a copy that was still fading.
+			a.later(func() { a.finishPaneOverlay(o.p, o.kind) })
 			continue
 		}
-		ui.Box(c.Key("closing:" + cp.p.ID)).Absolute().
-			Left(cp.rect.X).Top(cp.rect.Y).Width(cp.rect.W).Height(cp.rect.H).Clip().
-			Children(func() { a.paneCardMode(c, k, cp.t, cp.p, true) })
+		ui.Box(c.Key(overlayKey{o.p.ID, o.kind})).Absolute().
+			Left(o.rect.X).Top(o.rect.Y).Width(o.rect.W).Height(o.rect.H).Clip().
+			IgnoreInput(true).
+			Children(func() { a.paneCardMode(c, k, o.t, o.p, o.kind) })
 	}
 }
 
@@ -187,7 +189,7 @@ func iconButton(c *ui.Context, k *colors, name, label string, size, iconSize flo
 }
 
 // tabContent lays out the tab's split tree, or the one zoomed. Each
-// split gives its two sides the same share of the space.
+// split gives its sides the share its divider was dragged to.
 func (a *app) tabContent(c *ui.Context, k *colors, t *tab, vw, vh float32) {
 	if t.Root == nil {
 		a.emptyState(c, k, vw, vh)
@@ -214,16 +216,34 @@ func (a *app) nodeView(c *ui.Context, k *colors, t *tab, n *node) ui.Element {
 	var box ui.Element
 	if n.Vertical {
 		box = ui.Column(c.Key(key)).Grow(1).MinWidth(0).MinHeight(0).
-			Gap(gap).AlignItems(ui.Stretch)
+			AlignItems(ui.Stretch)
 	} else {
 		box = ui.Row(c.Key(key)).Grow(1).MinWidth(0).MinHeight(0).
-			Gap(gap).AlignItems(ui.Stretch)
+			AlignItems(ui.Stretch)
 	}
+	// The last frame's room sizes the share; a split on its first frame
+	// has none yet and keeps its own.
+	room := box.Bounds().W
+	minSize := float32(minPaneW)
+	if n.Vertical {
+		room = box.Bounds().H
+		minSize = minPaneH
+	}
+	share := splitShare(n, room, minSize)
 	box.Children(func() {
-		a.nodeView(c, k, t, n.A).Basis(0).Grow(1).MinWidth(0)
-		a.nodeView(c, k, t, n.B).Basis(0).Grow(1).MinWidth(0)
+		a.splitSide(c, k, t, n.A, share)
+		a.splitDivider(c, k, n, room)
+		a.splitSide(c, k, t, n.B, 100-share)
 	})
 	return box
+}
+
+// splitSide lays one side of a split out in its share of the room. The
+// divider takes the gap between the two sides.
+func (a *app) splitSide(c *ui.Context, k *colors, t *tab, n *node, grow float32) {
+	ui.Box(c).Grow(grow).MinWidth(0).MinHeight(0).Children(func() {
+		a.nodeView(c, k, t, n)
+	})
 }
 
 func (a *app) errorBanner(c *ui.Context, k *colors) {

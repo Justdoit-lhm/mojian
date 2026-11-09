@@ -25,8 +25,9 @@ type pane struct {
 	dragging      bool
 	closing       bool // fading out before the split closes
 	closeStarted  bool
-	lastBounds    ui.Rect // where the card showed, for its close overlay
-	enter         bool    // fades and slides in as a new pane, from a split or a terminal
+	hideStarted   bool    // a zoom hid it; its fade over the old place has begun
+	lastBounds    ui.Rect // where the card showed, for its overlay
+	enter         bool    // fades and slides in as a new pane, or back from a zoom
 	enterX        float32
 	enterY        float32
 	emptyQuery    string // the file search in an empty pane
@@ -46,11 +47,12 @@ type assetView struct {
 	pdfImageAt int // the page pdfImage was decoded for
 }
 
-// node is a leaf pane, or two panes side by side or stacked. There are
-// no pixel sizes: each side of a split takes the same share of the space
-// it is given.
+// node is a leaf pane, or two panes side by side or stacked. Share is the
+// first side's percentage of the room, from 0 to 100; the divider between
+// the two sides sets it, and zero takes half.
 type node struct {
 	Vertical bool // the panes are stacked, one above the other
+	Share    float32
 	A, B     *node
 	Pane     *pane
 }
@@ -230,7 +232,7 @@ func (n *node) splitSide(p, with *pane, side splitSide) bool {
 		if side.before() {
 			left, right = right, left
 		}
-		*n = node{Vertical: side.vertical(), A: left, B: right}
+		*n = node{Vertical: side.vertical(), Share: 50, A: left, B: right}
 		return true
 	}
 	if n.A != nil && n.A.splitSide(p, with, side) {
@@ -267,7 +269,7 @@ func (t *tab) wrapPane(to, from *pane, zone paneDrop) bool {
 	if t.Root == nil || !t.contains(to) || zone == dropNone || zone == dropCenter {
 		return false
 	}
-	split := &node{Vertical: zone.vertical()}
+	split := &node{Vertical: zone.vertical(), Share: 50}
 	toLeaf, fromLeaf := &node{Pane: to}, &node{Pane: from}
 	if zone.before() {
 		split.A, split.B = fromLeaf, toLeaf

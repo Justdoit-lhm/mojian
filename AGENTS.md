@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Mojian is a quiet text editor for plain files, written in Go against [MyGo](https://mygo.egoist.dev)'s native UI. It is not a web app: there is no webview, no cgo, no JavaScript build. One Go binary draws its own window (Metal on macOS). Tabs are workspaces; each tab holds a binary split tree of panes, and each pane edits a file, previews a picture or PDF, or runs a terminal. Version `0.2.4`, bundle id `dev.mojian.app`, macOS 13+.
+Mojian is a quiet text editor for plain files, written in Go against [MyGo](https://mygo.egoist.dev)'s native UI. It is not a web app: there is no webview, no cgo, no JavaScript build. One Go binary draws its own window (Metal on macOS). Tabs are workspaces; each tab holds a binary split tree of panes, and each pane edits a file, previews a picture or PDF, or runs a terminal. The gap between two panes is a divider you drag (or move with the arrows) to resize them; each split saves the share you chose. Version `0.2.6`, bundle id `dev.mojian.app`, macOS 13+.
 
 A project is just a folder; it keeps its own tabs and layout. Opened projects stay loaded in a workspace cache (`internal/app/workspace.go`): switching stashes the active tabs, terminals, layout and Git page and restores the next project without reading it again. Edits stay in memory until an explicit `⌘S`. On macOS and Linux every local project is opened through the local session server, so its files, Git and terminals share one process; quitting the app detaches the terminals and reopening reattaches them. Remote projects are edited directly on the host: only a listing is cached, and a file's text is read when it opens. A remote server and its terminals stay alive after the app or SSH connection disconnects. Windows is not supported.
 
@@ -103,7 +103,7 @@ To add a fixture, register it in `cmd/harness/main.go` and add its factory in `c
 - **Concurrency.** Mutate `app` state only on the UI thread. Views must not start goroutines or keep elements/parts — store `ui.Handle`, app data and widget state instead. Give stateful widgets stable identity with `c.Key(key)` before construction; bind persistent fields with `.Bind(&handle)` / `.FocusBind(&field, value)`; read committed focus via `handle.Focused(c)`.
 - **Deferred input.** Bound values update after construction; `OnClick`/`OnShortcut` run after construction, `OnChange`/`OnSubmit` observe the rebuilt view. Prefer `handle.OnShortcut(c, mods, key, fn)` for scoped commands.
 - **Writes.** Anything user-visible on disk goes through `writeFileAtomic`; never write in place.
-- **Motion.** Use `internal/motion` transitions: critically damped springs for pages, tabs, the tree and panes so a change mid-flight reverses instead of restarting, matched geometry for a pane the layout moves, and a short color curve for hover. A new pane fades and slides in with `AnimateTo` because its split is new too; a closing pane leaves the layout at once so the survivor expands, while a copy of the card fades and slides back the same way over its old place (the engine cannot keep an Exit copy when the split goes with it). Terminals skip the size match so their grid does not reflow. MyGo keeps the fade and drops movement when the system asks for less motion.
+- **Motion.** Use `internal/motion` transitions: critically damped springs for pages, tabs, the tree and panes so a change mid-flight reverses instead of restarting, matched geometry for a pane the layout moves, and a short color curve for hover. A new pane fades and slides in with `AnimateTo` because its split is new too; a closing pane leaves the layout at once so the survivor expands, while a copy of the card fades and slides back the same way over its old place (the engine cannot keep an Exit copy when the split goes with it). Zooming a pane hides the others behind copies that fade over their old places, and the zoomed card, file or terminal, flies to the tab through the same match. MyGo keeps the fade and drops movement when the system asks for less motion.
 - **Formatting.** `gofmt` clean, stdlib import block first. Long fluent UI chains go one call per line. Comments are prose sentences explaining why, and cite the reference product (Kero, GoRex, Ghostty) when a design follows one.
 - **Platform split.** Real implementations carry `//go:build darwin || linux`; stubs in `*_other.go` return `errUnsupported`. Browser builds are guarded with `runtime.GOOS == "js"`.
 
@@ -116,7 +116,7 @@ To add a fixture, register it in `cmd/harness/main.go` and add its factory in `c
 | `internal/app/settings_file.go` | `settingsFile`, load/save/reset persistence, font getters. |
 | `internal/app/panes.go` | Opening notes/assets, tabs, pane close/zoom/selection. |
 | `internal/app/menu.go` | Menu construction, command dispatch, window title, reveal project. |
-| `internal/app/model.go` | `pane`/`tab`, the `node` split tree, pane directions and moves. |
+| `internal/app/model.go` | `pane`/`tab`, the `node` split tree, pane directions, moves and split shares. |
 | `internal/app/layout.go` | Layout snapshot/restore and its JSON format. |
 | `internal/app/store.go` | Project openers (`openStoreAt`, `openDefaultStore`, `openStore`) and the default folder. |
 | `internal/project/` | `Store`, `Note`, `Asset` and `TreeNode`: listing, save, rename/copy/move, asset cache, editor buffers. |
@@ -128,7 +128,8 @@ To add a fixture, register it in `cmd/harness/main.go` and add its factory in `c
 | `internal/app/settingsui/` | Settings window: search rail, table-driven pages, keyboard recorder, font picker. |
 | `internal/app/settings_host.go` | `settingsui.Host` adapter, Settings window wrapper and editor font helper. |
 | `internal/app/settings_hosts.go` | Hosts page; it drives host setup and stays app-side. |
-| `internal/app/view.go` | Root view: title bar, workspace switch, closing panes, error banner. |
+| `internal/app/view.go` | Root view: title bar, workspace switch, pane overlays, error banner. |
+| `internal/app/splitter.go` | Draggable split dividers, share math, drag and keyboard resizing. |
 | `internal/app/pane.go` | Pane card, header, drag/drop and empty-pane picker. |
 | `internal/app/welcome.go` | Welcome/empty state and recent files. |
 | `internal/app/commands/` | Static command metadata and the per-window run registry. |

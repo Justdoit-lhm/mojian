@@ -175,12 +175,12 @@ func (a *app) addTerminalPane(tt *termTab) *pane {
 	}
 	p := newTermPane(tt)
 	p.enterSide(splitRight)
+	a.unzoom(t)
 	if t.Root == nil {
 		t.Root = &node{Pane: p}
 	} else {
-		t.Root = &node{Vertical: false, A: t.Root, B: &node{Pane: p}}
+		t.Root = &node{Vertical: false, Share: 50, A: t.Root, B: &node{Pane: p}}
 	}
-	t.Zoom = nil
 	t.Focus = p
 	a.git.Open = false
 	a.focusReq = p

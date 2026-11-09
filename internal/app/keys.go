@@ -24,7 +24,7 @@ func (a *app) focusPaneDirection(dir paneDirection) {
 	if target == nil || target == t.Focus {
 		return
 	}
-	t.Zoom = nil
+	a.unzoom(t)
 	t.Focus = target
 	a.focusReq = target
 	a.changed()
@@ -50,10 +50,10 @@ func (a *app) movePaneDirection(dir paneDirection) {
 	case paneDown:
 		zone = dropBelow
 	}
+	a.clearZoom(t)
 	if !t.movePane(from, target, zone) {
 		return
 	}
-	t.Zoom = nil
 	t.Focus = from
 	a.focusReq = from
 	a.changed()

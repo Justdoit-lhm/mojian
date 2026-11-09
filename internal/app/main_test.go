@@ -96,6 +96,7 @@ func TestLayoutRoundTrip(t *testing.T) {
 	if !t1.splitSide(t1.Focus, second, splitRight) {
 		t.Fatal("split failed")
 	}
+	t1.Root.Share = 63
 	a.saveLayout()
 
 	b := &app{workspace: &workspace{store: s, layoutPath: a.layoutPath}}
@@ -107,6 +108,9 @@ func TestLayoutRoundTrip(t *testing.T) {
 	}
 	if got := len(b.tabs[0].panes()); got != 2 {
 		t.Fatalf("panes: %d", got)
+	}
+	if got := b.tabs[0].Root.Share; got != 63 {
+		t.Errorf("the layout lost the split share: %.1f, want 63", got)
 	}
 	if got, want := b.tabs[0].panes()[0].Note.Rel, notes[0].Rel; got != want {
 		t.Errorf("the layout lost the first pane: %q, want %q", got, want)
@@ -178,6 +182,9 @@ func TestRestoreReadsTheOldSplitTree(t *testing.T) {
 	}
 	if got := len(app.tabs[0].panes()); got != 2 {
 		t.Fatalf("panes: %d", got)
+	}
+	if got := app.tabs[0].Root.Share; got != 50 {
+		t.Errorf("an old layout did not split evenly: %.1f", got)
 	}
 	if got := app.tabs[0].panes()[0].Note.Rel; got != "a.md" {
 		t.Errorf("first pane: %q", got)

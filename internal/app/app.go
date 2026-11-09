@@ -76,7 +76,7 @@ type app struct {
 	pickerSel      int
 	pickerErr      string
 
-	closingPanes []*closingPane
+	paneOverlays []*paneOverlay
 
 	sshPick  bool
 	sshQuery string

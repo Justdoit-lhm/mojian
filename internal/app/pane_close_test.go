@@ -28,7 +28,7 @@ func TestClosingPaneFadesOverItsOldPlace(t *testing.T) {
 	if !target.closing {
 		t.Fatal("the closing pane did not start fading")
 	}
-	if got := len(a.closingPanes); got != 1 {
+	if got := len(a.paneOverlays); got != 1 {
 		t.Fatalf("closing overlays: %d", got)
 	}
 	if got := len(a.tab().panes()); got != 1 || a.tab().panes()[0] != survivor {
@@ -39,13 +39,13 @@ func TestClosingPaneFadesOverItsOldPlace(t *testing.T) {
 	}
 	tt.Advance(60 * time.Millisecond)
 	tt.Frame()
-	if !target.closing || len(a.closingPanes) != 1 {
+	if !target.closing || len(a.paneOverlays) != 1 {
 		t.Fatal("the overlay left mid-fade")
 	}
 	tt.Advance(400 * time.Millisecond)
 	tt.Frame()
 	tt.Frame()
-	if target.closing || len(a.closingPanes) != 0 {
+	if target.closing || len(a.paneOverlays) != 0 {
 		t.Fatal("the closing overlay never finished")
 	}
 }

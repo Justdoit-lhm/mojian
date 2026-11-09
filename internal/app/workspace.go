@@ -77,7 +77,7 @@ func (a *app) activeWorkspaceKey() string {
 // nothing to copy.
 func (a *app) stashActiveWorkspace() {
 	a.initWorkspaces()
-	a.dropClosingPanes(nil)
+	a.dropPaneOverlays(nil)
 	// A Git refresh from this project must not land in the next one.
 	a.git.Seq++
 	a.git.DiffSeq++
