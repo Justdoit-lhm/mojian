@@ -89,21 +89,19 @@ func TestPaneFocusShortcutsMoveInAllDirections(t *testing.T) {
 }
 
 func TestPaneSplitShortcutsSplitRightAndDown(t *testing.T) {
-	for _, dir := range []struct {
-		mods ui.Modifiers
-		name string
-	}{
-		{ui.Cmd, "Cmd+D"},
-		{ui.Cmd | ui.Shift, "Shift+Cmd+D"},
-	} {
+	for _, accel := range []string{cmdSplitRight.Default(), cmdSplitDown.Default()} {
+		mods, key, ok := parseAccel(accel)
+		if !ok {
+			t.Fatalf("%q does not parse", accel)
+		}
 		a := newProjectApp(t)
 		a.harness = true
 		tt := ui.NewTester(a.view, 1100, 700)
 		tt.Frame()
-		tt.Key(dir.mods, ui.KeyD)
+		tt.Key(mods, key)
 		tt.Frame()
 		if got := len(a.tab().panes()); got != 2 {
-			t.Fatalf("%s left %d panes, want 2", dir.name, got)
+			t.Fatalf("%s left %d panes, want 2", accel, got)
 		}
 	}
 }
