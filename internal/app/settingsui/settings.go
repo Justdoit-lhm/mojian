@@ -51,7 +51,7 @@ func (u *UI) settingsIndex() []settingsEntry {
 		out = append(out, settingsEntry{row.Cat, row.Title, row.Words})
 	}
 	for _, cmd := range u.commands() {
-		if cmd.Accel == "" || !cmd.Available {
+		if !cmd.Available {
 			continue
 		}
 		label := strings.TrimSuffix(cmd.Title, "…")
@@ -286,7 +286,7 @@ func (u *UI) settingsPage(c *ui.Context, k *colors, cat int) {
 		u.settingsHostsPage(c, k)
 	case settingsGit:
 		u.settingsGenericPage(c, k, cat)
-		u.settingsNote(c, k, "Open the page with "+nativeKeys("⇧⌘G")+", or the Git button in the title bar.")
+		u.settingsNote(c, k, "Open the page with "+nativeKeys("⌃⇧G")+", or the Git button in the title bar.")
 	case settingsUpdates:
 		u.settingsUpdatesPage(c, k)
 	default:

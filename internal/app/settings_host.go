@@ -31,6 +31,7 @@ func (h settingsHost) ServerAlias() string          { return h.a.serverAlias }
 func (h settingsHost) Store() *store                { return h.a.store }
 func (h settingsHost) ActiveRemote() *remote.Conn   { return h.a.activeRemote() }
 func (h settingsHost) Shortcuts() map[string]string { return h.a.shortcutKeys }
+func (h settingsHost) ShowTabKeys() string          { return showTabKeys() }
 func (h settingsHost) FontSize() float64            { return h.a.fontSize() }
 func (h settingsHost) CheckForUpdates()             { h.a.checkForUpdates() }
 func (h settingsHost) InstallAvailableUpdate()      { h.a.installAvailableUpdate() }
@@ -56,7 +57,7 @@ func (h settingsHost) Commands() []settingsui.Command {
 		out = append(out, settingsui.Command{
 			ID:        c.ID,
 			Title:     c.Title,
-			Accel:     c.Accel,
+			Accel:     c.Default(),
 			Keys:      h.a.commandKeys(c),
 			Available: commandAvailable(c),
 		})

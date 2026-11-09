@@ -6,6 +6,7 @@ package project
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -106,7 +107,46 @@ func (n *Note) NewState() *editor.State {
 		NoActiveLine: true,
 		Placeholder:  "Start writing…",
 		Label:        n.Title,
+		Bindings:     editorBindings(),
 	}
+}
+
+// editorBindings keeps the window's pane family working in the browser
+// and the harness, and keeps the editor commands those keys replace on a
+// key of their own. The menu bar takes Ghostty's keys before the editor
+// on macOS, but a browser build has no menu, so the editor would take
+// them and the pane commands would never see them. A NoCommand binding
+// hands the key back to the window.
+func editorBindings() []editor.Binding {
+	add := ui.Ctrl | ui.Super
+	if runtime.GOOS != "darwin" {
+		add = ui.Ctrl | ui.Alt | ui.Shift
+	}
+	b := []editor.Binding{
+		// Pane focus owns Command+Option and every arrow.
+		{Mods: ui.Cmd | ui.Alt, Key: ui.KeyLeft, Command: editor.NoCommand},
+		{Mods: ui.Cmd | ui.Alt, Key: ui.KeyRight, Command: editor.NoCommand},
+		{Mods: ui.Cmd | ui.Alt, Key: ui.KeyUp, Command: editor.NoCommand},
+		{Mods: ui.Cmd | ui.Alt, Key: ui.KeyDown, Command: editor.NoCommand},
+		// Multi-cursor moves aside.
+		{Mods: add, Key: ui.KeyUp, Command: editor.AddCursorAbove},
+		{Mods: add, Key: ui.KeyDown, Command: editor.AddCursorBelow},
+		// Split Right owns Command+D, and Zoom Pane owns the platform's
+		// Shift+Enter; Select Next and New Line Above move aside.
+		{Mods: ui.Ctrl | ui.Shift, Key: ui.KeyD, Command: editor.SelectNext},
+		{Mods: ui.Alt | ui.Shift, Key: ui.KeyEnter, Command: editor.NewlineAbove},
+	}
+	if runtime.GOOS == "darwin" {
+		b = append(b,
+			editor.Binding{Mods: ui.Super, Key: ui.KeyD, Command: editor.NoCommand},
+			editor.Binding{Mods: ui.Super | ui.Shift, Key: ui.KeyEnter, Command: editor.NoCommand},
+		)
+	} else {
+		b = append(b,
+			editor.Binding{Mods: ui.Ctrl | ui.Shift, Key: ui.KeyEnter, Command: editor.NoCommand},
+		)
+	}
+	return b
 }
 
 // LineNumbersFor keeps line numbers off prose and on source code.

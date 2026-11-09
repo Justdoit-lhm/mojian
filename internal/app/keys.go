@@ -1,20 +1,7 @@
 package app
 
-import "github.com/egoist/mygo/ui"
-
-// paneKeys moves the focus with Option and the arrows: left and right
-// between columns, up and down between panes stacked in the same column.
-func (a *app) paneKeys(c *ui.Context) {
-	c.OnShortcut(ui.Alt, ui.KeyLeft, func() { a.focusPaneDirection(paneLeft) })
-	c.OnShortcut(ui.Alt, ui.KeyRight, func() { a.focusPaneDirection(paneRight) })
-	c.OnShortcut(ui.Alt, ui.KeyUp, func() { a.focusPaneDirection(paneUp) })
-	c.OnShortcut(ui.Alt, ui.KeyDown, func() { a.focusPaneDirection(paneDown) })
-	c.OnShortcut(ui.Alt|ui.Shift, ui.KeyLeft, func() { a.movePaneDirection(paneLeft) })
-	c.OnShortcut(ui.Alt|ui.Shift, ui.KeyRight, func() { a.movePaneDirection(paneRight) })
-	c.OnShortcut(ui.Alt|ui.Shift, ui.KeyUp, func() { a.movePaneDirection(paneUp) })
-	c.OnShortcut(ui.Alt|ui.Shift, ui.KeyDown, func() { a.movePaneDirection(paneDown) })
-}
-
+// focusPaneDirection gives the focus to the pane on the side, and no
+// pane there leaves it where it is.
 func (a *app) focusPaneDirection(dir paneDirection) {
 	t := a.tab()
 	if t == nil {

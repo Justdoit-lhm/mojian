@@ -175,18 +175,10 @@ var Rows = []Row{
 	// Keyboard (custom controls; rows feed search)
 	{ID: "shortcuts", Cat: Keyboard, Section: "SHORTCUTS", Title: "SHORTCUTS",
 		Words: "shortcuts keys keybindings hotkeys keyboard commands", Kind: Custom},
-	{ID: "pane-navigation", Cat: Keyboard, Section: "PANE NAVIGATION", Title: "PANE NAVIGATION",
-		Words: "pane navigation focus move keys", Kind: Custom},
-	{ID: "move-focus", Cat: Keyboard, Section: "PANE NAVIGATION", Title: "Move focus",
-		Detail: "Focus the neighboring pane.", Words: "pane navigation focus arrow keys", Kind: Custom},
-	{ID: "move-pane", Cat: Keyboard, Section: "PANE NAVIGATION", Title: "Move the focused pane",
-		Detail: "Put it on the neighbor's edge.", Words: "pane move reorder arrow keys", Kind: Custom},
 	{ID: "tab-switching", Cat: Keyboard, Section: "TAB SWITCHING", Title: "TAB SWITCHING",
 		Words: "tab switching next previous keys", Kind: Custom},
 	{ID: "show-tab", Cat: Keyboard, Section: "TAB SWITCHING", Title: "Show tab",
 		Detail: "Go to a tab by its position.", Words: "tab number position shortcut", Kind: Custom},
-	{ID: "trash-shortcut", Cat: Keyboard, Section: "TAB SWITCHING", Title: "Move to Trash",
-		Detail: "On a file in the file tree.", Words: "trash delete remove file tree shortcut", Kind: Custom},
 
 	// Hosts (custom controls; rows feed search)
 	{ID: "add-host", Cat: Hosts, Section: "ADD HOST", Title: "ADD HOST",

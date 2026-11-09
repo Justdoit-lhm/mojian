@@ -28,7 +28,7 @@ func (a *app) commandAccel(c *commands.Command) string {
 	if v, ok := a.shortcutKeys[c.ID]; ok {
 		return v
 	}
-	return c.Accel
+	return c.Default()
 }
 
 // commandKeys is the keys a command shows beside its name, in the
@@ -56,8 +56,23 @@ func (a *app) menuAccel(c *commands.Command) string {
 	return a.commandAccel(c)
 }
 
+// showTabAccel is the accelerator of the nth tab, from 1 to 9: Command
+// and the digit on a Mac, Option elsewhere, as Ghostty binds them.
+func showTabAccel(n int) string {
+	if runtime.GOOS == "darwin" {
+		return "CmdOrCtrl+" + strconv.Itoa(n)
+	}
+	return "Alt+" + strconv.Itoa(n)
+}
+
+// showTabKeys writes the tab digits for the platform, as Settings shows
+// them: ⌘1…⌘9 on a Mac, Alt+1…Alt+9 elsewhere.
+func showTabKeys() string {
+	return shortcutDisplay(showTabAccel(1)) + "…" + shortcutDisplay(showTabAccel(9))
+}
+
 // shortcutDisplay writes an accelerator in the keys of the platform, as
-// command keys show them: ⌥⇧⌘D on a Mac, Alt+Shift+Ctrl+D elsewhere.
+// command keys show them: ⌥⇧⌘→ on a Mac, Ctrl+Alt+Shift+Right elsewhere.
 func shortcutDisplay(accel string) string {
 	if accel == "" {
 		return "None"
@@ -234,7 +249,7 @@ func (a *app) setShortcutValue(id, accel string) string {
 		}
 	}
 	c := commandByID(id)
-	if c != nil && strings.EqualFold(accel, c.Accel) {
+	if c != nil && strings.EqualFold(accel, c.Default()) {
 		delete(sc, id)
 	} else {
 		sc[id] = accel

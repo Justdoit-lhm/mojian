@@ -36,7 +36,6 @@ func (a *app) view(c *ui.Context) {
 	if a.err != "" {
 		a.errorBanner(c, k)
 	}
-	a.paneKeys(c)
 	a.projectPickerModal(c, k)
 	a.remotePickerModal(c, k)
 	a.sshPicker(c, k)

@@ -17,11 +17,11 @@ Mojian is a quiet text editor for plain files, built with [MyGo](https://mygo.eg
 ## Start here
 
 - **⌘O** opens a project folder, and the name at the top left switches between them.
-- **⇧⌘B** shows the file tree.
+- **⌘B** shows the file tree.
 - **⌘N** names a new file; **⇧⌘N** makes a folder.
-- **⇧⌘D** splits the editor, so you can work in two places at once.
-- **⇧⌘O** opens any file of the project.
-- **⇧⌘T** opens a terminal on the right, in the folder you are in.
+- **Pane › Split Right** splits the editor to the right, so you can work in two places at once.
+- **⌘P** opens any file of the project.
+- **⌃ + backtick** toggles a terminal on the right, in the folder you are in.
 - **⇧⌘P** opens the command palette.
 
 Mojian edits text and code, with syntax highlighting for Python, JavaScript,
@@ -36,7 +36,7 @@ var Note = platformNote()
 func platformNote() string {
 	note := text
 	if !platform.TerminalsSupported() {
-		note = strings.Replace(note, "- **⇧⌘T** opens a terminal on the right, in the folder you are in.\n", "", 1)
+		note = strings.Replace(note, "- **⌃ + backtick** toggles a terminal on the right, in the folder you are in.\n", "", 1)
 	}
 	return platform.NativeKeys(note)
 }

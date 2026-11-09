@@ -1,11 +1,21 @@
 # Changelog
 
-## Unreleased
+## 0.2.8
 
 - The Open Folder picker lists folders reached through symbolic links, and
   its **Hidden folders** switch beside Cancel includes names that start
   with a dot. A project opened through a symlink is stored at its target,
   so its files are listed.
+- The tab and pane defaults now follow Ghostty: `⌘D` and `⇧⌘D` split
+  right and down, `⌥⌘` and the arrows move focus, `⇧⌘Enter` zooms a
+  pane, `⌘W` closes a pane while `⌥⌘W` closes the tab, `⇧⌘[` and `⇧⌘]`
+  switch tabs, and `⌘1` through `⌘9` go to a tab. Linux follows
+  Ghostty's Control+Shift defaults for a new tab, splits and zoom, and
+  keeps Control+Alt+W for closing a tab. Select Next and New Line Above
+  move to `⌃⇧D` and `⌥⇧Enter` so those keys belong to the window. Left,
+  up and Move Pane have no default keys; Settings lists them so they can
+  be assigned. Open File moves to `⌘P`, the tree to `⌘B`, the terminal
+  to Control+backtick, Git to `⌃⇧G` and SSH to `⇧⌘S`.
 - Mojian accepts a path on the command line: `mojian .` opens the
   current folder, `mojian ~/git/abc` opens that project, and
   `mojian ~/git/abc/README.md` opens the file with its folder as the

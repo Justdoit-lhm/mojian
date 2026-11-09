@@ -62,7 +62,7 @@ func (a *app) menu() *mygo.Menu {
 		i := i
 		tabItems = append(tabItems, &mygo.MenuItem{
 			Label:       "Show Tab " + string(rune('0'+i)),
-			Accelerator: "CmdOrCtrl+" + string(rune('0'+i)),
+			Accelerator: showTabAccel(i),
 			Click: func(*mygo.MenuItem, *mygo.Window) {
 				a.showTab(i)
 			},
@@ -119,10 +119,22 @@ func (a *app) menu() *mygo.Menu {
 			item(cmdRenameTab),
 		)},
 		{Label: "Pane", Submenu: []*mygo.MenuItem{
+			item(cmdFocusLeft),
+			item(cmdFocusRight),
+			item(cmdFocusUp),
+			item(cmdFocusDown),
+			mygo.Separator(),
 			item(cmdSplitLeft),
 			item(cmdSplitRight),
 			item(cmdSplitUp),
 			item(cmdSplitDown),
+			mygo.Separator(),
+			{Label: "Move Pane", Submenu: []*mygo.MenuItem{
+				item(cmdMoveLeft),
+				item(cmdMoveRight),
+				item(cmdMoveUp),
+				item(cmdMoveDown),
+			}},
 			mygo.Separator(),
 			item(cmdZoom),
 			mygo.Separator(),

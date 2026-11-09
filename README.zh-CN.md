@@ -74,9 +74,9 @@ mojian ~/git/abc/README.md      # 文件，其所在文件夹成为项目
 
 文件树展示磁盘上真实存在的目录：
 
-- 用 `Shift+Cmd+B` / `Ctrl+Shift+B` 显示或隐藏。
+- 用 `Cmd+B` / `Ctrl+B` 显示或隐藏。
 - 用文件树的搜索框过滤可见目录。
-- 用 **打开文件**（`Shift+Cmd+O` / `Ctrl+Shift+O`）搜索项目中的所有文件。
+- 用 **打开文件**（`Cmd+P` / `Ctrl+P`）搜索项目中的所有文件。
 - 直接在文件树中新建文件与文件夹。
 - 右键可打开、重命名、创建副本、复制、剪切、复制路径、在文件管理器中显示，或移到废纸篓。
 
@@ -84,15 +84,15 @@ mojian ~/git/abc/README.md      # 文件，其所在文件夹成为项目
 
 ## 标签页、窗格与终端
 
-按 `Cmd+T` / `Ctrl+T` 打开标签页。用 `Shift+Cmd+D` / `Shift+Cmd+E` 向右或向下拆分当前窗格，用 `Option+Cmd` / `Ctrl+Alt` 加方向键向左或向上拆分。新窗格会带一个内联文件搜索。
+按 `Cmd+T` / `Ctrl+Shift+T` 打开标签页，与 Ghostty 一致。用 `Cmd+D` / `Shift+Cmd+D`（Linux 上是 `Ctrl+Shift+O` / `Ctrl+Shift+E`）向右或向下拆分当前窗格；向左、向上默认没有快捷键，可在 **设置 › 快捷键** 中绑定。新窗格会带一个内联文件搜索。
 
-拖动窗格标题到另一个窗格的边缘即可移动它。用 `Option` / `Alt` 加方向键在窗格之间移动焦点，用 `Option+Shift` / `Alt+Shift` 加方向键移动当前窗格，用 `Shift+Cmd+M` / `Ctrl+Shift+M` 放大它。
+拖动窗格标题到另一个窗格的边缘即可移动它。用 `Option+Cmd` / `Ctrl+Alt` 加方向键在窗格之间移动焦点，用 `Shift+Cmd+Enter` / `Ctrl+Shift+Enter` 放大当前窗格，用 `Cmd+W` 关闭窗格，用 `Option+Cmd+W` / `Ctrl+Alt+W` 关闭标签页。
 
 双击标签页重命名，双击窗格标题放大，或右键标签页查看更多操作。
 
-按 `Shift+Cmd+T` / `Ctrl+Shift+T` 在项目根目录打开终端。终端也是窗格，可以像其他窗格一样拆分、移动、放大和关闭。在 macOS 和 Linux 上，退出墨间后 shell 仍然存活，重新打开会接回。
+按 `Ctrl` 加反引号键（macOS 上是 `⌃` 加反引号）在项目根目录切换终端。终端也是窗格，可以像其他窗格一样拆分、移动、放大和关闭。在 macOS 和 Linux 上，退出墨间后 shell 仍然存活，重新打开会接回。
 
-按 `Shift+Cmd+L` / `Ctrl+Shift+L` 打开到 **设置 › 主机** 中某个主机的 SSH 终端。
+按 `Shift+Cmd+S` / `Ctrl+Shift+S` 打开到 **设置 › 主机** 中某个主机的 SSH 终端。
 
 ## 写作与预览
 
@@ -106,7 +106,7 @@ Markdown 窗格可在标题栏切换源码与预览。**设置 › 编辑器** �
 
 ### Git
 
-按 `Shift+Cmd+G` / `Ctrl+Shift+G` 将工作区与 `HEAD` 比较。左侧显示状态，右侧是带两列行号的 diff，包含已暂存、未暂存和未跟踪的改动。
+按 `Ctrl+Shift+G`（macOS 上是 `⌃⇧G`）将工作区与 `HEAD` 比较。左侧显示状态，右侧是带两列行号的 diff，包含已暂存、未暂存和未跟踪的改动。
 
 ### 命令面板
 
@@ -142,32 +142,34 @@ Markdown 窗格可在标题栏切换源码与预览。**设置 › 编辑器** �
 
 ## 快捷键
 
-应用内会按平台显示对应按键。下表是默认绑定；**设置 › 快捷键** 可以重新绑定、恢复默认或解除绑定。
+应用内会按平台显示对应按键。下表是默认绑定；**设置 › 快捷键** 可以重新绑定、恢复默认或解除绑定。标签页与窗格的默认键位跟随 Ghostty：`⌘` 用于文件、标签页与工具，`⌘⌥` 用于在窗格间移动，`⌃` 用于旁边的面板。
 
 | 操作 | macOS | Linux |
 |---|---|---|
 | 打开项目 | `⌘O` | `Ctrl+O` |
-| 打开文件 | `⇧⌘O` | `Ctrl+Shift+O` |
+| 打开文件 | `⌘P` | `Ctrl+P` |
 | 新建文件 | `⌘N` | `Ctrl+N` |
 | 新建文件夹 | `⇧⌘N` | `Ctrl+Shift+N` |
 | 重命名选中项 | `F2` | `F2` |
 | 移到废纸篓 | `⌘⌫` | `Ctrl+Backspace` |
 | 保存 | `⌘S` | `Ctrl+S` |
-| 新建标签页 | `⌘T` | `Ctrl+T` |
-| 关闭窗格 / 标签页 | `⌘W` / `⇧⌘W` | `Ctrl+W` / `Ctrl+Shift+W` |
-| 下一个 / 上一个标签页 | `⌃⇥` / `⌃⇧⇥` | `Ctrl+Tab` / `Ctrl+Shift+Tab` |
-| 显示标签页 1-9 | `⌘1…⌘9` | `Ctrl+1…Ctrl+9` |
-| 向右 / 向下拆分 | `⇧⌘D` / `⇧⌘E` | `Ctrl+Shift+D` / `Ctrl+Shift+E` |
-| 向左 / 向上拆分 | `⌥⌘←` / `⌥⌘↑` | `Ctrl+Alt+Left` / `Ctrl+Alt+Up` |
-| 聚焦相邻窗格 | `⌥` + 方向键 | `Alt` + 方向键 |
-| 移动当前窗格 | `⌥⇧` + 方向键 | `Alt+Shift` + 方向键 |
-| 放大窗格 | `⇧⌘M` | `Ctrl+Shift+M` |
-| 显示 / 隐藏文件树 | `⇧⌘B` | `Ctrl+Shift+B` |
-| 打开 / 关闭终端 | `⇧⌘T` | `Ctrl+Shift+T` |
-| SSH 终端 | `⇧⌘L` | `Ctrl+Shift+L` |
-| Git 工作区 | `⇧⌘G` | `Ctrl+Shift+G` |
+| 新建标签页 | `⌘T` | `Ctrl+Shift+T` |
+| 关闭窗格 / 标签页 | `⌘W` / `⌥⌘W` | `Ctrl+Shift+W` / `Ctrl+Alt+W` |
+| 下一个 / 上一个标签页 | `⇧⌘]` / `⇧⌘[` | `Ctrl+Tab` / `Ctrl+Shift+Tab` |
+| 显示标签页 1-9 | `⌘1…⌘9` | `Alt+1…Alt+9` |
+| 向右 / 向下拆分 | `⌘D` / `⇧⌘D` | `Ctrl+Shift+O` / `Ctrl+Shift+E` |
+| 向左 / 向上拆分 | 在设置中绑定 | 在设置中绑定 |
+| 聚焦相邻窗格 | `⌥⌘` + 方向键 | `Ctrl+Alt` + 方向键 |
+| 移动当前窗格 | 拖动，或在设置中绑定 | 拖动，或在设置中绑定 |
+| 放大窗格 | `⇧⌘↩` | `Ctrl+Shift+Enter` |
+| 显示 / 隐藏文件树 | `⌘B` | `Ctrl+B` |
+| 打开 / 关闭终端 | `⌃` + 反引号 | `Ctrl` + 反引号 |
+| SSH 终端 | `⇧⌘S` | `Ctrl+Shift+S` |
+| Git 工作区 | `⌃⇧G` | `Ctrl+Shift+G` |
 | 命令面板 | `⇧⌘P` | `Ctrl+Shift+P` |
 | 设置 | `⌘,` | `Ctrl+,` |
+
+有两个 Ghostty 键位留给编辑器：`⌘[` / `⌘]` 减少 / 增加缩进，`⌘Enter` 在下方插入一行。
 
 终端与 SSH 快捷键仅在 macOS 和 Linux 上可用。
 

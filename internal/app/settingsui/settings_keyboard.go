@@ -37,7 +37,7 @@ func (u *UI) settingsKeyboardPage(c *ui.Context, k *colors) {
 		})
 		ui.Divider(c).Margin(0, 16)
 		for _, cmd := range u.commands() {
-			if cmd.Accel == "" || !cmd.Available {
+			if !cmd.Available {
 				continue
 			}
 			label := strings.TrimSuffix(cmd.Title, "…")
@@ -56,17 +56,10 @@ func (u *UI) settingsKeyboardPage(c *ui.Context, k *colors) {
 				Padding(14, 16)
 		}
 	})
-	u.settingsSection(c, k, "PANE NAVIGATION", func() {
-		u.settingsFixedKeys(c, k, "Move focus", nativeKeys("⌥←  ⌥→  ⌥↑  ⌥↓"),
-			"Focus the neighboring pane.")
-		u.settingsFixedKeys(c, k, "Move the focused pane", nativeKeys("⌥⇧←  ⌥⇧→  ⌥⇧↑  ⌥⇧↓"),
-			"Put it on the neighbor's edge.")
-	})
 	u.settingsSection(c, k, "TAB SWITCHING", func() {
-		u.settingsFixedKeys(c, k, "Show tab", nativeKeys("⌘1…⌘9"), "Go to a tab by its position.")
-		u.settingsFixedKeys(c, k, "Move to Trash", nativeKeys("⌘⌫"), "On a file in the file tree.")
+		u.settingsFixedKeys(c, k, "Show tab", u.ShowTabKeys(), "Go to a tab by its position.")
 	})
-	u.settingsNote(c, k, "A key used twice is taken from the command that had it. Escape cancels; Backspace unbinds.")
+	u.settingsNote(c, k, "A key used twice is taken from the command that had it. Commands without keys show None; click one to assign it. Escape cancels; Backspace unbinds.")
 }
 
 func (u *UI) settingsFixedKeys(c *ui.Context, k *colors, title, keys, detail string) {

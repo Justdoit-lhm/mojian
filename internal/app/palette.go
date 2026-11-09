@@ -1,7 +1,6 @@
 package app
 
 import (
-	"fmt"
 	"runtime"
 	"strings"
 
@@ -19,6 +18,14 @@ var (
 	cmdTrashNode   = commands.ByID("trash")
 	cmdNewTab      = commands.ByID("new-tab")
 	cmdSave        = commands.ByID("save")
+	cmdFocusLeft   = commands.ByID("focus-left")
+	cmdFocusRight  = commands.ByID("focus-right")
+	cmdFocusUp     = commands.ByID("focus-up")
+	cmdFocusDown   = commands.ByID("focus-down")
+	cmdMoveLeft    = commands.ByID("move-pane-left")
+	cmdMoveRight   = commands.ByID("move-pane-right")
+	cmdMoveUp      = commands.ByID("move-pane-up")
+	cmdMoveDown    = commands.ByID("move-pane-down")
 	cmdSplitLeft   = commands.ByID("split-left")
 	cmdSplitRight  = commands.ByID("split-right")
 	cmdSplitUp     = commands.ByID("split-up")
@@ -99,7 +106,7 @@ func (a *app) paletteItems() []paletteItem {
 		i := i
 		keys := ""
 		if i < 9 {
-			keys = nativeKeys(fmt.Sprintf("⌘%d", i+1))
+			keys = shortcutDisplay(showTabAccel(i + 1))
 		}
 		tabDetail := "Tab"
 		if detail != "" {
@@ -229,7 +236,10 @@ func (a *app) shortcuts(c *ui.Context) {
 	}
 	for i := 1; i <= 9; i++ {
 		i := i
-		key := ui.Key(int(ui.Key1) + i - 1)
-		c.OnShortcut(ui.Cmd, key, func() { a.showTab(i) })
+		mods, key, ok := parseAccel(showTabAccel(i))
+		if !ok {
+			continue
+		}
+		c.OnShortcut(mods, key, func() { a.showTab(i) })
 	}
 }

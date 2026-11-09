@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -117,9 +118,28 @@ func TestSettingsShortcutRecording(t *testing.T) {
 		t.Fatalf("save shortcut display: %q", got)
 	}
 	// The default is not an override.
-	a.setShortcut(cmdSave.ID, cmdSave.Accel)
+	a.setShortcut(cmdSave.ID, cmdSave.Default())
 	if _, ok := a.shortcutKeys[cmdSave.ID]; ok {
 		t.Fatalf("the default was kept as an override: %v", a.shortcutKeys)
+	}
+}
+
+func TestShortcutDefaultsParseAndDoNotCollide(t *testing.T) {
+	seen := map[string]string{}
+	for _, c := range paletteCommands {
+		accel := c.Default()
+		if accel == "" {
+			continue
+		}
+		mods, key, ok := parseAccel(accel)
+		if !ok {
+			t.Fatalf("%s: %q does not parse", c.ID, accel)
+		}
+		sig := fmt.Sprintf("%d/%d", mods, key)
+		if other, ok := seen[sig]; ok {
+			t.Fatalf("%s and %s both use %s", other, c.ID, accel)
+		}
+		seen[sig] = c.ID
 	}
 }
 
@@ -148,7 +168,7 @@ func TestSettingsShortcutPersistenceAndConflict(t *testing.T) {
 		t.Fatalf("loaded shortcut: %q", loaded.commandAccel(cmdSave))
 	}
 	// Binding a command to another's keys unbinds that one.
-	a.setShortcut(cmdSave.ID, cmdPalette.Accel)
+	a.setShortcut(cmdSave.ID, cmdPalette.Default())
 	if got := a.commandAccel(cmdPalette); got != "" {
 		t.Fatalf("palette kept the taken keys: %q", got)
 	}

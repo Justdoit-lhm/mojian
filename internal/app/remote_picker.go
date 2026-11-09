@@ -241,7 +241,7 @@ func (a *app) serverChip(c *ui.Context, k *colors) {
 	label := a.remoteName()
 	chip := ui.Row(c).Gap(6).Padding(3, 8, 3, 6).Radius(radius).AlignItems(ui.Center).
 		Cursor(ui.CursorPointer).Role(ui.RoleButton).Label("Switch server: " + label).
-		Tooltip("Server  " + nativeKeys("⇧⌘L")).MaxWidth(170).Shrink(0).ClipX().
+		Tooltip("Server  " + nativeKeys("⇧⌘S")).MaxWidth(170).Shrink(0).ClipX().
 		Transition(motion.Colors)
 	if chip.Hovered() || a.serverOpen {
 		chip.Background(k.Hover)

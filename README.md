@@ -73,9 +73,9 @@ On first launch, Mojian opens `~/Documents/Mojian` when no project is selected a
 
 The Explorer shows the folder as it exists on disk:
 
-- Toggle it with `Shift+Cmd+B` / `Ctrl+Shift+B`.
+- Toggle it with `Cmd+B` / `Ctrl+B`.
 - Filter the visible tree with its search field.
-- Search every project file with **Open File**, `Shift+Cmd+O` / `Ctrl+Shift+O`.
+- Search every project file with **Open File**, `Cmd+P` / `Ctrl+P`.
 - Create files and folders directly in the tree.
 - Right-click to open, rename, duplicate, copy, cut, copy a path, reveal, or move an entry to trash.
 
@@ -83,15 +83,15 @@ Generated folders such as `.git`, `node_modules`, `dist`, and `build` stay hidde
 
 ## Tabs, panes, and terminals
 
-Press `Cmd+T` / `Ctrl+T` to open a tab. Split the current pane right or down with `Shift+Cmd+D` / `Shift+Cmd+E`, or left and up with `Option+Cmd` / `Ctrl+Alt` and the arrow keys. A new pane opens with an inline file search.
+Press `Cmd+T` / `Ctrl+Shift+T` to open a tab, as in Ghostty. Split the focused pane right or down with `Cmd+D` / `Shift+Cmd+D` (`Ctrl+Shift+O` / `Ctrl+Shift+E` on Linux); left and up have no default keys, and can be assigned in **Settings › Keyboard**. A new pane opens with an inline file search.
 
-Drag a pane by its header onto another pane's edge to move it. Use `Option` / `Alt` and the arrows to move focus, `Option+Shift` / `Alt+Shift` and the arrows to move the focused pane, and `Shift+Cmd+M` / `Ctrl+Shift+M` to zoom it.
+Drag a pane by its header onto another pane's edge to move it. Use `Option+Cmd` / `Ctrl+Alt` and the arrows to move focus, `Shift+Cmd+Enter` / `Ctrl+Shift+Enter` to zoom the focused pane, `Cmd+W` to close a pane, and `Option+Cmd+W` / `Ctrl+Alt+W` to close the tab.
 
 Double-click a tab to rename it, double-click a pane header to zoom it, or right-click a tab for more actions.
 
-Press `Shift+Cmd+T` / `Ctrl+Shift+T` to open a terminal at the project root. Terminals are panes, so they can be split, moved, zoomed, and closed like any other pane. On macOS and Linux, quitting Mojian leaves their shells alive and reopening attaches them again.
+Press `Ctrl` and the backtick key (`⌃` + backtick on macOS) to toggle a terminal at the project root. Terminals are panes, so they can be split, moved, zoomed, and closed like any other pane. On macOS and Linux, quitting Mojian leaves their shells alive and reopening attaches them again.
 
-Press `Shift+Cmd+L` / `Ctrl+Shift+L` to open an SSH terminal to a host from **Settings › Hosts**.
+Press `Shift+Cmd+S` / `Ctrl+Shift+S` to open an SSH terminal to a host from **Settings › Hosts**.
 
 ## Writing and previewing
 
@@ -105,7 +105,7 @@ Press `Cmd+S` / `Ctrl+S` to write every unsaved note atomically. Unsaved work is
 
 ### Git
 
-Press `Shift+Cmd+G` / `Ctrl+Shift+G` to compare the working tree with `HEAD`. Statuses appear on the left and a two-gutter diff on the right, including staged, unstaged, and untracked work.
+Press `Ctrl+Shift+G` on both platforms to compare the working tree with `HEAD`. Statuses appear on the left and a two-gutter diff on the right, including staged, unstaged, and untracked work.
 
 ### Command palette
 
@@ -141,32 +141,34 @@ Self-updates require a writable installation, such as the macOS app bundle or th
 
 ## Keyboard shortcuts
 
-The labels in Mojian follow the platform. These are the default bindings; **Settings › Keyboard** can rebind, reset, or unbind them.
+The labels in Mojian follow the platform. These are the default bindings; **Settings › Keyboard** can rebind, reset, or unbind them. The tab and pane defaults follow Ghostty: `⌘` for files, tabs and tools, `⌘⌥` for moving through panes, and `⌃` for the panels beside them.
 
 | Action | macOS | Linux |
 |---|---|---|
 | Open project | `⌘O` | `Ctrl+O` |
-| Open file | `⇧⌘O` | `Ctrl+Shift+O` |
+| Open file | `⌘P` | `Ctrl+P` |
 | New file | `⌘N` | `Ctrl+N` |
 | New folder | `⇧⌘N` | `Ctrl+Shift+N` |
 | Rename selected entry | `F2` | `F2` |
 | Move selected entry to Trash | `⌘⌫` | `Ctrl+Backspace` |
 | Save | `⌘S` | `Ctrl+S` |
-| New tab | `⌘T` | `Ctrl+T` |
-| Close pane / tab | `⌘W` / `⇧⌘W` | `Ctrl+W` / `Ctrl+Shift+W` |
-| Next / previous tab | `⌃⇥` / `⌃⇧⇥` | `Ctrl+Tab` / `Ctrl+Shift+Tab` |
-| Show tab 1-9 | `⌘1…⌘9` | `Ctrl+1…Ctrl+9` |
-| Split right / down | `⇧⌘D` / `⇧⌘E` | `Ctrl+Shift+D` / `Ctrl+Shift+E` |
-| Split left / up | `⌥⌘←` / `⌥⌘↑` | `Ctrl+Alt+Left` / `Ctrl+Alt+Up` |
-| Focus neighboring pane | `⌥` + arrows | `Alt` + arrows |
-| Move focused pane | `⌥⇧` + arrows | `Alt+Shift` + arrows |
-| Zoom pane | `⇧⌘M` | `Ctrl+Shift+M` |
-| Toggle Explorer | `⇧⌘B` | `Ctrl+Shift+B` |
-| Toggle terminal | `⇧⌘T` | `Ctrl+Shift+T` |
-| SSH terminal | `⇧⌘L` | `Ctrl+Shift+L` |
-| Git diff page | `⇧⌘G` | `Ctrl+Shift+G` |
+| New tab | `⌘T` | `Ctrl+Shift+T` |
+| Close pane / tab | `⌘W` / `⌥⌘W` | `Ctrl+Shift+W` / `Ctrl+Alt+W` |
+| Next / previous tab | `⇧⌘]` / `⇧⌘[` | `Ctrl+Tab` / `Ctrl+Shift+Tab` |
+| Show tab 1-9 | `⌘1…⌘9` | `Alt+1…Alt+9` |
+| Split right / down | `⌘D` / `⇧⌘D` | `Ctrl+Shift+O` / `Ctrl+Shift+E` |
+| Split left / up | assign in Settings | assign in Settings |
+| Focus neighboring pane | `⌥⌘` + arrows | `Ctrl+Alt` + arrows |
+| Move focused pane | drag, or assign in Settings | drag, or assign in Settings |
+| Zoom pane | `⇧⌘↩` | `Ctrl+Shift+Enter` |
+| Toggle file tree | `⌘B` | `Ctrl+B` |
+| Toggle terminal | `⌃` + backtick | `Ctrl` + backtick |
+| SSH terminal | `⇧⌘S` | `Ctrl+Shift+S` |
+| Git diff page | `⌃⇧G` | `Ctrl+Shift+G` |
 | Command palette | `⇧⌘P` | `Ctrl+Shift+P` |
 | Settings | `⌘,` | `Ctrl+,` |
+
+Two Ghostty keys stay with the editor: `⌘[` / `⌘]` indent and outdent, and `⌘Enter` inserts a line below.
 
 Terminal and SSH shortcuts are available on macOS and Linux only.
 

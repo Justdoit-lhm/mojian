@@ -92,6 +92,7 @@ type Host interface {
 	ActiveRemote() *remote.Conn
 
 	Shortcuts() map[string]string
+	ShowTabKeys() string
 	SetShortcut(id, value string) string
 	ResetShortcut(id string)
 	ResetShortcuts()

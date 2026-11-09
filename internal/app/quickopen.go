@@ -8,7 +8,7 @@ import (
 
 // openQuickOpen shows the file picker over the window: every file of the
 // project is listed before typing, the field filters them, and Enter or a
-// click opens one in the active tab. The welcome page and ⇧⌘O both lead
+// click opens one in the active tab. The welcome page and ⌘P both lead
 // here, so the action is visible even when the Explorer is already open.
 func (a *app) openQuickOpen() {
 	a.closeModals()

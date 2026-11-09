@@ -54,38 +54,79 @@ func TestSplitPutsPaneOnEdge(t *testing.T) {
 	}
 }
 
-func TestOptionArrowsMoveInAllDirections(t *testing.T) {
+func TestPaneFocusShortcutsMoveInAllDirections(t *testing.T) {
 	a := newProjectApp(t)
 	first := a.tab().Focus
 	a.splitWith(a.store.ByRelPath("Reading notes.md"))
 	second := a.tab().Focus
 	a.splitWithSide(a.store.ByRelPath("scripts/tasks.py"), splitDown)
 	third := a.tab().Focus
+	// A harness window has no menu bar, so the view binds the commands
+	// itself, as the browser does.
+	a.harness = true
 	tt := ui.NewTester(a.view, 1100, 700)
 	tt.Frame()
-	tt.Key(ui.Alt, ui.KeyUp)
+	tt.Key(ui.Cmd|ui.Alt, ui.KeyUp)
 	tt.Frame()
 	if a.tab().Focus != second {
-		t.Fatal("Option+Up did not focus the pane above")
+		t.Fatal("Cmd+Option+Up did not focus the pane above")
 	}
-	tt.Key(ui.Alt, ui.KeyDown)
+	tt.Key(ui.Cmd|ui.Alt, ui.KeyDown)
 	tt.Frame()
 	if a.tab().Focus != third {
-		t.Fatal("Option+Down did not focus the pane below")
+		t.Fatal("Cmd+Option+Down did not focus the pane below")
 	}
-	tt.Key(ui.Alt, ui.KeyLeft)
+	tt.Key(ui.Cmd|ui.Alt, ui.KeyLeft)
 	tt.Frame()
 	if a.tab().Focus != first {
-		t.Fatal("Option+Left did not focus the pane on the left")
+		t.Fatal("Cmd+Option+Left did not focus the pane on the left")
 	}
-	tt.Key(ui.Alt, ui.KeyRight)
+	tt.Key(ui.Cmd|ui.Alt, ui.KeyRight)
 	tt.Frame()
 	if a.tab().Focus != second {
-		t.Fatal("Option+Right did not focus the pane on the right")
+		t.Fatal("Cmd+Option+Right did not focus the pane on the right")
 	}
 }
 
-func TestOptionShiftInsertsPaneOnEdge(t *testing.T) {
+func TestPaneSplitShortcutsSplitRightAndDown(t *testing.T) {
+	for _, dir := range []struct {
+		mods ui.Modifiers
+		name string
+	}{
+		{ui.Cmd, "Cmd+D"},
+		{ui.Cmd | ui.Shift, "Shift+Cmd+D"},
+	} {
+		a := newProjectApp(t)
+		a.harness = true
+		tt := ui.NewTester(a.view, 1100, 700)
+		tt.Frame()
+		tt.Key(dir.mods, ui.KeyD)
+		tt.Frame()
+		if got := len(a.tab().panes()); got != 2 {
+			t.Fatalf("%s left %d panes, want 2", dir.name, got)
+		}
+	}
+}
+
+func TestPaneZoomShortcutTogglesTheZoom(t *testing.T) {
+	a := newProjectApp(t)
+	a.harness = true
+	tt := ui.NewTester(a.view, 1100, 700)
+	tt.Frame()
+	focus := a.tab().Focus
+	tt.Key(ui.Cmd|ui.Shift, ui.KeyEnter)
+	tt.Frame()
+	if a.tab().Zoom != focus {
+		t.Fatal("Shift+Cmd+Enter did not zoom the focused pane")
+	}
+	tt.Key(ui.Cmd|ui.Shift, ui.KeyEnter)
+	tt.Frame()
+	if a.tab().Zoom != nil {
+		t.Fatal("Shift+Cmd+Enter did not restore the panes")
+	}
+}
+
+func TestMovePaneDirectionInsertsOnEdge(t *testing.T) {
 	a := newProjectApp(t)
 	first := a.tab().Focus
 	a.splitWith(a.store.ByRelPath("Reading notes.md"))
