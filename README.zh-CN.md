@@ -98,7 +98,7 @@ mojian ~/git/abc/README.md      # 文件，其所在文件夹成为项目
 
 代码保留行号，散文自动换行。语法高亮覆盖 Python、JavaScript、TypeScript、Go、Rust、C 与 C++、Swift、Kotlin、Ruby、JSON、YAML、TOML、SQL、HTML、CSS、Markdown 等语言。
 
-Markdown 窗格可在标题栏切换源码与预览。**设置 › 编辑器** 可以让新打开的 `.md` 文件默认渲染。图片（包括 SVG）在窗格内的查看器中打开；安装 `pdftoppm` 后 PDF 逐页渲染，macOS 上还会回退到 Quick Look 首页。
+Markdown 窗格可在标题栏切换源码与预览。**设置 › 编辑器** 可以让新打开的 `.md` 文件默认渲染。图片（包括 SVG）在窗格内的查看器中打开；PDF 可以逐页查看全部页面：装了 Poppler 的 `pdftoppm` 时用它渲染，macOS 上则用 PDFKit。
 
 按 `Cmd+S` / `Ctrl+S` 原子写入所有未保存的笔记；关闭窗口时也会写入未保存的修改。
 

@@ -36,15 +36,18 @@ type pane struct {
 
 // assetView is what a picture or PDF pane has loaded, and its headings.
 type assetView struct {
-	pdfPages   []string
-	pdfPage    int
 	pdfDir     string
-	pdfErr     string
+	pdfCount   int // the document's pages, 0 until the count is read
+	pdfPage    int
+	pdfErr     string // why the document could not be opened
 	pdfLoading bool
 	pdfStarted bool
-	pdfGen     int // invalidates a preview whose pane was repurposed
-	pdfImage   ui.ImageSource
-	pdfImageAt int // the page pdfImage was decoded for
+	pdfGen     int            // invalidates work whose pane was repurposed
+	pdfImage   ui.ImageSource // the page pdfImageAt was decoded for
+	pdfImageAt int
+	pdfFiles   map[int]string // page (0-based) to the PNG drawn for it
+	pdfPending map[int]bool   // pages being drawn now
+	pdfPageErr map[int]string // why a page could not be drawn
 }
 
 // node is a leaf pane, or two panes side by side or stacked. Share is the

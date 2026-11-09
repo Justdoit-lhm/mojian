@@ -1,18 +1,12 @@
 package app
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"regexp"
 	"runtime"
-	"sort"
-	"strconv"
 	"strings"
-	"time"
 
 	"mojian/internal/icons"
 
@@ -36,8 +30,15 @@ func (a *app) markdownBody(c *ui.Context, k *colors, p *pane) {
 			Padding(26, 34, 44, 34).Children(func() {
 			if p.md == nil {
 				opts := &markdown.Options{}
-				if a.store == nil || !a.store.IsRemote() {
-					opts.LoadImage = markdown.FileImages(filepath.Dir(p.Note.Path))
+				local := a.store == nil || !a.store.IsRemote()
+				load := markdownImages(filepath.Dir(p.Note.Path), local)
+				// HTML blocks carry a README's badges and linked
+				// pictures, which the view would otherwise show as
+				// source.
+				images := map[string]*markdownImage{}
+				opts.LoadImage = load
+				opts.HTML = func(c *ui.Context, block string) {
+					markdownHTMLBlock(c, block, images, load)
 				}
 				p.md = opts
 			}
@@ -46,7 +47,7 @@ func (a *app) markdownBody(c *ui.Context, k *colors, p *pane) {
 	})
 }
 
-// assetBody shows a picture, a PDF's first page, or why neither can show.
+// assetBody shows a picture or a PDF, or why neither can show.
 func (a *app) assetBody(c *ui.Context, k *colors, p *pane) {
 	if p.Asset == nil {
 		return
@@ -79,24 +80,29 @@ func (a *app) assetBody(c *ui.Context, k *colors, p *pane) {
 
 func (a *app) pdfBody(c *ui.Context, k *colors, p *pane) {
 	v := p.assetView
+	if v.pdfFiles == nil {
+		v.pdfFiles = map[int]string{}
+		v.pdfPending = map[int]bool{}
+		v.pdfPageErr = map[int]string{}
+	}
+	path, win := p.Asset.LocalPath(), a.win
 	if !v.pdfStarted {
 		v.pdfStarted, v.pdfLoading = true, true
 		v.pdfGen++
 		gen := v.pdfGen
-		path, win := p.Asset.LocalPath(), a.win
 		go func() {
-			pages, dir, err := pdfPreview(path)
+			dir, count, err := pdfOpen(path)
 			update := func() {
 				// The pane may have been closed or repurposed while the
-				// preview was made; do not publish into it, and do not
-				// leave its temporary pages behind.
+				// count was read; do not publish into it, and do not leave
+				// its temporary files behind.
 				if p.assetView != v || v.pdfGen != gen {
 					if dir != "" {
 						_ = os.RemoveAll(dir)
 					}
 					return
 				}
-				v.pdfLoading, v.pdfPages, v.pdfDir, v.pdfErr = false, pages, dir, ""
+				v.pdfLoading, v.pdfDir, v.pdfCount = false, dir, count
 				if err != nil {
 					v.pdfErr = err.Error()
 				}
@@ -112,40 +118,93 @@ func (a *app) pdfBody(c *ui.Context, k *colors, p *pane) {
 	switch {
 	case v.pdfErr != "":
 		a.assetError(c, k, p, errors.New(v.pdfErr))
-	case v.pdfLoading || len(v.pdfPages) == 0:
-		ui.Column(c).Grow(1).Center().Gap(8).Children(func() {
-			ui.Icon(c, icons.Icon("file-text")).Size(26, 26).TextColor(k.TextMuted)
-			ui.Text(c, "Reading PDF…").FontSize(13).FontWeight(600).TextColor(k.Text)
-			ui.Text(c, "The page previews are being prepared.").
-				FontSize(11.5).TextColor(k.TextFaint)
-		})
+	case v.pdfLoading:
+		pdfStatus(c, k, "Reading PDF…", "The document's pages are being counted.")
+	case v.pdfCount == 0:
+		a.assetError(c, k, p, errors.New("this PDF has no pages"))
 	default:
-		page := min(max(v.pdfPage, 0), len(v.pdfPages)-1)
-		if v.pdfImage == nil || v.pdfImageAt != page {
-			data, err := os.ReadFile(v.pdfPages[page])
-			if err != nil {
-				a.assetError(c, k, p, err)
+		page := min(max(v.pdfPage, 0), v.pdfCount-1)
+		v.pdfPage = page
+		errText, failed := v.pdfPageErr[page]
+		if !failed && (v.pdfImage == nil || v.pdfImageAt != page) {
+			if file, drawn := v.pdfFiles[page]; drawn {
+				data, err := os.ReadFile(file)
+				var img ui.ImageSource
+				if err == nil {
+					img, err = ui.DecodeImage(data)
+				}
+				if err != nil {
+					v.pdfPageErr[page] = err.Error()
+					errText, failed = v.pdfPageErr[page], true
+				} else {
+					v.pdfImage, v.pdfImageAt = img, page
+				}
+			} else {
+				// Draw only the page on screen; a long document does
+				// not need a PNG for every page it may never show. One
+				// page is drawn at a time, so flipping through pages
+				// quickly does not pile up renderer processes.
+				if len(v.pdfPending) == 0 {
+					v.pdfPending[page] = true
+					gen, dir := v.pdfGen, v.pdfDir
+					go func() {
+						file, err := pdfRenderPage(path, dir, page+1)
+						update := func() {
+							if p.assetView != v || v.pdfGen != gen {
+								return
+							}
+							delete(v.pdfPending, page)
+							if err != nil {
+								v.pdfPageErr[page] = err.Error()
+							} else {
+								v.pdfFiles[page] = file
+							}
+							a.invalidate()
+						}
+						if win != nil {
+							win.Update(update)
+						} else {
+							update()
+						}
+					}()
+				}
+				pdfStatus(c, k, fmt.Sprintf("Drawing page %d…", page+1),
+					"Pages are drawn as you turn to them.")
 				return
 			}
-			img, err := ui.DecodeImage(data)
-			if err != nil {
-				a.assetError(c, k, p, err)
-				return
-			}
-			v.pdfImage, v.pdfImageAt = img, page
 		}
 		ui.Column(c).Grow(1).MinHeight(0).Children(func() {
-			ui.Box(c).Grow(1).MinHeight(0).Center().Padding(18).Children(func() {
-				ui.Image(c, v.pdfImage).Fill().Fit(ui.Contain)
-			})
+			if failed {
+				ui.Box(c).Grow(1).MinHeight(0).Center().Padding(24).Children(func() {
+					ui.Column(c).Center().Gap(6).Children(func() {
+						ui.Text(c, fmt.Sprintf("Page %d of this PDF could not be drawn.", page+1)).
+							FontSize(12).FontWeight(550).TextColor(k.TextMuted).
+							TextAlign(ui.Center).MaxWidth(460)
+						ui.Text(c, errText).FontSize(11).TextColor(k.TextFaint).
+							TextAlign(ui.Center).MaxWidth(460)
+					})
+				})
+			} else {
+				ui.Box(c).Grow(1).MinHeight(0).Center().Padding(18).Children(func() {
+					ui.Image(c, v.pdfImage).Fill().Fit(ui.Contain)
+				})
+			}
 			a.pdfFooter(c, k, p)
 		})
 	}
 }
 
+func pdfStatus(c *ui.Context, k *colors, title, note string) {
+	ui.Column(c).Grow(1).Center().Gap(8).Children(func() {
+		ui.Icon(c, icons.Icon("file-text")).Size(26, 26).TextColor(k.TextMuted)
+		ui.Text(c, title).FontSize(13).FontWeight(600).TextColor(k.Text)
+		ui.Text(c, note).FontSize(11.5).TextColor(k.TextFaint)
+	})
+}
+
 func (a *app) pdfFooter(c *ui.Context, k *colors, p *pane) {
 	v := p.assetView
-	n := len(v.pdfPages)
+	n := v.pdfCount
 	ui.Row(c).Height(31).Padding(0, 12, 0, 12).Gap(8).AlignItems(ui.Center).
 		Children(func() {
 			ui.Text(c, "PDF").FontSize(10.5).FontWeight(600).TextColor(k.TextFaint)
@@ -229,59 +288,6 @@ func fileSize(n int64) string {
 
 func isPDFPath(path string) bool {
 	return strings.EqualFold(filepath.Ext(path), ".pdf")
-}
-
-// pdfPreview renders a PDF's pages to PNGs in a temporary directory:
-// pdftoppm when it is installed, else Quick Look on macOS for the first
-// page. The pages are capped so a long document does not decode without
-// bound.
-func pdfPreview(path string) (pages []string, dir string, err error) {
-	const maxPages = 60
-	dir, err = os.MkdirTemp("", "mojian-pdf-")
-	if err != nil {
-		return nil, "", err
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
-	defer cancel()
-	if tool, lookErr := exec.LookPath("pdftoppm"); lookErr == nil {
-		base := filepath.Join(dir, "page")
-		cmd := exec.CommandContext(ctx, tool, "-png", "-r", "110",
-			"-f", "1", "-l", strconv.Itoa(maxPages), path, base)
-		if _, runErr := cmd.CombinedOutput(); runErr == nil {
-			matches, _ := filepath.Glob(base + "-*.png")
-			sort.SliceStable(matches, func(i, j int) bool {
-				return pageNumber(matches[i]) < pageNumber(matches[j])
-			})
-			if len(matches) > 0 {
-				return matches, dir, nil
-			}
-		}
-	}
-	if tool, lookErr := exec.LookPath("qlmanage"); lookErr == nil {
-		cmd := exec.CommandContext(ctx, tool, "-t", "-s", "1600", "-o", dir, path)
-		if out, runErr := cmd.CombinedOutput(); runErr == nil {
-			if matches, _ := filepath.Glob(filepath.Join(dir, "*.png")); len(matches) > 0 {
-				sort.Strings(matches)
-				return matches[:1], dir, nil
-			}
-		} else if len(out) > 0 {
-			err = errors.New(strings.TrimSpace(string(out)))
-		}
-	}
-	if err == nil {
-		err = errors.New("no PDF preview tool found")
-	}
-	return nil, dir, err
-}
-
-var pageNumberPattern = regexp.MustCompile(`-([0-9]+)\.png$`)
-
-func pageNumber(path string) int {
-	if m := pageNumberPattern.FindStringSubmatch(path); len(m) == 2 {
-		n, _ := strconv.Atoi(m[1])
-		return n
-	}
-	return 0
 }
 
 // releaseAsset drops a pane's PDF preview files before it shows another

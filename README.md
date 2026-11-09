@@ -97,7 +97,7 @@ Press `Shift+Cmd+S` / `Ctrl+Shift+S` to open an SSH terminal to a host from **Se
 
 Code keeps line numbers and prose wraps. Syntax highlighting covers Python, JavaScript, TypeScript, Go, Rust, C and C++, Swift, Kotlin, Ruby, JSON, YAML, TOML, SQL, HTML, CSS, Markdown, and more.
 
-Markdown panes switch between source and preview from the pane header. **Settings › Editor** can render new `.md` files by default. Images, including SVG, open in a contained viewer. PDFs render page by page when `pdftoppm` is installed, with a Quick Look first page on macOS.
+Markdown panes switch between source and preview from the pane header. **Settings › Editor** can render new `.md` files by default. Images, including SVG, open in a contained viewer. PDFs page through every page: drawn with Poppler's `pdftoppm` when it is installed, else with PDFKit on macOS.
 
 Press `Cmd+S` / `Ctrl+S` to write every unsaved note atomically. Unsaved work is also written when the window closes.
 

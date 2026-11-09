@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- Markdown previews draw the HTML blocks documents use for badges and
+  linked pictures, which used to show as their source: links open in the
+  browser, pictures come from beside the note or from the web, and a
+  README's screenshot with a cache query (`?v=…`) loads again.
+- PDF panes page through every page of a document instead of stopping
+  after the first. A page is drawn when you turn to it, so a long
+  document opens at once and holds one page image rather than a folder
+  of them. macOS draws with PDFKit when Poppler is not installed, and a
+  Homebrew `pdftoppm` beside the app is found when Mojian starts from
+  Finder.
+
 ## 0.2.8
 
 - The Open Folder picker lists folders reached through symbolic links, and
