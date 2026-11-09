@@ -13,7 +13,7 @@
 
 [下载最新版本](https://github.com/ox0pine/mojian/releases) · [English](README.md) · [从源码构建](#从源码构建)
 
-![墨间：同一标签页中的编辑器、选择文件的窗格和两个终端](docs/screenshot.png?v=6b38e5e)
+![墨间：同一标签页中的编辑器、选择文件的窗格和两个终端](resources/screenshot.png?v=6b38e5e)
 
 ## 功能
 

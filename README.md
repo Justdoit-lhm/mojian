@@ -13,7 +13,7 @@ Mojian is a native plain-text editor for ordinary folders. Edit files, preview i
 
 [Download the latest release](https://github.com/ox0pine/mojian/releases) · [简体中文](README.zh-CN.md) · [Build from source](#build-from-source)
 
-![Mojian with an editor, a pane choosing a file, and two terminals in one tab](docs/screenshot.png?v=6b38e5e)
+![Mojian with an editor, a pane choosing a file, and two terminals in one tab](resources/screenshot.png?v=6b38e5e)
 
 ## Features
 
