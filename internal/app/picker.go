@@ -74,10 +74,15 @@ func (a *app) setPickerPath(p string) {
 	}
 	var dirs []pickerEntry
 	for _, e := range entries {
-		if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
+		name := e.Name()
+		if !a.pickerHidden && strings.HasPrefix(name, ".") {
 			continue
 		}
-		dirs = append(dirs, pickerEntry{Name: e.Name(), Path: filepath.Join(abs, e.Name())})
+		p := filepath.Join(abs, name)
+		if !pickerFolder(e, p) {
+			continue
+		}
+		dirs = append(dirs, pickerEntry{Name: name, Path: p})
 	}
 	sort.Slice(dirs, func(i, j int) bool {
 		return strings.ToLower(dirs[i].Name) < strings.ToLower(dirs[j].Name)
@@ -95,6 +100,17 @@ func (a *app) pickerTarget() string {
 		return a.pickerEntries[a.pickerSel].Path
 	}
 	return a.pickerPath
+}
+
+// pickerFolder reports whether e opens as a folder. Stat follows a
+// symlink, so a link to a folder is listed like the folder itself; a
+// broken link or a regular file is not.
+func pickerFolder(e os.DirEntry, path string) bool {
+	if e.IsDir() {
+		return true
+	}
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }
 
 func (a *app) pickerUp() {
@@ -289,6 +305,21 @@ func (a *app) pickerMain(c *ui.Context, k *colors) {
 	})
 }
 
+// pickerHiddenSwitch draws the hidden-folder switch beside Cancel.
+func (a *app) pickerHiddenSwitch(c *ui.Context, k *colors) {
+	ui.Row(c).Height(28).Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, "Hidden folders").FontSize(11.5).TextColor(k.TextFaint)
+		on := a.pickerHidden
+		sw := ui.Switch(c, &on).Label("Show hidden folders").
+			Tooltip("Show folders whose name starts with a dot")
+		if sw.Changed() {
+			a.pickerHidden = on
+			a.later(func() { a.setPickerPath(a.pickerPath) })
+			a.invalidate()
+		}
+	})
+}
+
 func (a *app) pickerFooter(c *ui.Context, k *colors) {
 	ui.Row(c).Height(58).Padding(0, 18).Gap(8).AlignItems(ui.Center).Children(func() {
 		target := a.pickerTarget()
@@ -297,6 +328,7 @@ func (a *app) pickerFooter(c *ui.Context, k *colors) {
 			ui.Text(c, shortPath(target)).FontSize(12).TextColor(k.TextMuted).
 				SingleLine().Ellipsis("…")
 		})
+		a.pickerHiddenSwitch(c, k)
 		a.pickerButton(c, k, "Cancel", false, func() {
 			a.projectPicker = false
 		})

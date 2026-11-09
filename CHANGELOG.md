@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- The Open Folder picker lists folders reached through symbolic links, and
+  its **Hidden folders** switch beside Cancel includes names that start
+  with a dot. A project opened through a symlink is stored at its target,
+  so its files are listed.
 - Mojian accepts a path on the command line: `mojian .` opens the
   current folder, `mojian ~/git/abc` opens that project, and
   `mojian ~/git/abc/README.md` opens the file with its folder as the

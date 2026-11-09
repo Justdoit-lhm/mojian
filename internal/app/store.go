@@ -62,6 +62,20 @@ func openStore() (*store, error) {
 	return openStoreAt(dir)
 }
 
+// resolveProjectRoot follows a project folder that is itself a symlink.
+// WalkDir would treat that root as a file and list nothing, while a
+// folder reached through an intermediate symlink already works.
+func resolveProjectRoot(dir string) string {
+	info, err := os.Lstat(dir)
+	if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		return dir
+	}
+	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+		return resolved
+	}
+	return dir
+}
+
 // openStoreAt opens dir as a project, creating the folder when it is
 // missing. macOS and Linux open projects through the session server; the
 // direct store now serves tests and the browser's memory fallback.
@@ -73,6 +87,7 @@ func openStoreAt(dir string) (*store, error) {
 	if err := os.MkdirAll(abs, 0o755); err != nil {
 		return nil, err
 	}
+	abs = resolveProjectRoot(abs)
 	s := project.New(fs.NewDirect(abs))
 	if err := s.Refresh(); err != nil {
 		return nil, err

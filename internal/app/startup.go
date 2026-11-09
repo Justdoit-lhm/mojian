@@ -18,7 +18,13 @@ func (a *app) openStartupFile() {
 	if a.startup.File == "" || a.store == nil {
 		return
 	}
-	rel, err := filepath.Rel(a.store.Dir, a.startup.File)
+	// The command line names the file under the folder it named, which
+	// may be a symlink the store opened at its target.
+	base := a.startup.Dir
+	if base == "" {
+		base = a.store.Dir
+	}
+	rel, err := filepath.Rel(base, a.startup.File)
 	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return
 	}

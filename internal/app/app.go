@@ -80,6 +80,7 @@ type app struct {
 	pickerEntries  []pickerEntry
 	pickerSel      int
 	pickerErr      string
+	pickerHidden   bool
 
 	paneOverlays []*paneOverlay
 

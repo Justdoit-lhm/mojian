@@ -39,6 +39,7 @@ func (a *app) openLocalStore(dir string) (*store, error) {
 	if err != nil {
 		return nil, err
 	}
+	abs = resolveProjectRoot(abs)
 	client, err := a.sessions()
 	if err != nil {
 		return nil, err

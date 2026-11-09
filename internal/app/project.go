@@ -92,6 +92,9 @@ func (a *app) openProject(dir string) {
 		a.fail(err)
 		return
 	}
+	// A project reached through a symlink is stored at its target, so
+	// the folder lists its files and compares equal to a real path.
+	abs = resolveProjectRoot(abs)
 	a.initWorkspaces()
 	if ws := a.workspaces[workspaceKeyLocal(abs)]; ws != nil {
 		a.switchWorkspace(ws)

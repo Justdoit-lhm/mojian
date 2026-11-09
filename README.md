@@ -67,6 +67,8 @@ mojian ~/git/abc/README.md      # a file, with its folder as the project
 
 The file opens in the focused pane of the project's saved layout. The app bundle's binary is `Mojian.app/Contents/MacOS/Mojian`: link it as `mojian` to use the name in these examples, and run `mojian --help` for the usage.
 
+The Open Folder picker lists folders reached through symbolic links, and its **Hidden folders** switch beside Cancel includes names that start with a dot.
+
 On first launch, Mojian opens `~/Documents/Mojian` when no project is selected and leaves a welcome note if the folder is empty.
 
 The Explorer shows the folder as it exists on disk:
