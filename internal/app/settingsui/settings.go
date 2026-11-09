@@ -482,34 +482,41 @@ func (u *UI) settingsSwitchRow(c *ui.Context, k *colors, title, detail string, g
 // value's and whose choice is set's.
 func (u *UI) settingsChoiceRow(c *ui.Context, k *colors, key, title, detail string, value func() int, set func(int), labels []string) {
 	u.settingRow(c, k, title, detail, func() {
-		current := value()
-		ui.Row(c).Padding(3).Radius(8).Background(k.Hover).
-			Border(1, k.PanelBorder).Gap(2).Role(ui.RoleRadioGroup).
-			Label(title).Children(func() {
-			for n, label := range labels {
-				b := ui.Row(c.Key(key+"-"+strconv.Itoa(n))).Padding(4, 11).
-					Radius(6).Cursor(ui.CursorPointer).Role(ui.RoleRadio).
-					Label(label).AccessSelected(n == current)
-				switch {
-				case n == current:
-					b.Background(k.CardFocused)
-				case b.Hovered():
-					b.Background(k.Hover)
-				}
-				if b.Clicked() {
-					set(n)
-					u.saveSettings()
-					u.invalidate()
-				}
-				b.Children(func() {
-					col := k.TextMuted
-					if n == current {
-						col = k.Text
-					}
-					ui.Text(c, label).FontSize(11.5).FontWeight(550).TextColor(col)
-				})
-			}
+		u.settingsChoiceControl(c, k, key, title, value(), labels, func(n int) {
+			set(n)
+			u.saveSettings()
+			u.invalidate()
 		})
+	})
+}
+
+// settingsChoiceControl is the segmented control a row places at its end;
+// the selected index and the labels are read before it is built.
+func (u *UI) settingsChoiceControl(c *ui.Context, k *colors, key, label string, current int, labels []string, choose func(int)) {
+	ui.Row(c).Padding(3).Radius(8).Background(k.Hover).
+		Border(1, k.PanelBorder).Gap(2).Role(ui.RoleRadioGroup).
+		Label(label).Children(func() {
+		for n, text := range labels {
+			b := ui.Row(c.Key(key+"-"+strconv.Itoa(n))).Padding(4, 11).
+				Radius(6).Cursor(ui.CursorPointer).Role(ui.RoleRadio).
+				Label(text).AccessSelected(n == current)
+			switch {
+			case n == current:
+				b.Background(k.CardFocused)
+			case b.Hovered():
+				b.Background(k.Hover)
+			}
+			if b.Clicked() {
+				choose(n)
+			}
+			b.Children(func() {
+				col := k.TextMuted
+				if n == current {
+					col = k.Text
+				}
+				ui.Text(c, text).FontSize(11.5).FontWeight(550).TextColor(col)
+			})
+		}
 	})
 }
 

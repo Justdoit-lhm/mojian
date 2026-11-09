@@ -32,6 +32,7 @@ type Prefs struct {
 	TerminalScrollback  int     `json:"terminalScrollback,omitempty"`
 	NoRestoreLayout     bool    `json:"noRestoreLayout,omitempty"`
 	NoGitAutoRefresh    bool    `json:"noGitAutoRefresh,omitempty"`
+	ShellCommand        string  `json:"shellCommand,omitempty"`
 }
 
 // defaults is the settings of a new install. Default and the effective
@@ -81,4 +82,9 @@ func (p *Prefs) Sanitize() {
 		p.TerminalCursor = 0
 	}
 	p.TerminalScrollback = int(clamp(float64(p.TerminalScrollback), 1, 100, float64(defaults.TerminalScrollback)))
+	switch p.ShellCommand {
+	case "", "zsh", "bash":
+	default:
+		p.ShellCommand = ""
+	}
 }

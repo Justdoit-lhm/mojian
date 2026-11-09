@@ -1,10 +1,12 @@
 package app
 
 import (
+	"errors"
 	"strings"
 
 	"mojian/internal/app/settingsui"
 	"mojian/internal/remote"
+	"mojian/internal/shellcmd"
 	"mojian/internal/theme"
 
 	"github.com/egoist/mygo/ui"
@@ -14,23 +16,29 @@ import (
 // the Settings package reaches app state.
 type settingsHost struct{ a *app }
 
-func (h settingsHost) Invalidate()                  { h.a.invalidate() }
-func (h settingsHost) ApplyTheme(c *ui.Context)     { h.a.applyTheme(c) }
-func (h settingsHost) RunPending()                  { h.a.runPending() }
-func (h settingsHost) SaveSettings()                { h.a.saveSettings() }
-func (h settingsHost) SaveSettingsSoon()            { h.a.saveSettingsSoon() }
-func (h settingsHost) Later(fn func())              { h.a.later(fn) }
-func (h settingsHost) Fail(err error)               { h.a.fail(err) }
-func (h settingsHost) RefreshMenu()                 { h.a.refreshMenu() }
-func (h settingsHost) SetAppearance(n int)          { h.a.applyAppearance(n) }
-func (h settingsHost) SetTheme(id string)           { h.a.setTheme(id) }
-func (h settingsHost) ProjectPath() string          { return h.a.projectPath() }
-func (h settingsHost) RemoteName() string           { return h.a.remoteName() }
-func (h settingsHost) SettingsPath() string         { return h.a.settingsPath }
-func (h settingsHost) RemotePath() string           { return h.a.remotePath }
-func (h settingsHost) ServerAlias() string          { return h.a.serverAlias }
-func (h settingsHost) Store() *store                { return h.a.store }
-func (h settingsHost) ActiveRemote() *remote.Conn   { return h.a.activeRemote() }
+func (h settingsHost) Invalidate()                { h.a.invalidate() }
+func (h settingsHost) ApplyTheme(c *ui.Context)   { h.a.applyTheme(c) }
+func (h settingsHost) RunPending()                { h.a.runPending() }
+func (h settingsHost) SaveSettings()              { h.a.saveSettings() }
+func (h settingsHost) SaveSettingsSoon()          { h.a.saveSettingsSoon() }
+func (h settingsHost) Later(fn func())            { h.a.later(fn) }
+func (h settingsHost) Fail(err error)             { h.a.fail(err) }
+func (h settingsHost) RefreshMenu()               { h.a.refreshMenu() }
+func (h settingsHost) SetAppearance(n int)        { h.a.applyAppearance(n) }
+func (h settingsHost) SetTheme(id string)         { h.a.setTheme(id) }
+func (h settingsHost) ProjectPath() string        { return h.a.projectPath() }
+func (h settingsHost) RemoteName() string         { return h.a.remoteName() }
+func (h settingsHost) SettingsPath() string       { return h.a.settingsPath }
+func (h settingsHost) RemotePath() string         { return h.a.remotePath }
+func (h settingsHost) ServerAlias() string        { return h.a.serverAlias }
+func (h settingsHost) Store() *store              { return h.a.store }
+func (h settingsHost) ActiveRemote() *remote.Conn { return h.a.activeRemote() }
+func (h settingsHost) ShellCommandExecutable() (string, error) {
+	if h.a.harness {
+		return "", errors.New("the UI harness does not install shell commands")
+	}
+	return shellcmd.Executable()
+}
 func (h settingsHost) Shortcuts() map[string]string { return h.a.shortcutKeys }
 func (h settingsHost) ShowTabKeys() string          { return showTabKeys() }
 func (h settingsHost) FontSize() float64            { return h.a.fontSize() }

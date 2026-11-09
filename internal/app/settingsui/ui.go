@@ -43,6 +43,8 @@ type UI struct {
 	ResetAsk     bool
 	Query        string
 
+	shellCmd shellCommandState
+
 	FontPick    bool
 	FontPickFor int
 	FontSearch  string
@@ -92,6 +94,9 @@ type Host interface {
 	ServerAlias() string
 	Store() *project.Store
 	ActiveRemote() *remote.Conn
+	// ShellCommandExecutable is the binary Settings writes into a shell's
+	// startup file, or the reason it cannot.
+	ShellCommandExecutable() (string, error)
 
 	Shortcuts() map[string]string
 	ShowTabKeys() string

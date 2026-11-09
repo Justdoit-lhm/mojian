@@ -12,6 +12,7 @@ import (
 	"mojian/internal/remote"
 	"mojian/internal/session"
 	"mojian/internal/settings"
+	"mojian/internal/shellcmd"
 	"mojian/internal/theme"
 
 	"github.com/egoist/mygo/ui"
@@ -475,5 +476,69 @@ func TestFinishHostSetupKeepsConnection(t *testing.T) {
 	}
 	if a.remoteHomes["fedora"] != "/home/me" {
 		t.Fatalf("cached home: %q", a.remoteHomes["fedora"])
+	}
+}
+
+func TestSettingsShellCommandInstallsAndRemoves(t *testing.T) {
+	registerFonts()
+	a := newProjectApp(t)
+	a.ShellCommand = "zsh"
+	a.settings.Cat = settingsAdvanced
+	tt := ui.NewTester(a.settingsWindowView, 900, 1400)
+	tt.Frame()
+	if !tt.HasText("Shell command") {
+		t.Fatalf("the command line section is missing: %q", tt.Texts())
+	}
+	if err := tt.Click("Bash"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.ShellCommand != "bash" {
+		t.Fatalf("shell after choosing Bash: %q", a.ShellCommand)
+	}
+	if err := tt.Click("Zsh"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.ShellCommand != "zsh" {
+		t.Fatalf("shell after choosing Zsh: %q", a.ShellCommand)
+	}
+	rc, err := shellcmd.RcFile(shellcmd.Zsh)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(rc); err == nil {
+		t.Fatalf("the test home already has %s", rc)
+	}
+	if err := tt.Click("Install"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	data, err := os.ReadFile(rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "alias mojian=") {
+		t.Fatalf("the alias is missing: %q", data)
+	}
+	if !tt.HasText("Remove") {
+		t.Fatalf("the install button did not become Remove: %q", tt.Texts())
+	}
+	if !strings.Contains(a.settings.Notice, "Added the mojian command") {
+		t.Fatalf("notice after install: %q", a.settings.Notice)
+	}
+	if err := tt.Click("Remove"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	data, err = os.ReadFile(rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "Mojian command line") {
+		t.Fatalf("the block is still there: %q", data)
+	}
+	if !strings.Contains(a.settings.Notice, "Removed the mojian command") {
+		t.Fatalf("notice after remove: %q", a.settings.Notice)
 	}
 }

@@ -63,6 +63,9 @@ window, the error banner and command dispatch from menu, palette and keyboard.
   the session server must be guarded by it, or the headless worker blocks.
 - Motion uses `internal/motion`: critically damped springs for pages, tabs, the tree and panes, a
   short color curve for hover; MyGo drops movement when the system asks for less motion.
+- Settings › Advanced › Shell command writes the `mojian` alias through `internal/shellcmd` into
+  the startup file of the chosen shell, in one marked block. The row's Install, Update or Remove
+  button reads `shellcmd.Inspect`, and the headless harness has no executable to install.
 - The palette and the appearance are one decision made per frame: `(*app).dark` reads
   `prefs.Appearance` (System follows the frame's theme), `(*app).colorsOf` is
   `theme.Window(a.Theme, dark)`, and `(*app).applyTheme` hands the frame `theme.UI` of that

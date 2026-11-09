@@ -41,7 +41,7 @@ var Categories = []Category{
 	{"Terminal", "Type, input, notifications and the shell", "square-terminal", "terminal shell font cursor blink scrollback clipboard option alt notifications bell exit"},
 	{"Keyboard", "Shortcuts this app uses", "command", "keyboard shortcut keys hotkeys keybindings commands"},
 	{"Hosts", "SSH servers and remote projects", "server", "host server ssh remote project address"},
-	{"Advanced", "Data, settings file and reset", "sliders-horizontal", "advanced data settings file reset paths server session socket"},
+	{"Advanced", "Shell command, data, settings file and reset", "sliders-horizontal", "advanced shell command zsh bash alias install data settings file reset paths server session socket"},
 	{"About", "Version, updates and system", "info", "about mojian version updates release install restart system fonts project"},
 }
 
@@ -174,6 +174,9 @@ var Rows = []Row{
 		Words: "server setup install upload binaries", Kind: Custom},
 
 	// Advanced (custom controls; rows feed search)
+	{ID: "shell-command", Cat: Advanced, Section: "COMMAND LINE", Title: "Shell command",
+		Detail: "Make mojian run from zsh or bash.", Words: "shell command line terminal alias zsh bash cli path install launcher",
+		Kind: Custom, Pref: "ShellCommand"},
 	{ID: "settings-file", Cat: Advanced, Section: "SETTINGS FILE", Title: "Settings file",
 		Words: "settings file json path", Kind: Custom},
 	{ID: "reveal-settings", Cat: Advanced, Section: "SETTINGS FILE", Title: "Reveal",

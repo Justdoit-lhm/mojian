@@ -69,6 +69,8 @@ The file opens in the focused pane of the project's saved layout. The app bundle
 
 A launch from a terminal detaches at once: the prompt returns, and closing the terminal or pressing Ctrl+C no longer ends the window. A launch without a terminal, such as from Finder, stays in place, and errors from a detached window go to `app.log` in Mojian's data folder.
 
+To run `mojian` from zsh or bash, **Settings › Advanced › Shell command** installs an alias in `~/.zshrc` or the bash startup file; the same row updates or removes it.
+
 The Open Folder picker lists folders reached through symbolic links, and its **Hidden folders** switch beside Cancel includes names that start with a dot.
 
 On first launch, Mojian opens `~/Documents/Mojian` when no project is selected and leaves a welcome note if the folder is empty.

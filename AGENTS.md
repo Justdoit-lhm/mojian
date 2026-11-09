@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Mojian is a quiet text editor for plain files, written in Go against [MyGo](https://mygo.egoist.dev)'s native UI. It is not a web app: there is no webview, no cgo, no JavaScript build. One Go binary draws its own window (Metal on macOS). Tabs are workspaces; each tab holds a binary split tree of panes, and each pane edits a file, previews a picture or PDF, or runs a terminal. The gap between two panes is a divider you drag (or move with the arrows) to resize them; each split saves the share you chose. Version `0.2.10`, bundle id `dev.mojian.app`, macOS 13+.
+Mojian is a quiet text editor for plain files, written in Go against [MyGo](https://mygo.egoist.dev)'s native UI. It is not a web app: there is no webview, no cgo, no JavaScript build. One Go binary draws its own window (Metal on macOS). Tabs are workspaces; each tab holds a binary split tree of panes, and each pane edits a file, previews a picture or PDF, or runs a terminal. The gap between two panes is a divider you drag (or move with the arrows) to resize them; each split saves the share you chose. Version `0.2.11`, bundle id `dev.mojian.app`, macOS 13+.
 
 A project is just a folder; it keeps its own tabs and layout. Opened projects stay loaded in a workspace cache (`internal/app/workspace.go`): switching stashes the active tabs, terminals, layout and Git page and restores the next project without reading it again. Edits stay in memory until an explicit `⌘S`. On macOS and Linux every local project is opened through the local session server, so its files, Git and terminals share one process; quitting the app detaches the terminals and reopening reattaches them. Remote projects are edited directly on the host: only a listing is cached, and a file's text is read when it opens. A remote server and its terminals stay alive after the app or SSH connection disconnects. Windows is not supported.
 
@@ -26,7 +26,7 @@ The paragraphs below are the short version; `docs/subsystems/` holds the contrac
 
 ## Key Directories
 
-`internal/app` is the window's Go package: the immediate-mode view and every action read and mutate the same `*app` state, so the view itself stays in one package. Its UI layers live in subpackages under it: `explorer`, `settingsui` and `widgets`. The domain and shared layers are siblings: `internal/project` (Store/Note/Asset/tree model), `internal/welcome` (starter notes and fixture files), `internal/fs`, `internal/remote`, `internal/update`, `internal/platform`, `internal/prefs`, `internal/session`, `internal/settings`, `internal/git`.
+`internal/app` is the window's Go package: the immediate-mode view and every action read and mutate the same `*app` state, so the view itself stays in one package. Its UI layers live in subpackages under it: `explorer`, `settingsui` and `widgets`. The domain and shared layers are siblings: `internal/project` (Store/Note/Asset/tree model), `internal/welcome` (starter notes and fixture files), `internal/fs`, `internal/remote`, `internal/update`, `internal/platform`, `internal/prefs`, `internal/session`, `internal/settings`, `internal/shellcmd`, `internal/git`.
 
 | Path | Purpose |
 |---|---|
@@ -139,6 +139,7 @@ To add a fixture, register it in `cmd/harness/main.go` and add its factory in `c
 | `internal/app/headless.go` | `Headless` view API used by `cmd/harness`. |
 | `internal/app/server.go` | Local session-server project opener and `localServerID`. |
 | `internal/settings` | Pure Settings page table: categories, rows, kinds, search words. |
+| `internal/shellcmd/` | The `mojian` alias Settings installs in zsh or bash, in one marked block. |
 | `internal/update/` | Release checks, signed install and the GitHub release source. |
 | `internal/platform/` | OS key spelling, file-manager labels and terminal support. |
 | `internal/git/git.go` / `parse.go` / `view.go` | Git page state, status/diff parsing, and view. |

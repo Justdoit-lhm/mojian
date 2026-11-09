@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.11
+
+- Settings › Advanced gains a Shell command row: choose zsh or bash and
+  install the `mojian` alias in that shell's startup file, update it when
+  the app has moved, or remove it. The alias lives in one marked block,
+  so the rest of the file is left as it was; a symlinked startup file is
+  written through to its target.
+
 ## 0.2.10
 
 - `mojian .` from a terminal returns the prompt at once: the app re-runs
