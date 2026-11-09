@@ -135,7 +135,7 @@ func FolderIcon() *ui.SVG {
 }
 
 // Brand returns a Mojian logo asset: "mark", "mark-reversed",
-// "wordmark" or "wordmark-reversed". The files come from logos/svg.
+// "wordmark" or "wordmark-reversed". The files ship in internal/assets/brand.
 func Brand(name string) *ui.SVG {
 	return cached("brand/mojian-"+name, "brand "+name)
 }

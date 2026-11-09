@@ -1,5 +1,7 @@
 /build/
 /.mygo/
+/.cloudflare/
+/.agents/
 .DS_Store
 
 /mojian

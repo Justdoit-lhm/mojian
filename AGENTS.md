@@ -6,8 +6,6 @@ Mojian is a quiet text editor for plain files, written in Go against [MyGo](http
 
 A project is just a folder; it keeps its own tabs and layout. Opened projects stay loaded in a workspace cache (`internal/app/workspace.go`): switching stashes the active tabs, terminals, layout and Git page and restores the next project without reading it again. Edits stay in memory until an explicit `⌘S`. On macOS and Linux every local project is opened through the local session server, so its files, Git and terminals share one process; quitting the app detaches the terminals and reopening reattaches them. Remote projects are edited directly on the host: only a listing is cached, and a file's text is read when it opens. A remote server and its terminals stay alive after the app or SSH connection disconnects. Windows is not supported.
 
-Read `.agents/skills/mygo-maintenance/SKILL.md` before touching UI code; it is the authoritative source for MyGo lifetime and threading rules.
-
 ## Architecture & Data Flow
 
 **Immediate-mode UI, one state struct.** `internal/app/app.go:26` holds every piece of app state as plain fields on `*app`. There are no reducers, observables or stores. `(*app).view` (`internal/app/view.go:16`) rebuilds the whole element tree each frame from that state; MyGo calls it again after input, `Window.Update` or `Invalidate`. A second root, `(*app).settingsWindowView` (`internal/app/settings_host.go:87`), draws the Settings window through `internal/app/settingsui`.
@@ -49,7 +47,7 @@ Frame conventions that keep this correct:
 | `internal/remotebin/` | Embedded Linux `mojian-server` binaries and libghostty `.so` files (generated). |
 | `test/` | Black-box integration tests (`package integration`, import path `mojian/test`). |
 | `tools/build-remote.sh` | Cross-compiles the remote server into `internal/remotebin`. |
-| `logos/`, `resources/` | Logo masters/exports; `resources/icon.png` is the app icon embedded at build. |
+| `resources/` | `resources/icon.png` is the app icon embedded at build. |
 
 ## Development Commands
 
@@ -157,7 +155,7 @@ To add a fixture, register it in `cmd/harness/main.go` and add its factory in `c
 - No linter or formatter config exists; `gofmt` and `go vet` are the standard. `go tool mygo vet .` additionally rejects stored UI build values and goroutine captures.
 - Build output is `build/<os>-<arch>/`; `/build/`, `/.mygo/` and the root `mojian` binary are gitignored. Do not commit them.
 - `internal/remotebin/*.so` and `internal/remotebin/mojian-server-linux-*` are build artifacts embedded by `go:embed`; regenerate with `tools/build-remote.sh`, never hand-edit.
-- `resources/icon.png` is a copy of `logos/png/mojian-app-icon-reversed-1024.png` for Finder/Dock; logo rules (palette, clear space, no recoloring the cursor) are in `logos/README.md`.
+- `resources/icon.png` is the app icon for Finder/Dock and is embedded at build; the brand marks the app draws come from `internal/assets/brand`.
 - No CI: verification is local. Run before yielding: `go test ./...`, `go tool mygo vet .`, and `go tool mygo dev` when the change is visible (a screenshot or the running app, not just a green test).
 
 ## Testing & QA

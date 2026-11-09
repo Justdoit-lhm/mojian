@@ -217,7 +217,7 @@ Each release contains:
 
 ## Design
 
-Mojian uses ink `#1F1B16`, paper `#FBF7EF`, and vermilion `#D24A2B`. Almost everything is ink on paper; only the cursor keeps the vermilion, the one voice the page raises. Logo masters and exports live in [`logos/README.md`](logos/README.md).
+Mojian uses ink `#1F1B16`, paper `#FBF7EF`, and vermilion `#D24A2B`. Almost everything is ink on paper; only the cursor keeps the vermilion, the one voice the page raises.
 
 ## Credits
 
