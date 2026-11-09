@@ -36,7 +36,7 @@ type Category struct {
 // Categories is the rail, in order.
 var Categories = []Category{
 	{"General", "Startup, project and working tree", "settings", "startup restore tabs project server git working tree refresh"},
-	{"Appearance", "How Mojian looks", "palette", "theme light dark appearance look colors"},
+	{"Appearance", "How Mojian looks", "palette", "theme light dark appearance look colors mode auto palette"},
 	{"Editor", "Type, writing and Markdown", "pencil", "editor code font line height tab wrap markdown active line indent brackets scroll"},
 	{"Terminal", "Type, input, notifications and the shell", "square-terminal", "terminal shell font cursor blink scrollback clipboard option alt notifications bell exit"},
 	{"Keyboard", "Shortcuts this app uses", "command", "keyboard shortcut keys hotkeys keybindings commands"},
@@ -84,11 +84,16 @@ var Rows = []Row{
 		Detail: "Read the working tree again when the app regains focus.", Words: "git refresh focus auto worktree",
 		Kind: Toggle, Pref: "NoGitAutoRefresh", Invert: true},
 
-	// Appearance (the page paints the theme tiles; this row feeds search)
-	{ID: "appearance", Cat: Appearance, Section: "THEME", Title: "Theme",
-		Detail: "Light, dark or the system's.",
-		Words:  "theme appearance light dark system look", Kind: Choice, Pref: "Appearance",
+	// Appearance (the page paints the mode row and the theme grid; these
+	// rows feed search)
+	{ID: "appearance", Cat: Appearance, Section: "THEME", Title: "Mode",
+		Detail: "System, Light or Dark.",
+		Words:  "appearance mode system light dark auto follow", Kind: Choice, Pref: "Appearance",
 		Options: []string{"System", "Light", "Dark"}},
+	{ID: "appearance-theme", Cat: Appearance, Section: "THEME", Title: "Theme",
+		Detail: "The window's colors.", Words: "theme color colors colour palette " +
+			"petal mist meadow dusk tide apricot aurora dune paper plain",
+		Kind: Text, Pref: "Theme"},
 
 	// Editor
 	{ID: "editor-font", Cat: Editor, Section: "TYPE", Title: "Editor font",

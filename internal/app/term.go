@@ -303,6 +303,8 @@ func (a *app) terminalOptions(conn *session.Stream, tt *termTab) terminal.Option
 		NoBlink:      a.NoCursorBlink,
 		Scrollback:   a.termScrollback() * 1 << 20,
 		Transparent:  true,
+		Theme:        terminalTheme(a.Theme, false),
+		DarkTheme:    terminalTheme(a.Theme, true),
 		Padding:      terminal.Padding{X: 10, Y: 8},
 		OnBell: func() {
 			update(func() {
@@ -324,6 +326,35 @@ func (a *app) terminalOptions(conn *session.Stream, tt *termTab) terminal.Option
 				a.invalidate()
 			})
 		},
+	}
+}
+
+// rethemeTerminals repaints every live terminal, in the project on screen
+// and in the ones kept loaded, so a theme change reaches a shell that is
+// already running instead of waiting for the pane to reopen.
+func (a *app) rethemeTerminals() {
+	light, dark := terminalTheme(a.Theme, false), terminalTheme(a.Theme, true)
+	seen := map[*terminal.Terminal]bool{}
+	apply := func(tabs []*tab) {
+		for _, t := range tabs {
+			if t == nil {
+				continue
+			}
+			for _, p := range t.panes() {
+				if p.Term == nil || p.Term.Term == nil || seen[p.Term.Term] {
+					continue
+				}
+				seen[p.Term.Term] = true
+				p.Term.Term.SetTheme(light, dark)
+			}
+		}
+	}
+	apply(a.tabs)
+	for _, ws := range a.workspaces {
+		if ws == nil || ws == a.workspace {
+			continue
+		}
+		apply(ws.tabs)
 	}
 }
 

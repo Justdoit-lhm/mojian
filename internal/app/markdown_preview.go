@@ -110,17 +110,17 @@ func shieldPNG(raw string) string {
 // little HTML documents carry: paragraphs, links, pictures and text,
 // which the Markdown view would otherwise show as source. The pictures
 // load on goroutines of their own.
-func markdownHTMLBlock(c *ui.Context, src string, images map[string]*markdownImage, load func(string) (ui.ImageSource, error)) {
+func markdownHTMLBlock(c *ui.Context, src string, images map[string]*markdownImage, load func(string) (ui.ImageSource, error), k *colors) {
 	doc, err := html.Parse(strings.NewReader(src))
 	if err != nil {
-		ui.Text(c, src).FontSize(14).TextColor(colorsOf(c).TextMuted)
+		ui.Text(c, src).FontSize(14).TextColor(k.TextMuted)
 		return
 	}
 	body := htmlBody(doc)
 	if body == nil {
 		return
 	}
-	htmlChildren(c, body, images, load)
+	htmlChildren(c, body, images, load, k)
 }
 
 func htmlBody(doc *html.Node) *html.Node {
@@ -144,7 +144,7 @@ func htmlBody(doc *html.Node) *html.Node {
 
 // htmlChildren builds a parent's children, a row for each run of inline
 // content between the blocks.
-func htmlChildren(c *ui.Context, parent *html.Node, images map[string]*markdownImage, load func(string) (ui.ImageSource, error)) {
+func htmlChildren(c *ui.Context, parent *html.Node, images map[string]*markdownImage, load func(string) (ui.ImageSource, error), k *colors) {
 	var run []*html.Node
 	flush := func() {
 		if len(run) == 0 {
@@ -152,7 +152,7 @@ func htmlChildren(c *ui.Context, parent *html.Node, images map[string]*markdownI
 		}
 		ui.Row(c).Wrap().Gap(6).AlignItems(ui.Center).Children(func() {
 			for _, n := range run {
-				htmlInlineNode(c, n, images, load)
+				htmlInlineNode(c, n, images, load, k)
 			}
 		})
 		run = nil
@@ -163,7 +163,7 @@ func htmlChildren(c *ui.Context, parent *html.Node, images map[string]*markdownI
 		}
 		if htmlBlockElement(n) {
 			flush()
-			htmlBlock(c, n, images, load)
+			htmlBlock(c, n, images, load, k)
 			continue
 		}
 		run = append(run, n)
@@ -171,38 +171,36 @@ func htmlChildren(c *ui.Context, parent *html.Node, images map[string]*markdownI
 	flush()
 }
 
-func htmlBlock(c *ui.Context, n *html.Node, images map[string]*markdownImage, load func(string) (ui.ImageSource, error)) {
-	k := colorsOf(c)
+func htmlBlock(c *ui.Context, n *html.Node, images map[string]*markdownImage, load func(string) (ui.ImageSource, error), k *colors) {
 	switch n.Data {
 	case "hr":
 		ui.Box(c).Height(1).AlignSelf(ui.Stretch).Background(k.Hover).Margin(6, 0)
 	case "ul", "ol":
 		ui.Column(c).Gap(4).AlignSelf(ui.Stretch).Children(func() {
-			htmlChildren(c, n, images, load)
+			htmlChildren(c, n, images, load, k)
 		})
 	case "li":
 		ui.Row(c).AlignItems(ui.Start).Gap(6).Children(func() {
 			ui.Text(c, "•").FontSize(14).TextColor(k.TextFaint)
 			ui.Column(c).Grow(1).Children(func() {
-				htmlChildren(c, n, images, load)
+				htmlChildren(c, n, images, load, k)
 			})
 		})
 	case "blockquote":
 		ui.Row(c).Gap(10).AlignSelf(ui.Stretch).Children(func() {
 			ui.Box(c).Width(3).AlignSelf(ui.Stretch).Background(k.Hover)
 			ui.Column(c).Grow(1).Children(func() {
-				htmlChildren(c, n, images, load)
+				htmlChildren(c, n, images, load, k)
 			})
 		})
 	default:
 		ui.Column(c).AlignSelf(ui.Stretch).Children(func() {
-			htmlChildren(c, n, images, load)
+			htmlChildren(c, n, images, load, k)
 		})
 	}
 }
 
-func htmlInlineNode(c *ui.Context, n *html.Node, images map[string]*markdownImage, load func(string) (ui.ImageSource, error)) {
-	k := colorsOf(c)
+func htmlInlineNode(c *ui.Context, n *html.Node, images map[string]*markdownImage, load func(string) (ui.ImageSource, error), k *colors) {
 	switch n.Type {
 	case html.TextNode:
 		if text := strings.Join(strings.Fields(n.Data), " "); text != "" {
@@ -221,7 +219,7 @@ func htmlInlineNode(c *ui.Context, n *html.Node, images map[string]*markdownImag
 			// The row's gap separates what a break divides.
 		default:
 			for child := n.FirstChild; child != nil; child = child.NextSibling {
-				htmlInlineNode(c, child, images, load)
+				htmlInlineNode(c, child, images, load, k)
 			}
 		}
 	}
@@ -236,7 +234,7 @@ func htmlLink(c *ui.Context, k *colors, n *html.Node, images map[string]*markdow
 	}
 	link.Children(func() {
 		for child := n.FirstChild; child != nil; child = child.NextSibling {
-			htmlInlineNode(c, child, images, load)
+			htmlInlineNode(c, child, images, load, k)
 		}
 	})
 }

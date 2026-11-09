@@ -3,10 +3,35 @@ package app
 import (
 	"testing"
 
+	"mojian/internal/remote"
 	"mojian/internal/session"
 
 	"github.com/egoist/mygo/ui"
 )
+
+func TestRemotePickerReusesConnectionAndHome(t *testing.T) {
+	if !terminalsSupported() {
+		t.Skip("remote projects need terminals")
+	}
+	startLocalServerForTest(t)
+	a := newProjectApp(t)
+	client, err := session.Connect()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = client.Close() })
+	a.setRemoteConn(&remote.Conn{Host: "buildbox", Client: client})
+	a.keepRemote("buildbox")
+	a.remoteHomes = map[string]string{"buildbox": t.TempDir()}
+
+	a.openRemotePicker("buildbox")
+	if a.remoteBusy {
+		t.Fatal("a kept connection still used the loading card")
+	}
+	if !a.remotePicker || a.remotePickHost != "buildbox" || a.remoteHost != "buildbox" {
+		t.Fatalf("picker: open=%v host=%q shown=%q", a.remotePicker, a.remotePickHost, a.remoteHost)
+	}
+}
 
 func TestRemotePickerScrollsItsFolders(t *testing.T) {
 	registerFonts()

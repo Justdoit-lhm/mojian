@@ -33,8 +33,17 @@ func (a *app) openRemotePicker(host string) {
 	}
 	a.closeModals()
 	a.initWorkspaces()
+	cachedHome := a.remoteHomes[host]
 	existing := a.remoteForHost(host)
-	seq, win := a.beginRemoteTask("Connecting to " + a.hostLabel(host) + "…")
+	if existing != nil && cachedHome != "" {
+		a.showRemotePicker(host, cachedHome, existing)
+		return
+	}
+	msg := "Connecting to " + a.hostLabel(host) + "…"
+	if existing != nil {
+		msg = "Reading folders on " + a.hostLabel(host) + "…"
+	}
+	seq, win := a.beginRemoteTask(msg)
 	if seq == 0 {
 		return
 	}
@@ -44,9 +53,9 @@ func (a *app) openRemotePicker(host string) {
 		if rc == nil {
 			rc, err = remote.Dial(host)
 		}
-		var home string
+		home := cachedHome
 		var dirs []session.FileEntry
-		if err == nil {
+		if err == nil && home == "" {
 			home, err = remote.SSHOutput(host, `printf %s "$HOME"`)
 		}
 		if err == nil {
@@ -67,6 +76,12 @@ func (a *app) openRemotePicker(host string) {
 				a.fail(err)
 				return
 			}
+			if home != "" {
+				if a.remoteHomes == nil {
+					a.remoteHomes = map[string]string{}
+				}
+				a.remoteHomes[host] = home
+			}
 			if rc != nil {
 				a.installRemoteConn(rc)
 				a.remotePickHost = host
@@ -84,6 +99,22 @@ func (a *app) openRemotePicker(host string) {
 			a.invalidate()
 		})
 	}()
+}
+
+// showRemotePicker opens the folder picker at home on a connected host,
+// without the window-wide loading card.
+func (a *app) showRemotePicker(host, home string, rc *remote.Conn) {
+	if rc == nil {
+		return
+	}
+	a.installRemoteConn(rc)
+	a.remotePickHost = host
+	a.remoteHost = host
+	a.remoteQuery = home
+	a.remotePicker = true
+	a.serverOpen = false
+	a.remoteErr = ""
+	a.loadRemoteDirs(home)
 }
 
 // pickerRemote is the server whose folders the project picker shows.
@@ -323,26 +354,22 @@ func (a *app) remoteProjectRows(c *ui.Context, k *colors) {
 			continue
 		}
 		p := p
-		row := ui.Row(c.Key("remote:"+p.Host+":"+p.Path)).Height(39).Padding(0, 8).
-			Gap(8).Radius(radius).Cursor(ui.CursorPointer).Role(ui.RoleButton).
-			Label(p.Path)
-		if p.Path == a.remotePath {
-			row.Background(k.PanelSel)
-		} else if row.Hovered() {
-			row.Background(k.Hover)
-		}
-		if row.Clicked() {
-			a.projectOpen = false
-			a.later(func() { a.openRemoteProjectAsync(p.Host, p.Path) })
-		}
-		row.Children(func() {
-			ui.Icon(c, icons.FolderIcon()).Size(15, 15).TextColor(k.TextMuted)
-			ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-				ui.Text(c, filepath.Base(p.Path)).FontSize(12.5).TextColor(k.Text).
-					SingleLine().Ellipsis("…")
-				ui.Text(c, p.Path).FontSize(10.5).TextColor(k.TextFaint).
-					SingleLine().Ellipsis("…")
-			})
+		current := p.Path == a.remotePath
+		a.projectRowBase(c, k, projectRowSpec{
+			key:        "remote:" + p.Host + ":" + p.Path,
+			label:      p.Path,
+			title:      filepath.Base(p.Path),
+			detail:     p.Path,
+			closeLabel: p.Path,
+			current:    current,
+			open: func() {
+				a.projectOpen = false
+				a.later(func() { a.openRemoteProjectAsync(p.Host, p.Path) })
+			},
+			close: func() {
+				a.projectOpen = false
+				a.later(func() { a.closeRemoteProject(p.Host, p.Path) })
+			},
 		})
 	}
 }
@@ -409,6 +436,9 @@ func (a *app) setUpHost(host string) {
 // Settings window.
 func (a *app) finishHostSetup(host string, setup *remote.Setup, err error) {
 	if a.hostSetupAddr != host {
+		if setup != nil && setup.Conn != nil && a.remoteConn(setup.Conn.Host) != setup.Conn {
+			a.detachRemoteConn(setup.Conn)
+		}
 		a.hostSetupBusy = false
 		return
 	}
@@ -418,6 +448,22 @@ func (a *app) finishHostSetup(host string, setup *remote.Setup, err error) {
 		a.hostSetupMsg = ""
 		a.invalidate()
 		return
+	}
+	if setup.Home != "" {
+		if a.remoteHomes == nil {
+			a.remoteHomes = map[string]string{}
+		}
+		a.remoteHomes[host] = setup.Home
+	}
+	if setup.Conn != nil {
+		if a.remoteConn(setup.Conn.Host) == setup.Conn {
+			a.keepRemote(setup.Conn.Host)
+		} else if cur := a.remoteForHost(host); cur != nil && cur != setup.Conn {
+			remote.Close(setup.Conn)
+		} else {
+			a.installRemoteConn(setup.Conn)
+			a.keepRemote(host)
+		}
 	}
 	if a.hostReady == nil {
 		a.hostReady = map[string]bool{}

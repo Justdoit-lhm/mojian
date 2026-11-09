@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Mojian is a quiet text editor for plain files, written in Go against [MyGo](https://mygo.egoist.dev)'s native UI. It is not a web app: there is no webview, no cgo, no JavaScript build. One Go binary draws its own window (Metal on macOS). Tabs are workspaces; each tab holds a binary split tree of panes, and each pane edits a file, previews a picture or PDF, or runs a terminal. The gap between two panes is a divider you drag (or move with the arrows) to resize them; each split saves the share you chose. Version `0.2.6`, bundle id `dev.mojian.app`, macOS 13+.
+Mojian is a quiet text editor for plain files, written in Go against [MyGo](https://mygo.egoist.dev)'s native UI. It is not a web app: there is no webview, no cgo, no JavaScript build. One Go binary draws its own window (Metal on macOS). Tabs are workspaces; each tab holds a binary split tree of panes, and each pane edits a file, previews a picture or PDF, or runs a terminal. The gap between two panes is a divider you drag (or move with the arrows) to resize them; each split saves the share you chose. Version `0.2.9`, bundle id `dev.mojian.app`, macOS 13+.
 
 A project is just a folder; it keeps its own tabs and layout. Opened projects stay loaded in a workspace cache (`internal/app/workspace.go`): switching stashes the active tabs, terminals, layout and Git page and restores the next project without reading it again. Edits stay in memory until an explicit `⌘S`. On macOS and Linux every local project is opened through the local session server, so its files, Git and terminals share one process; quitting the app detaches the terminals and reopening reattaches them. Remote projects are edited directly on the host: only a listing is cached, and a file's text is read when it opens. A remote server and its terminals stay alive after the app or SSH connection disconnects. Windows is not supported.
 
@@ -20,6 +20,8 @@ The paragraphs below are the short version; `docs/subsystems/` holds the contrac
 
 **Cross-package contracts.** `git.Host` (`internal/git/git.go:52`) is the only interface the Git page uses to reach the window; `*app` implements it in `internal/app/git_bridge.go`. `internal/app/theme_bridge.go` exists so `app` touches `internal/theme` through one file, and `platform_bridge.go` / `remote_bridge.go` do the same for `internal/platform` and `internal/remote`.
 
+**Colors.** One `appearance` preference (System/Light/Dark) picks the light or dark world; one `theme` preference names the ten color themes, Petal by default. `internal/theme/themes.go` builds both palettes of every theme once at start: `Window` is the window's `Colors`, `Terminal` the program palette, `UI` the MyGo widget theme, `EditorTheme` the code colors, and `PaintPreview` the Settings thumbnail. Petal keeps the palettes Mojian has always drawn; every other theme derives its surfaces and program colors from one tone.
+
 **Persistence.** `settings.json` and `layouts/<fnv64a(projectDir)>.json` live in `mygo.App.Path(mygo.PathUserData)`; `MOJIAN_VAULT` selects the project folder and `MOJIAN_DIR` the data/socket/log directory. The preference schema is `internal/prefs.Prefs`; the compatibility rules for the files and the layout JSON are in [docs/subsystems/persistence-and-layout.md](docs/subsystems/persistence-and-layout.md).
 
 ## Key Directories
@@ -36,7 +38,7 @@ The paragraphs below are the short version; `docs/subsystems/` holds the contrac
 | `internal/session/` | PTY server and client, wire protocol, remote file ops, spawn/lock, platform stubs. |
 | `internal/git/` | Working-tree diff page: status/diff reading, parsing, view. |
 | `internal/gitenv/` | The environment Git commands run in, without redirect variables. |
-| `internal/theme/` | Light/dark `Colors`, `Radius`, background painting, editor theme, font registration. |
+| `internal/theme/` | The ten color themes and their derivation, `Colors`, `Radius`, background painting, editor and terminal themes, font registration. |
 | `internal/icons/` | Lucide action icons and Material Icon Theme file icons, cached from embedded SVG. |
 | `internal/assets/` | `embed.FS` of icons, brand marks and JetBrains Mono. |
 | `internal/motion/` | `ui.ElementTransition` values (`Page`, `Tab`, `Tree`, `Row`, `Pane`, `Colors`), springs for interruptible changes. |

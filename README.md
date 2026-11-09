@@ -115,7 +115,7 @@ Press `Shift+Cmd+P` / `Ctrl+Shift+P` to search commands, files, and tabs with fu
 
 Press `Cmd+,` / `Ctrl+,` to open the separate Settings window. It includes General, Appearance, Editor, Terminal, Shell, Notifications, Keyboard, Hosts, Git, Advanced, and Updates.
 
-Search finds preferences by name or keyword, and `Cmd+F` focuses the search field. Mojian follows the system appearance by default; **View › Appearance** overrides it.
+Search finds preferences by name or keyword, and `Cmd+F` focuses the search field. Mojian follows the system appearance by default; **View › Appearance** overrides it, and the Appearance page's theme grid picks one of ten color themes (Petal, Mist, Meadow, Dusk, Tide, Apricot, Aurora, Dune, Paper, Plain) for the window, the editor and terminals.
 
 ## Remote projects
 
@@ -126,6 +126,8 @@ Search finds preferences by name or keyword, and `Cmd+F` focuses the search fiel
 Setup requires no root access, listening port, or system service.
 
 The Explorer lists files on the host. Files are read when opened, and saves and file operations write straight back. Git also runs on the host. Once opened, a project stays loaded, so switching back restores its tabs and terminals without reading it again.
+
+Each project in the project chip, local or remote, has a trash button on its right. It removes that project from the list and unloads it if it is open, saving first when it is the open project: a local close switches to the next recent project, and a remote one goes back to the last local project. The host's connection is kept after **Set Up Server** and while any project on it is loaded, so its folder picker opens without connecting again; it is released when the last project on that host is removed, and at quit.
 
 The remote server and its terminals stay alive when Mojian or the SSH connection disconnects. Each terminal remembers the server that owns it. Run `mojian-server -stop` to end a server explicitly.
 

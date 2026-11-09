@@ -42,6 +42,7 @@ func (a *app) remoteForHost(host string) *remote.Conn {
 		return rc
 	}
 	a.deleteRemoteConn(host)
+	delete(a.remoteKeep, host)
 	remote.Close(rc)
 	return nil
 }

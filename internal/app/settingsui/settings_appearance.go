@@ -1,8 +1,6 @@
 package settingsui
 
 import (
-	"strconv"
-
 	"mojian/internal/theme"
 
 	"github.com/egoist/mygo/ui"
@@ -12,76 +10,56 @@ import (
 // System, Light, Dark.
 var themeLabels = []string{"System", "Light", "Dark"}
 
-// settingsAppearancePage shows the appearance as the window it makes: the
-// same gradient and card the user is looking at, in each palette.
+// settingsAppearancePage offers the appearance as a compact control, since
+// it is a choice of two worlds rather than a look, and the look itself as a
+// grid of themes, each drawn the way the window would be.
 func (u *UI) settingsAppearancePage(c *ui.Context, k *colors) {
+	u.settingsSection(c, k, "", func() {
+		u.settingsChoiceRow(c, k, "appearance-mode", "Mode",
+			"System follows this Mac's light or dark appearance.",
+			func() int { return u.Appearance }, func(n int) { u.setAppearance(n) }, themeLabels)
+	})
 	u.settingsSection(c, k, "THEME", func() {
-		ui.Row(c).Padding(16).Gap(10).Role(ui.RoleRadioGroup).Label("Theme").
+		dark := u.dark(c)
+		ui.Row(c).Padding(16).Gap(10).Wrap().Role(ui.RoleRadioGroup).Label("Theme").
 			Children(func() {
-				for n, label := range themeLabels {
-					n, label := n, label
-					sel := u.Appearance == n
-					tile := ui.ButtonBase(c.Key("theme-" + strconv.Itoa(n))).Grow(1).
-						Height(96).Padding(6).Radius(10).Role(ui.RoleRadio).
-						AccessSelected(sel).Label(label + " theme")
-					if sel {
-						tile.Border(2, c.Theme().Accent)
-					} else {
-						tile.Border(2, ui.Transparent)
-					}
-					if tile.Clicked() && !sel {
-						u.chooseAppearance(n)
-					}
-					tile.Children(func() {
-						ui.Column(c).FillWidth().Gap(6).Children(func() {
-							ui.Box(c).Height(54).FillWidth().Radius(7).Clip().
-								Draw(func(p *ui.Painter, r ui.Rect) {
-									paintThemePreview(p, r, n)
-								})
-							col, weight := k.TextMuted, 500
-							if sel {
-								col, weight = k.Text, 650
-							}
-							ui.Text(c, label).FontSize(12.5).FontWeight(weight).
-								TextColor(col).TextAlign(ui.Center).FillWidth()
-						})
-					})
+				for _, ch := range theme.Choices {
+					u.themeTile(c, k, ch, dark)
 				}
 			})
 	})
 }
 
-// chooseAppearance applies one of the three appearances and keeps it.
-func (u *UI) chooseAppearance(n int) {
-	u.Appearance = n
-	u.syncAppearance()
-	u.saveSettings()
-	u.invalidate()
-}
-
-// paintThemePreview fills a preview with the window's background and its
-// card, in one palette or in both.
-func paintThemePreview(p *ui.Painter, r ui.Rect, which int) {
-	light, dark := theme.Palette(false), theme.Palette(true)
-	switch which {
-	case 1:
-		theme.PaintBackground(p, r, &light)
-		p.Fill(previewCard(r), light.Card, 5)
-	case 2:
-		theme.PaintBackground(p, r, &dark)
-		p.Fill(previewCard(r), dark.Card, 5)
-	default:
-		half := ui.Rect{X: r.X, Y: r.Y, W: r.W / 2, H: r.H}
-		rest := ui.Rect{X: r.X + half.W, Y: r.Y, W: r.W - half.W, H: r.H}
-		p.Clip(half, 0, func() { theme.PaintBackground(p, r, &light) })
-		p.Clip(rest, 0, func() { theme.PaintBackground(p, r, &dark) })
-		p.Fill(previewCard(half), light.Card, 5)
-		p.Fill(previewCard(rest), dark.Card, 5)
+// themeTile is one theme of the grid: a thumbnail of the window it makes,
+// its name under it, and a ring in its own accent while it is the one.
+func (u *UI) themeTile(c *ui.Context, k *colors, ch theme.Choice, dark bool) {
+	sel := theme.Resolve(u.Theme) == ch.ID
+	tk := theme.Window(ch.ID, dark)
+	tile := ui.ButtonBase(c.Key("theme-" + ch.ID)).Width(132).Padding(6).
+		Radius(10).Role(ui.RoleRadio).AccessSelected(sel).
+		Label(ch.Name + " theme")
+	if sel {
+		tile.Border(2, tk.Accent)
+	} else {
+		tile.Border(2, ui.Transparent)
 	}
-}
-
-// previewCard is the inside of a preview: the mini section card, 12 DIPs
-// in from the surface it sits on.
-func previewCard(r ui.Rect) ui.Rect {
-	return ui.Rect{X: r.X + 12, Y: r.Y + 12, W: r.W - 24, H: r.H - 24}
+	if tile.Clicked() && !sel {
+		u.setTheme(ch.ID)
+		u.saveSettings()
+		u.invalidate()
+	}
+	tile.Children(func() {
+		ui.Column(c).FillWidth().Gap(6).Children(func() {
+			ui.Box(c).Height(80).FillWidth().Radius(7).Clip().
+				Draw(func(p *ui.Painter, r ui.Rect) {
+					theme.PaintPreview(p, r, ch.ID, dark)
+				})
+			col, weight := k.TextMuted, 500
+			if sel {
+				col, weight = k.Text, 650
+			}
+			ui.Text(c, ch.Name).FontSize(12.5).FontWeight(weight).
+				TextColor(col).TextAlign(ui.Center).FillWidth()
+		})
+	})
 }

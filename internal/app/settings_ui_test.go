@@ -10,7 +10,9 @@ import (
 	"testing"
 
 	"mojian/internal/remote"
+	"mojian/internal/session"
 	"mojian/internal/settings"
+	"mojian/internal/theme"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -254,17 +256,37 @@ func TestSettingsSearchShortcut(t *testing.T) {
 	}
 }
 
+func TestSettingsSearchFindsTheme(t *testing.T) {
+	registerFonts()
+	a := newProjectApp(t)
+	tt := ui.NewTester(a.settingsWindowView, 900, 640)
+	tt.Frame()
+	a.settings.Query = "meadow"
+	tt.Frame()
+	tt.Frame()
+	if !a.settings.Found[settingsAppearance] {
+		t.Fatalf("searching meadow did not find the theme row: %q", tt.Texts())
+	}
+	if a.settings.Cat != settingsAppearance {
+		t.Fatalf("page after searching meadow: %d", a.settings.Cat)
+	}
+}
+
 func TestSettingsResetKeepsProjectsAndServers(t *testing.T) {
 	registerFonts()
 	a := newProjectApp(t)
 	a.Appearance = 2
 	a.EditorFontSize = 20
 	a.HideLineNumbers = true
+	a.Theme = "dusk"
 	a.hostService().SetHosts([]hostConfig{{Name: "Dev", Address: "me@devbox"}})
 	a.project = "/tmp/project"
 	a.resetPreferences()
 	if a.Appearance != 0 || a.fontSize() != 12.5 || a.HideLineNumbers {
 		t.Fatalf("preferences after reset: appearance=%d size=%v hide=%v", a.Appearance, a.fontSize(), a.HideLineNumbers)
+	}
+	if a.Theme != theme.DefaultID {
+		t.Fatalf("theme after reset: %q", a.Theme)
 	}
 	if len(a.hosts()) != 1 || a.project != "/tmp/project" {
 		t.Fatalf("reset dropped projects or servers: hosts=%v project=%q", a.hosts(), a.project)
@@ -326,26 +348,45 @@ func TestSettingsAppearanceThemes(t *testing.T) {
 	registerFonts()
 	a := newProjectApp(t)
 	a.settings.Cat = settingsAppearance
-	tt := ui.NewTester(a.settingsWindowView, 900, 640)
+	tt := ui.NewTester(a.settingsWindowView, 900, 720)
 	tt.Frame()
 	for _, label := range []string{"System", "Light", "Dark"} {
 		if !tt.HasText(label) {
 			t.Fatalf("the appearance page is missing %q: %q", label, tt.Texts())
 		}
 	}
-	if err := tt.Click("Dark theme"); err != nil {
+	for _, ch := range theme.Choices {
+		if !tt.HasText(ch.Name) {
+			t.Fatalf("the appearance page is missing the %s theme: %q", ch.ID, tt.Texts())
+		}
+	}
+	if err := tt.Click("Dark"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
 	if a.Appearance != 2 {
-		t.Fatalf("appearance after the dark tile: %d", a.Appearance)
+		t.Fatalf("appearance after Dark: %d", a.Appearance)
 	}
-	if err := tt.Click("System theme"); err != nil {
+	if err := tt.Click("System"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
 	if a.Appearance != 0 {
-		t.Fatalf("appearance after the system tile: %d", a.Appearance)
+		t.Fatalf("appearance after System: %d", a.Appearance)
+	}
+	if err := tt.Click("Mist theme"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.Theme != "mist" {
+		t.Fatalf("theme after the mist tile: %q", a.Theme)
+	}
+	if err := tt.Click("Petal theme"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.Theme != theme.DefaultID {
+		t.Fatalf("theme after the petal tile: %q", a.Theme)
 	}
 }
 
@@ -409,5 +450,30 @@ func TestSettingsHostsHidesRecentRemoteProjects(t *testing.T) {
 	tt.Frame()
 	if tt.HasText("RECENT REMOTE PROJECTS") {
 		t.Fatalf("the hosts page still lists recent remote projects: %q", tt.Texts())
+	}
+}
+
+func TestFinishHostSetupKeepsConnection(t *testing.T) {
+	if !terminalsSupported() {
+		t.Skip("remote projects need terminals")
+	}
+	startLocalServerForTest(t)
+	a := newProjectApp(t)
+	client, err := session.Connect()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = client.Close() })
+	rc := &remote.Conn{Host: "fedora", Client: client}
+	a.hostSetupAddr = "fedora"
+	a.finishHostSetup("fedora", &remote.Setup{Home: "/home/me", Conn: rc}, nil)
+	if a.remoteConn("fedora") != rc {
+		t.Fatal("the setup connection was not pooled")
+	}
+	if !a.remoteKeep["fedora"] {
+		t.Fatal("the setup connection was not kept")
+	}
+	if a.remoteHomes["fedora"] != "/home/me" {
+		t.Fatalf("cached home: %q", a.remoteHomes["fedora"])
 	}
 }

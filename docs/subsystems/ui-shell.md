@@ -57,6 +57,18 @@ window, the error banner and command dispatch from menu, palette and keyboard.
   the session server must be guarded by it, or the headless worker blocks.
 - Motion uses `internal/motion`: critically damped springs for pages, tabs, the tree and panes, a
   short color curve for hover; MyGo drops movement when the system asks for less motion.
+- The palette and the appearance are one decision made per frame: `(*app).dark` reads
+  `prefs.Appearance` (System follows the frame's theme), `(*app).colorsOf` is
+  `theme.Window(a.Theme, dark)`, and `(*app).applyTheme` hands the frame `theme.UI` of that
+  palette. `(*app).editorTheme` is cached per theme and appearance pair and re-read by every pane
+  each frame, so a theme switch re-colors notes that are already open.
+- A forced appearance must reach the native side, which frame colors cannot do: `themeSource`
+  maps the preference to `mygo.ThemeSource` and `applyAppearanceSource` calls
+  `mygo.Theme.SetSource`, both at window creation (before `mygo.NewWindow`) and on every change.
+  A window's own `BackgroundColor` comes from `(*app).windowBackground`, a `light-dark()` pair of
+  the open theme, so the strip behind the traffic lights matches without a flash.
+- `internal/app/theme_bridge.go` is the only file in `internal/app` that names `internal/theme`
+  (besides `settings_host.go`); `archtest` enforces it.
 
 ## Verification
 

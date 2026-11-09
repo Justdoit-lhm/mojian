@@ -1,7 +1,23 @@
 # Changelog
 
-## Unreleased
+## 0.2.9
 
+- The Appearance page offers ten color themes: Petal, the look Mojian has
+  always had, and Mist, Meadow, Dusk, Tide, Apricot, Aurora, Dune, Paper
+  and Plain. Each colors the window, its cards, the editor's syntax and
+  the terminals from one palette, the grid shows a thumbnail of every
+  theme, and the shells and notes already open follow the choice without
+  reopening. The three appearances are a compact control now, and a forced
+  Light or Dark also switches the native window, so the traffic lights and
+  the system panels follow the choice instead of staying on the Mac's.
+- Each project in the project chip, local or remote, has a trash button on
+  its right: it removes that project from the list and unloads it if it is
+  open, saving first when it is the open project. A local close switches to
+  the next recent project; a remote one returns to the last local project.
+  The server's connection stays pooled after **Set Up Server** and while
+  any project on it is loaded, so its folder picker opens without
+  connecting again; the connection is released when the last project on
+  that host is removed.
 - Markdown previews draw the HTML blocks documents use for badges and
   linked pictures, which used to show as their source: links open in the
   browser, pictures come from beside the note or from the web, and a

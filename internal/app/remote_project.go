@@ -80,6 +80,7 @@ func (a *app) reconnectActiveRemoteAsync() {
 		return
 	}
 	if existing := a.remoteForHost(host); existing != nil && existing.Healthy() {
+		a.keepRemote(host)
 		a.installRemoteConn(existing)
 		a.invalidate()
 		return
@@ -102,6 +103,7 @@ func (a *app) reconnectActiveRemoteAsync() {
 				return
 			}
 			a.installRemoteConn(rc)
+			a.keepRemote(host)
 			a.saveSettings()
 			a.invalidate()
 		})
@@ -116,6 +118,7 @@ func (a *app) reconnectWorkspaceAsync(ws *workspace, host string) {
 	}
 	existing := a.remoteForHost(host)
 	if existing != nil && existing.Healthy() {
+		a.keepRemote(host)
 		a.installRemoteConn(existing)
 		a.switchWorkspace(ws)
 		return
@@ -143,11 +146,55 @@ func (a *app) reconnectWorkspaceAsync(ws *workspace, host string) {
 				return
 			}
 			a.installRemoteConn(rc)
+			a.keepRemote(host)
 			a.switchWorkspace(ws)
 			a.saveSettings()
 			a.invalidate()
 		})
 	}()
+}
+
+// closeRemoteProject forgets one project from the remembered list. When
+// it is loaded it is unloaded too; closing the open project returns to
+// the last local project, and the host's connection is released when no
+// project or terminal on it remains.
+func (a *app) closeRemoteProject(host, path string) {
+	a.projectOpen = false
+	key := workspaceKeyRemote(host, path)
+	a.initWorkspaces()
+	active := a.serverAlias == host && a.remotePath == path
+	ws := a.workspaces[key]
+	if active {
+		if err := a.saveNow(); err != nil {
+			a.fail(fmt.Errorf("could not save the open project: %w", err))
+			return
+		}
+		a.dropPaneOverlays(nil)
+	}
+	if ws != nil {
+		closeWorkspaceTerminals(ws)
+		delete(a.workspaces, key)
+	}
+	a.hostService().ForgetProject(host, path)
+	if a.remotePickHost == host {
+		a.remotePickHost = ""
+	}
+	if active {
+		a.serverAlias, a.remotePath = "", ""
+		a.abandonActiveWorkspace()
+		a.updateTitle()
+		a.later(func() {
+			if a.project != "" {
+				a.openProject(a.project)
+			}
+		})
+	}
+	if !a.hostUsed(host) {
+		delete(a.remoteKeep, host)
+	}
+	a.releaseRemote(host)
+	a.saveSettings()
+	a.invalidate()
 }
 
 // openRemoteProjectAsync opens a remote project away from the UI thread,
@@ -173,6 +220,7 @@ func (a *app) openRemoteProjectAsync(host, remotePath string) {
 	if ws := a.workspaces[key]; ws != nil {
 		a.rememberRemoteProject(remoteProject{Host: host, Path: remotePath})
 		if a.workspaceReachable(ws) {
+			a.keepRemote(host)
 			a.switchWorkspace(ws)
 			a.dropPickerRemote()
 			a.saveSettings()
@@ -243,6 +291,10 @@ func (a *app) openRemoteProjectAsync(host, remotePath string) {
 			}
 			a.workspaces[key] = ws
 			a.activateWorkspace(ws)
+			if a.remotePickHost == host {
+				a.remotePickHost = ""
+			}
+			a.keepRemote(host)
 			a.rememberRemoteProject(remoteProject{Host: host, Path: remotePath})
 			if !a.restoreLayout() {
 				a.focusFirstNote()

@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"runtime"
 
@@ -85,6 +86,11 @@ func (a *app) showFromTray() {
 
 // createWindow opens a window for this app instance.
 func (a *app) createWindow(stateKey string) *mygo.Window {
+	// The native appearance has to be set before the window exists, or
+	// the first window opens in the system's and then flips.
+	if !a.harness {
+		mygo.Theme.SetSource(a.themeSource())
+	}
 	win := mygo.NewWindow(mygo.WindowOptions{
 		Title:                "Mojian",
 		Width:                1120,
@@ -94,7 +100,7 @@ func (a *app) createWindow(stateKey string) *mygo.Window {
 		StateKey:             stateKey,
 		TitleBarStyle:        mygo.TitleBarHidden,
 		TrafficLightPosition: &mygo.Point{X: 16, Y: 15},
-		BackgroundColor:      "light-dark(#efe1e6, #231e27)",
+		BackgroundColor:      a.windowBackground(),
 		Content:              ui.View(a.view),
 	})
 	a.win = win
@@ -164,7 +170,7 @@ func (a *app) openSettingsWindow() {
 		StateKey:             "settings",
 		TitleBarStyle:        mygo.TitleBarHidden,
 		TrafficLightPosition: &mygo.Point{X: 16, Y: 15},
-		BackgroundColor:      "light-dark(#efe1e6, #231e27)",
+		BackgroundColor:      a.windowBackground(),
 		Content:              ui.View(a.settingsWindowView),
 	})
 	a.settingsWin = win
@@ -189,23 +195,67 @@ func (a *app) invalidate() {
 	}
 }
 
-// applyTheme gives the frame the appearance the user chose.
+// applyTheme gives the frame the appearance and the palette the user
+// chose.
 func (a *app) applyTheme(c *ui.Context) {
-	switch a.Appearance {
-	case 1:
-		c.SetTheme(ui.LightTheme())
-	case 2:
-		c.SetTheme(ui.DarkTheme())
-	}
+	dark := a.dark(c)
+	c.SetTheme(windowTheme(c, a.colorsOf(c), dark))
 }
 
-// editorTheme returns the code theme for the current appearance, kept
-// between frames because it is built once per appearance.
+// editorTheme returns the code theme for the current appearance and theme,
+// kept between frames because it is built once per pair.
 func (a *app) editorTheme(c *ui.Context) *editor.Theme {
-	dark := c.Theme().Dark
-	if a.edTheme == nil || a.edDark != dark {
-		a.edTheme = editorThemeOf(c.Theme())
-		a.edDark = dark
+	id, dark := themeName(a.Theme), a.dark(c)
+	if a.edTheme == nil || a.edID != id || a.edDark != dark {
+		a.edTheme = codeTheme(c.Theme(), id, dark)
+		a.edID, a.edDark = id, dark
 	}
 	return a.edTheme
+}
+
+// themeSource is the appearance MyGo's native chrome draws in: the
+// window's buttons, its menus and the accessibility preferences a page
+// reads all follow it.
+func (a *app) themeSource() mygo.ThemeSource {
+	switch a.Appearance {
+	case 1:
+		return mygo.ThemeLight
+	case 2:
+		return mygo.ThemeDark
+	}
+	return mygo.ThemeSystem
+}
+
+// applyAppearanceSource hands the appearance to the native side, which the
+// frame's colors alone cannot do: a forced dark window needs dark traffic
+// lights and dark system panels too.
+func (a *app) applyAppearanceSource() {
+	if a.harness || a.win == nil {
+		return
+	}
+	mygo.Theme.SetSource(a.themeSource())
+}
+
+// windowBackground is the color a window paints before its view draws, in
+// both appearances, so resizing or a system appearance change never flashes
+// the wrong one.
+func (a *app) windowBackground() string {
+	l, d := themeBgMid(a.Theme, false), themeBgMid(a.Theme, true)
+	return fmt.Sprintf("light-dark(#%02x%02x%02x, #%02x%02x%02x)", l.R, l.G, l.B, d.R, d.G, d.B)
+}
+
+// updateWindowBackground repaints the two windows' own backgrounds after a
+// theme or appearance change.
+func (a *app) updateWindowBackground() {
+	bg := a.windowBackground()
+	if a.win != nil {
+		if err := a.win.SetBackgroundColor(bg); err != nil {
+			log.Print(err)
+		}
+	}
+	if a.settingsWin != nil {
+		if err := a.settingsWin.SetBackgroundColor(bg); err != nil {
+			log.Print(err)
+		}
+	}
 }

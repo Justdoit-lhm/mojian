@@ -25,6 +25,7 @@ import (
 // Install is where a host keeps the server this build needs. It is
 // probed over SSH before the binaries are compared and uploaded.
 type Install struct {
+	home       string
 	arch       string
 	dir        string
 	binPath    string
@@ -128,6 +129,11 @@ type Setup struct {
 	Uploaded bool
 	Path     string
 	Protocol int
+	// Home is the host's home directory, where its folder picker starts.
+	Home string
+	// Conn is the live connection provisioning ended with. The caller owns
+	// it and must Close it if it is not used.
+	Conn *Conn
 }
 
 // sshCommon is the non-interactive SSH base. It deliberately leaves out
@@ -190,6 +196,7 @@ func probe(host string) (*Install, error) {
 		return nil, err
 	}
 	return &Install{
+		home:       home,
 		arch:       arch,
 		dir:        dir,
 		binPath:    dir + "/mojian-server",
@@ -239,9 +246,9 @@ func Dial(host string) (*Conn, error) {
 	return info.forward(host)
 }
 
-// Provision installs the server and checks that it answers. The
-// connection is closed afterwards; the server keeps running for project
-// and terminal use.
+// Provision installs the server and checks that it answers. The returned
+// connection is live and belongs to the caller; the server keeps running
+// for project and terminal use.
 func Provision(host string, existing *Conn) (*Setup, error) {
 	if host == "" {
 		return nil, fmt.Errorf("no server selected")
@@ -263,7 +270,7 @@ func Provision(host string, existing *Conn) (*Setup, error) {
 	if connected {
 		// The binaries are current; the running server keeps its image
 		// until it next starts.
-		return &Setup{Uploaded: uploaded, Path: info.binPath, Protocol: session.ProtocolVersion}, nil
+		return &Setup{Uploaded: uploaded, Path: info.binPath, Protocol: session.ProtocolVersion, Home: info.home, Conn: existing}, nil
 	}
 	// Dial also upgrades a running server that speaks another
 	// protocol: it shuts it down, uploads this build and starts again.
@@ -272,14 +279,15 @@ func Provision(host string, existing *Conn) (*Setup, error) {
 		return nil, err
 	}
 	hello, helloErr := rc.Client.Hello()
-	Close(rc)
 	if helloErr != nil {
+		Close(rc)
 		return nil, helloErr
 	}
 	if hello.Version != session.ProtocolVersion {
+		Close(rc)
 		return nil, &session.ProtocolError{Server: hello.Version, Client: session.ProtocolVersion}
 	}
-	return &Setup{Uploaded: uploaded, Path: info.binPath, Protocol: hello.Version}, nil
+	return &Setup{Uploaded: uploaded, Path: info.binPath, Protocol: hello.Version, Home: info.home, Conn: rc}, nil
 }
 
 // stop asks the running server to exit, through its own -stop command.

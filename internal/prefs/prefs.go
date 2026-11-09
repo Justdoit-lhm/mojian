@@ -7,6 +7,7 @@ package prefs
 // keys all come from this one declaration.
 type Prefs struct {
 	Appearance          int     `json:"appearance"`
+	Theme               string  `json:"theme,omitempty"`
 	EditorFontFamily    string  `json:"editorFontFamily,omitempty"`
 	EditorFontSize      float64 `json:"editorFontSize,omitempty"`
 	EditorLineHeight    float64 `json:"editorLineHeight,omitempty"`
@@ -36,6 +37,7 @@ type Prefs struct {
 // defaults is the settings of a new install. Default and the effective
 // value getters of the app both read it, so a default lives in one place.
 var defaults = Prefs{
+	Theme:          "petal",
 	EditorFontSize: 12.5, EditorLineHeight: 1.55, EditorTabSize: 4,
 	TerminalFontSize: 12.5, TerminalLineHeight: 1, TerminalScrollback: 10,
 	NotifyBell: true, NotifyExit: true,
@@ -64,6 +66,11 @@ func clamp(v, lo, hi, def float64) float64 {
 func (p *Prefs) Sanitize() {
 	if p.Appearance < 0 || p.Appearance > 2 {
 		p.Appearance = 0
+	}
+	// Unknown ids are resolved by theme.Resolve, so only an unset one
+	// needs a value here.
+	if p.Theme == "" {
+		p.Theme = "petal"
 	}
 	p.EditorFontSize = clamp(p.EditorFontSize, 9, 28, defaults.EditorFontSize)
 	p.EditorLineHeight = clamp(p.EditorLineHeight, 1.1, 2.2, defaults.EditorLineHeight)

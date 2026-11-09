@@ -61,6 +61,8 @@ type app struct {
 	projectPicker  bool
 	remotePickHost string // the host a picker connection was made for
 	remoteOpening  bool   // a picked project is about to open
+	remoteKeep     map[string]bool
+	remoteHomes    map[string]string
 	// fileClip is the app's own clipboard: absolute local paths, or paths
 	// relative to a remote project (fileClipRemote). A cut is a one-shot
 	// intent and is cleared when the project changes.
@@ -149,6 +151,7 @@ type app struct {
 	saveSkipped   bool
 	pending       []func()
 
+	edID    string
 	edDark  bool
 	edTheme *editor.Theme
 }

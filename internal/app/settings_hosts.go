@@ -246,6 +246,9 @@ func (a *app) saveHostEdit(host string) {
 		if a.hostSetupAddr == host {
 			a.hostSetupAddr = addr
 		}
+		delete(a.remoteHomes, host)
+		delete(a.remoteHomes, addr)
+		delete(a.remoteKeep, host)
 		for j := range a.remoteProjects() {
 			if a.remoteProjects()[j].Host == host {
 				a.remoteProjects()[j].Host = addr
@@ -276,6 +279,8 @@ func (a *app) removeHost(address string) {
 		a.hostService().RemoveProjects(address)
 		a.hostRemoveAddr = ""
 		delete(a.hostReady, address)
+		delete(a.remoteKeep, address)
+		delete(a.remoteHomes, address)
 		if a.hostSetupAddr == address {
 			a.hostSetupAddr, a.hostSetupBusy = "", false
 			a.hostSetupMsg, a.hostSetupErr = "", ""

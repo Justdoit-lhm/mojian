@@ -38,7 +38,7 @@ func (a *app) markdownBody(c *ui.Context, k *colors, p *pane) {
 				images := map[string]*markdownImage{}
 				opts.LoadImage = load
 				opts.HTML = func(c *ui.Context, block string) {
-					markdownHTMLBlock(c, block, images, load)
+					markdownHTMLBlock(c, block, images, load, a.colorsOf(c))
 				}
 				p.md = opts
 			}

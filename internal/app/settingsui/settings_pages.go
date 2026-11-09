@@ -82,7 +82,8 @@ func (u *UI) openSettingsFile() {
 
 func (u *UI) resetPreferences() {
 	*u.Prefs = prefs.Default()
-	u.syncAppearance()
+	u.setAppearance(u.Appearance)
+	u.setTheme(u.Theme)
 	u.resetShortcuts()
 	u.ResetAsk = false
 	u.Notice = "Preferences reset."

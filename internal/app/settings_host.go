@@ -22,7 +22,8 @@ func (h settingsHost) SaveSettingsSoon()            { h.a.saveSettingsSoon() }
 func (h settingsHost) Later(fn func())              { h.a.later(fn) }
 func (h settingsHost) Fail(err error)               { h.a.fail(err) }
 func (h settingsHost) RefreshMenu()                 { h.a.refreshMenu() }
-func (h settingsHost) SyncAppearance()              { h.a.syncAppearance() }
+func (h settingsHost) SetAppearance(n int)          { h.a.applyAppearance(n) }
+func (h settingsHost) SetTheme(id string)           { h.a.setTheme(id) }
 func (h settingsHost) ProjectPath() string          { return h.a.projectPath() }
 func (h settingsHost) RemoteName() string           { return h.a.remoteName() }
 func (h settingsHost) SettingsPath() string         { return h.a.settingsPath }

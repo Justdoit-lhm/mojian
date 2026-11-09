@@ -46,7 +46,8 @@ the host list and connection pool the app keeps.
 3. A remote host is provisioned once: `remote.Provision` uploads the binaries from
    `internal/remotebin` (comparing hashes first), starts `mojian-server` with `nohup`, and opens
    `ssh -N -L` so a local temporary socket reaches the remote one. `remote.Dial` talks to the server
-   through that socket, and the app keeps the `Conn` in the pool.
+   through that socket; `Provision` returns the live `Conn` it ended with, and the app keeps it in
+   the pool.
 4. The remote server stays alive while any of its sessions exists, so a dropped SSH connection does
    not end the shells; `mojian-server -stop` ends it explicitly.
 
@@ -57,8 +58,11 @@ the host list and connection pool the app keeps.
 - One socket and one server per data directory: a client dials the socket first and spawns a server
   only when nothing answers, and `server.lock` (an exclusive `flock`) makes a server that loses the
   race exit instead of binding a second socket.
-- Remote connections are pooled by host and kept while any loaded project uses them; `CloseAll`
-  ends them when the last user goes.
+- Remote connections are pooled by host and kept while a loaded project uses them, and after
+  `Set Up Server` until the last project on that host is removed (`closeRemoteProject`); `CloseAll`
+  ends them at quit. A kept connection opens the folder picker at once, without the window-wide
+  loading card, using the home cached in `remoteHomes`. A dead control channel is dropped by
+  `remoteForHost` and dialed again on the next use.
 - Settings › Hosts is the only host source; the app does not scan `~/.ssh/config`.
 - Opening a remote project runs off the UI thread behind the loading card, so an unreachable host
   cannot block the window.

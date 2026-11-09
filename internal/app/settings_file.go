@@ -39,6 +39,7 @@ func (a *app) loadSettings() {
 	}
 	a.Prefs = s.Prefs
 	a.Prefs.Sanitize()
+	a.Theme = themeName(a.Theme)
 	a.syncAppearance()
 	a.shortcutKeys = s.Shortcuts
 	a.settings.IndexCache = nil
@@ -141,14 +142,36 @@ func (a *app) termScrollback() int {
 	return a.TerminalScrollback
 }
 
-func (a *app) setAppearance(v int) {
+// applyAppearance applies an appearance without saving it: the native
+// chrome follows it, the window's background follows it, and the menu's
+// checks follow it. Its callers decide whether the file changes.
+func (a *app) applyAppearance(v int) {
 	if v < 0 || v > 2 {
 		return
 	}
 	a.Appearance = v
 	a.syncAppearance()
+	a.applyAppearanceSource()
+	a.updateWindowBackground()
+}
+
+func (a *app) setAppearance(v int) {
+	if v < 0 || v > 2 {
+		return
+	}
+	a.applyAppearance(v)
 	a.saveSettings()
 	a.invalidate()
+}
+
+// setTheme applies a theme without saving it: every window, pane, terminal
+// and open note takes its colors from it.
+func (a *app) setTheme(id string) {
+	id = themeName(id)
+	a.Theme = id
+	a.edTheme = nil
+	a.rethemeTerminals()
+	a.updateWindowBackground()
 }
 
 func (a *app) syncAppearance() {

@@ -17,7 +17,7 @@ const (
 func (a *app) view(c *ui.Context) {
 	a.runPending()
 	a.applyTheme(c)
-	k := colorsOf(c)
+	k := a.colorsOf(c)
 	c.Root().Background(k.BgBottom)
 	ui.Column(c).Fill().
 		Draw(func(p *ui.Painter, r ui.Rect) { paintBackground(p, r, k) }).

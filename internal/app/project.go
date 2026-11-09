@@ -185,7 +185,7 @@ func (a *app) projectChip(c *ui.Context, k *colors) {
 			Translate(0, -4*(1-drop)).Opacity(0.45 + 0.55*drop)
 		if a.remotePath != "" {
 			a.remoteProjectRows(c, k)
-			ui.Divider(c)
+			ui.Divider(c).Margin(6, 0)
 			row := ui.Row(c).Height(34).Padding(0, 8).Gap(8).Radius(radius).
 				AlignItems(ui.Center).Cursor(ui.CursorPointer).Role(ui.RoleButton).
 				Label("Open Remote Folder…")
@@ -211,7 +211,7 @@ func (a *app) projectChip(c *ui.Context, k *colors) {
 			a.projectRow(c, k, p)
 		}
 		if runtime.GOOS != "js" {
-			ui.Divider(c)
+			ui.Divider(c).Margin(6, 0)
 			row := ui.Row(c).Height(34).Padding(0, 8).Gap(8).Radius(radius).
 				AlignItems(ui.Center).Cursor(ui.CursorPointer).Role(ui.RoleButton).
 				Label("Open Folder…")
@@ -233,30 +233,122 @@ func (a *app) projectChip(c *ui.Context, k *colors) {
 
 func (a *app) projectRow(c *ui.Context, k *colors, p string) {
 	current := a.store != nil && !a.store.IsMemory() && filepath.Clean(a.store.Dir) == filepath.Clean(p)
-	row := ui.Row(c.Key("project:"+p)).Height(42).Padding(0, 8).Gap(9).Radius(radius).
-		AlignItems(ui.Center).Cursor(ui.CursorPointer).Role(ui.RoleButton).
-		Label(a.projectLabel(p))
-	if current {
+	a.projectRowBase(c, k, projectRowSpec{
+		key:        "project:" + p,
+		label:      a.projectLabel(p),
+		title:      a.projectLabel(p),
+		detail:     shortPath(p),
+		closeLabel: p,
+		current:    current,
+		open: func() {
+			a.projectOpen = false
+			a.later(func() { a.openProject(p) })
+		},
+		close: func() {
+			a.projectOpen = false
+			a.later(func() { a.closeLocalProject(p) })
+		},
+	})
+}
+
+// projectRowSpec is one row of the project switcher. Its trash button
+// removes the project from the recent or remembered list.
+type projectRowSpec struct {
+	key        string
+	label      string
+	title      string
+	detail     string
+	closeLabel string
+	current    bool
+	open       func()
+	close      func()
+}
+
+func (a *app) projectRowBase(c *ui.Context, k *colors, s projectRowSpec) {
+	row := ui.Row(c.Key(s.key)).Height(42).Padding(0, 8).MarginY(2).Gap(9).Radius(radius).
+		AlignItems(ui.Center)
+	if s.current {
 		row.Background(k.PanelSel)
 	} else if row.Hovered() {
 		row.Background(k.Hover)
 	}
-	if row.Clicked() {
-		a.projectOpen = false
-		a.later(func() { a.openProject(p) })
-	}
 	row.Children(func() {
-		ui.Icon(c, icons.FolderIcon()).Size(16, 16).TextColor(k.TextMuted)
-		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-			ui.Text(c, a.projectLabel(p)).FontSize(12.5).FontWeight(500).TextColor(k.Text).
-				SingleLine().Ellipsis("…")
-			ui.Text(c, shortPath(p)).FontSize(11).TextColor(k.TextFaint).
-				SingleLine().Ellipsis("…")
+		info := ui.Row(c).Grow(1).MinWidth(0).Gap(9).AlignItems(ui.Center).
+			Cursor(ui.CursorPointer).Role(ui.RoleButton).Label(s.label)
+		if info.Clicked() && s.open != nil {
+			s.open()
+		}
+		info.Children(func() {
+			ui.Icon(c, icons.FolderIcon()).Size(16, 16).TextColor(k.TextMuted)
+			ui.Column(c).Grow(1).MinWidth(0).Children(func() {
+				ui.Text(c, s.title).FontSize(12.5).FontWeight(500).TextColor(k.Text).
+					SingleLine().Ellipsis("…")
+				ui.Text(c, s.detail).FontSize(11).TextColor(k.TextFaint).
+					SingleLine().Ellipsis("…")
+			})
 		})
-		if current {
-			ui.Icon(c, icons.Icon("check")).Size(15, 15).TextColor(k.TextMuted)
+		remove := iconButton(c, k, "trash-2", "Remove project "+s.closeLabel, 22, 13).
+			Tooltip("Remove Project")
+		if remove.Clicked() && s.close != nil {
+			s.close()
 		}
 	})
+}
+
+// closeLocalProject forgets one local project from the recent list. When
+// it is loaded it is unloaded too, and the open project saves first and
+// switches to the next recent project, or leaves the empty workspace.
+func (a *app) closeLocalProject(dir string) {
+	a.projectOpen = false
+	dir = filepath.Clean(dir)
+	key := workspaceKeyLocal(dir)
+	a.initWorkspaces()
+	active := a.remotePath == "" && a.store != nil && !a.store.IsMemory() &&
+		filepath.Clean(a.store.Dir) == dir
+	ws := a.workspaces[key]
+	if active {
+		if err := a.saveNow(); err != nil {
+			a.fail(fmt.Errorf("could not save the open project: %w", err))
+			return
+		}
+		a.dropPaneOverlays(nil)
+	}
+	if ws != nil {
+		closeWorkspaceTerminals(ws)
+		delete(a.workspaces, key)
+	}
+	kept := a.projects[:0]
+	for _, p := range a.projects {
+		if filepath.Clean(p) != dir {
+			kept = append(kept, p)
+		}
+	}
+	a.projects = kept
+	if filepath.Clean(a.project) == dir {
+		a.project = ""
+	}
+	if active {
+		a.abandonActiveWorkspace()
+		for _, p := range a.projects {
+			p = filepath.Clean(p)
+			if p == "" || p == "." {
+				continue
+			}
+			if info, err := os.Stat(p); err == nil && info.IsDir() {
+				a.project = p
+				break
+			}
+		}
+		fallback := a.project
+		a.updateTitle()
+		a.later(func() {
+			if fallback != "" {
+				a.openProject(fallback)
+			}
+		})
+	}
+	a.saveSettings()
+	a.invalidate()
 }
 
 func (a *app) projectLabel(p string) string {

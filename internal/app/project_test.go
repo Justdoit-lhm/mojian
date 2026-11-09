@@ -133,6 +133,167 @@ func TestProjectChip(t *testing.T) {
 	}
 }
 
+func TestCloseRemoteProjectReleasesLastConnection(t *testing.T) {
+	registerFonts()
+	startLocalServerForTest(t)
+	a := newProjectApp(t)
+	key := workspaceKeyRemote("buildbox", "/srv/app")
+	a.workspace.key, a.workspace.serverAlias, a.workspace.remotePath = key, "buildbox", "/srv/app"
+	a.workspaces = map[string]*workspace{key: a.workspace}
+	a.serverAlias, a.remotePath = "buildbox", "/srv/app"
+	a.rememberRemoteProject(remoteProject{Host: "buildbox", Path: "/srv/app"})
+	client, err := session.Connect()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = client.Close() })
+	a.setRemoteConn(&remote.Conn{Host: "buildbox", Client: client})
+	a.keepRemote("buildbox")
+
+	tt := ui.NewTester(a.view, 1100, 700)
+	tt.Frame()
+	if err := tt.Click("Switch project: app"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if _, ok := tt.Find("Remove project /srv/app"); !ok {
+		t.Fatalf("the remote project row has no remove button: %q", tt.Texts())
+	}
+	if err := tt.Click("Remove project /srv/app"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	tt.Frame()
+
+	if a.workspaces[key] != nil {
+		t.Fatal("the closed project stayed in the workspace cache")
+	}
+	if a.workspace.store != nil || a.serverAlias != "" || a.remotePath != "" {
+		t.Fatalf("the closed project is still open: server=%q path=%q", a.serverAlias, a.remotePath)
+	}
+	if a.remoteConn("buildbox") != nil {
+		t.Fatal("the last project's connection stayed in the pool")
+	}
+	found := false
+	for _, p := range a.remoteProjects() {
+		if p.Host == "buildbox" && p.Path == "/srv/app" {
+			found = true
+		}
+	}
+	if found {
+		t.Fatalf("the removed project stayed in the remembered list: %+v", a.remoteProjects())
+	}
+}
+
+func TestCloseLocalProjectSwitchesToRecent(t *testing.T) {
+	registerFonts()
+	startLocalServerForTest(t)
+	root := t.TempDir()
+	active := filepath.Join(root, "Active")
+	other := filepath.Join(root, "Other")
+	testutil.WriteVault(t, active, map[string]string{"a.md": "# A\n"})
+	testutil.WriteVault(t, other, map[string]string{"b.md": "# B\n"})
+	a := &app{workspace: &workspace{treeOpen: true}, dataDir: t.TempDir()}
+	s, err := openStoreAt(active)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.store = s
+	a.layoutPath = a.projectLayoutPath(s.Dir)
+	a.projects = []string{active, other}
+	a.project = active
+	a.focusFirstNote()
+	a.registerActiveWorkspace()
+	fallback, err := openStoreAt(other)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := workspaceKeyLocal(other)
+	a.workspaces[key] = &workspace{
+		key:      key,
+		project:  other,
+		store:    fallback,
+		treeOpen: true,
+		active:   -1,
+		openDirs: map[string]bool{},
+	}
+
+	tt := ui.NewTester(a.view, 1100, 700)
+	tt.Frame()
+	if err := tt.Click("Switch project: Active"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if _, ok := tt.Find("Remove project " + active); !ok {
+		t.Fatalf("the local project row has no remove button: %q", tt.Texts())
+	}
+	if err := tt.Click("Remove project " + active); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	tt.Frame()
+
+	if a.store == nil || a.store.Dir != other {
+		t.Fatalf("the fallback project did not open: %+v", a.store)
+	}
+	if a.project != other {
+		t.Fatalf("last project after closing: %q", a.project)
+	}
+	if a.workspaces[workspaceKeyLocal(active)] != nil {
+		t.Fatal("the closed project stayed in the workspace cache")
+	}
+	found := false
+	for _, p := range a.projects {
+		if p == active {
+			found = true
+		}
+	}
+	if found {
+		t.Fatalf("the removed project stayed in the recent list: %q", a.projects)
+	}
+}
+
+func TestRemoveUnloadedRecentProject(t *testing.T) {
+	registerFonts()
+	startLocalServerForTest(t)
+	root := t.TempDir()
+	active := filepath.Join(root, "Active")
+	old := filepath.Join(root, "Old")
+	testutil.WriteVault(t, active, map[string]string{"a.md": "# A\n"})
+	testutil.WriteVault(t, old, map[string]string{"old.md": "# Old\n"})
+	a := &app{workspace: &workspace{treeOpen: true}, dataDir: t.TempDir()}
+	s, err := openStoreAt(active)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.store = s
+	a.layoutPath = a.projectLayoutPath(s.Dir)
+	a.projects = []string{active, old}
+	a.project = active
+	a.focusFirstNote()
+	a.registerActiveWorkspace()
+
+	tt := ui.NewTester(a.view, 1100, 700)
+	tt.Frame()
+	if err := tt.Click("Switch project: Active"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if err := tt.Click("Remove project " + old); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+
+	if a.store == nil || a.store.Dir != active {
+		t.Fatal("removing a recent project changed the open project")
+	}
+	for _, p := range a.projects {
+		if p == old {
+			t.Fatalf("the removed project stayed in the recent list: %q", a.projects)
+		}
+	}
+}
+
 func TestRemoteWorkspaceSwitchUsesTheCache(t *testing.T) {
 	if !terminalsSupported() {
 		t.Skip("remote projects need terminals")

@@ -66,7 +66,7 @@ func (u *UI) settingsIndex() []settingsEntry {
 func (u *UI) WindowView(c *ui.Context) {
 	u.runPending()
 	u.applyTheme(c)
-	k := colorsOf(c)
+	k := u.colorsOf(c)
 	c.Root().Background(k.BgBottom)
 	u.prepareSettingsSearch()
 	if u.Recording == "" {

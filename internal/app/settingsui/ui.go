@@ -82,7 +82,8 @@ type Host interface {
 	Later(func())
 	Fail(error)
 	RefreshMenu()
-	SyncAppearance()
+	SetAppearance(int)
+	SetTheme(string)
 
 	ProjectPath() string
 	RemoteName() string
@@ -114,7 +115,12 @@ const radius = theme.Radius
 
 var noteFont = theme.NoteFont
 
-func colorsOf(c *ui.Context) *colors { return theme.Of(c) }
+// dark is the appearance the window draws in, and colorsOf the palette of
+// the open theme in it; Settings previews both, so it asks rather than
+// reading the frame's theme.
+func (u *UI) dark(c *ui.Context) bool { return theme.Dark(u.Appearance, c.Theme().Dark) }
+
+func (u *UI) colorsOf(c *ui.Context) *colors { return theme.Window(u.Theme, u.dark(c)) }
 
 func paintBackground(p *ui.Painter, r ui.Rect, k *colors) { theme.PaintBackground(p, r, k) }
 
@@ -155,7 +161,8 @@ func (u *UI) saveSettingsSoon()                       { u.SaveSettingsSoon() }
 func (u *UI) later(fn func())                         { u.Later(fn) }
 func (u *UI) fail(err error)                          { u.Fail(err) }
 func (u *UI) refreshMenu()                            { u.RefreshMenu() }
-func (u *UI) syncAppearance()                         { u.SyncAppearance() }
+func (u *UI) setAppearance(n int)                     { u.SetAppearance(n) }
+func (u *UI) setTheme(id string)                      { u.SetTheme(id) }
 
 func (u *UI) projectPath() string   { return u.ProjectPath() }
 func (u *UI) remoteName() string    { return u.RemoteName() }

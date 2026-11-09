@@ -90,6 +90,17 @@ func (s *Service) RemoveProjects(host string) {
 	s.projects = kept
 }
 
+// ForgetProject removes one remembered project from the list.
+func (s *Service) ForgetProject(host, path string) {
+	kept := s.projects[:0]
+	for _, p := range s.projects {
+		if p.Host != host || p.Path != path {
+			kept = append(kept, p)
+		}
+	}
+	s.projects = kept
+}
+
 // Conn returns the live connection for host, if any.
 func (s *Service) Conn(host string) *remote.Conn { return s.conns[host] }
 

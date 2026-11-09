@@ -53,6 +53,11 @@ that produce both files, and the environment overrides that move them.
 - Both files are written with `fs.WriteFileAtomic`; a partial file is never left behind.
 - Switching projects bumps `git.Page.Seq`/`DiffSeq` so a refresh from the project being stashed
   cannot land in the one being activated.
+- A project's row in the project chip carries a trash button: `closeLocalProject` or
+  `closeRemoteProject` removes the entry from the recent/remembered list and unloads its
+  workspace, saving it first when it is the open project. Closing the open local project switches
+  to the next existing recent project or the empty workspace; closing the open remote project goes
+  back to the last local project.
 
 ## Verification
 

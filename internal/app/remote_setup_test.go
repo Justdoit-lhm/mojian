@@ -30,12 +30,19 @@ func TestRemoteServerSetupFedora(t *testing.T) {
 	if first.Protocol != session.ProtocolVersion {
 		t.Fatalf("server protocol %d, want %d", first.Protocol, session.ProtocolVersion)
 	}
-	second, err := remote.Provision(host, nil)
+	if first.Conn == nil {
+		t.Fatal("provisioning returned no connection")
+	}
+	defer remote.Close(first.Conn)
+	second, err := remote.Provision(host, first.Conn)
 	if err != nil {
 		t.Fatalf("checking %s twice: %v", host, err)
 	}
 	if second.Uploaded {
 		t.Fatal("the second setup uploaded the binaries again")
+	}
+	if second.Conn != first.Conn {
+		t.Fatal("the second setup did not reuse the live connection")
 	}
 
 	rc, err := remote.Dial(host)

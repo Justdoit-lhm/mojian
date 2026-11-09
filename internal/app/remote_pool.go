@@ -38,16 +38,29 @@ func (a *app) hostUsed(host string) bool {
 	return false
 }
 
+// keepRemote marks a host's connection as owned by setup or a loaded
+// project: closing the picker and pane reaping do not release it.
+func (a *app) keepRemote(host string) {
+	if host == "" {
+		return
+	}
+	if a.remoteKeep == nil {
+		a.remoteKeep = map[string]bool{}
+	}
+	a.remoteKeep[host] = true
+}
+
 // releaseRemote closes host's pooled connection when nothing uses it any
 // more. The server and its sessions keep running on the host.
 func (a *app) releaseRemote(host string) {
-	if host == "" || a.remoteBusy || a.remoteDirsBusy || a.hostUsed(host) {
+	if host == "" || a.remoteBusy || a.remoteDirsBusy || a.hostUsed(host) || a.remoteKeep[host] {
 		return
 	}
 	rc := a.remoteConn(host)
 	if rc == nil {
 		return
 	}
+	delete(a.remoteKeep, host)
 	a.deleteRemoteConn(host)
 	remote.Close(rc)
 }

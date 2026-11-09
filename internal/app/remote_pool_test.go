@@ -14,6 +14,30 @@ func poolApp() *app {
 	return a
 }
 
+func TestKeptConnectionSurvivesReapAndPicker(t *testing.T) {
+	a := poolApp()
+	a.keepRemote("box")
+	a.reapRemotes()
+	if a.remoteConn("box") == nil {
+		t.Fatal("a kept connection was released by reaping")
+	}
+
+	a.remotePickHost = "box"
+	a.dropPickerRemote()
+	if a.remoteConn("box") == nil {
+		t.Fatal("closing the picker released a kept connection")
+	}
+	if a.remotePickHost != "" {
+		t.Fatalf("the picker host stayed: %q", a.remotePickHost)
+	}
+
+	delete(a.remoteKeep, "box")
+	a.reapRemotes()
+	if a.remoteConn("box") != nil {
+		t.Fatal("the connection stayed after its last project closed")
+	}
+}
+
 func TestRemotePoolReleasesTheLastUser(t *testing.T) {
 	a := poolApp()
 	a.reapRemotes()

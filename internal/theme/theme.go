@@ -8,7 +8,6 @@ import (
 	"mojian/internal/assets"
 
 	"github.com/egoist/mygo/ui"
-	"github.com/egoist/mygo/ui/editor"
 )
 
 // Radius is the one corner radius used by the window's surfaces: cards,
@@ -27,6 +26,10 @@ type Colors struct {
 
 	Text, TextMuted, TextFaint, IconMuted ui.Color
 	Hover, Pressed                        ui.Color
+
+	// Accent is the theme's own color: the selected row, the focus ring,
+	// the cursor and the terminal's selection all take it.
+	Accent ui.Color
 
 	Track, TrackBorder, TabActive, TabInactive, TileRim ui.Color
 
@@ -56,6 +59,8 @@ var lightColors = Colors{
 	IconMuted: ui.Hex("#7c7c82"),
 	Hover:     ui.RGBA(0, 0, 0, 0.055),
 	Pressed:   ui.RGBA(0, 0, 0, 0.1),
+
+	Accent: ui.Hex("#2563eb"),
 
 	Track:       ui.RGBA(255, 255, 255, 0.34),
 	TrackBorder: ui.RGBA(255, 255, 255, 0.45),
@@ -97,6 +102,8 @@ var darkColors = Colors{
 	Hover:     ui.RGBA(255, 255, 255, 0.08),
 	Pressed:   ui.RGBA(255, 255, 255, 0.14),
 
+	Accent: ui.Hex("#3b82f6"),
+
 	Track:       ui.RGBA(255, 255, 255, 0.06),
 	TrackBorder: ui.RGBA(255, 255, 255, 0.06),
 	TabActive:   ui.RGBA(255, 255, 255, 0.14),
@@ -114,22 +121,6 @@ var darkColors = Colors{
 	PanelBorder: ui.RGBA(255, 255, 255, 0.1),
 	PanelSel:    ui.RGBA(108, 178, 255, 0.18),
 	Backdrop:    ui.RGBA(0, 0, 0, 0.45),
-}
-
-func Of(c *ui.Context) *Colors {
-	if c.Theme().Dark {
-		return &darkColors
-	}
-	return &lightColors
-}
-
-// Palette returns the light or dark window palette, for previews that show
-// both before the user chooses.
-func Palette(dark bool) Colors {
-	if dark {
-		return darkColors
-	}
-	return lightColors
 }
 
 // PaintBackground paints the window's background below the cards.
@@ -152,15 +143,6 @@ var NoteFont = ui.Font{
 	Family:     "JetBrains Mono, SF Mono, Menlo, monospace",
 	Size:       12.5,
 	LineHeight: 1.55,
-}
-
-// EditorTheme colors an open note, over the Card's paper.
-func EditorTheme(t *ui.Theme) *editor.Theme {
-	th := editor.DefaultTheme(t)
-	th.Background = ui.Transparent
-	th.ActiveLine = t.Text.Alpha(0.035)
-	th.InactiveSelection = t.Selection.Alpha(0.45)
-	return th
 }
 
 // RegisterFonts loads the editor's faces, under one family.
