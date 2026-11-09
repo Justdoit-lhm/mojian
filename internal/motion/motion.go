@@ -1,3 +1,6 @@
+// Package motion holds the interruptible spring transitions for pages,
+// tabs, rows, panes and colors, so a change mid-flight reverses instead
+// of restarting.
 package motion
 
 import (

@@ -1,3 +1,5 @@
+// Package theme holds Mojian's light and dark colors, the one corner
+// radius, background painting, the editor theme and font registration.
 package theme
 
 import (

@@ -12,8 +12,7 @@ import (
 	gitpage "mojian/internal/git"
 	"mojian/internal/remote"
 	"mojian/internal/session"
-
-	integration "mojian/test"
+	"mojian/internal/testutil"
 )
 
 func TestLocalProjectStoreUsesSessionServer(t *testing.T) {
@@ -121,7 +120,7 @@ func TestLocalServerGitRunner(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "base.md"), []byte("# Base\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	integration.InitRepo(t, root)
+	testutil.InitRepo(t, root)
 	s, err := openServerStore(client, root, t.TempDir(), true)
 	if err != nil {
 		t.Fatal(err)

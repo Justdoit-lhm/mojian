@@ -215,7 +215,7 @@ Build output lives under `build/<os>-<arch>/`. macOS produces `.app` and `.dmg`;
 After changing the session protocol or `cmd/mojian-server`, rebuild the embedded remote binaries:
 
 ```sh
-sh tools/build-remote.sh
+go generate ./internal/remotebin
 ```
 
 ### Publishing a release

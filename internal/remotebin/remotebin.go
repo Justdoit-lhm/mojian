@@ -1,6 +1,8 @@
 // Package remotebin holds the server binaries Mojian uploads to SSH
-// hosts. They are built by tools/build-remote.sh.
+// hosts. build.sh builds them; `go generate ./internal/remotebin` runs it.
 package remotebin
+
+//go:generate sh build.sh
 
 import (
 	"embed"

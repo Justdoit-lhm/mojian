@@ -211,7 +211,7 @@ go tool mygo build -platform linux/amd64,linux/arm64
 修改会话协议或 `cmd/mojian-server` 后，重新生成嵌入的远程二进制：
 
 ```sh
-sh tools/build-remote.sh
+go generate ./internal/remotebin
 ```
 
 ### 发布版本

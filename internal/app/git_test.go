@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	integration "mojian/test"
+	"mojian/internal/testutil"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -14,8 +14,8 @@ import (
 func TestGitPage(t *testing.T) {
 	registerFonts()
 	dir := t.TempDir()
-	integration.WriteVault(t, dir, map[string]string{"a.md": "# A\n\nold\n", "keep.go": "package x\n"})
-	integration.InitRepo(t, dir)
+	testutil.WriteVault(t, dir, map[string]string{"a.md": "# A\n\nold\n", "keep.go": "package x\n"})
+	testutil.InitRepo(t, dir)
 	if err := os.WriteFile(filepath.Join(dir, "a.md"), []byte("# A\n\nnew\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func TestGitPage(t *testing.T) {
 func TestGitOutsideRepo(t *testing.T) {
 	registerFonts()
 	dir := t.TempDir()
-	integration.WriteVault(t, dir, map[string]string{"a.md": "# A\n"})
+	testutil.WriteVault(t, dir, map[string]string{"a.md": "# A\n"})
 	a := &app{workspace: &workspace{treeOpen: true}}
 	s, err := openStoreAt(dir)
 	if err != nil {

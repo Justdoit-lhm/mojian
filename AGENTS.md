@@ -8,24 +8,19 @@ A project is just a folder; it keeps its own tabs and layout. Opened projects st
 
 ## Architecture & Data Flow
 
-**Immediate-mode UI, one state struct.** `internal/app/app.go:26` holds every piece of app state as plain fields on `*app`. There are no reducers, observables or stores. `(*app).view` (`internal/app/view.go:16`) rebuilds the whole element tree each frame from that state; MyGo calls it again after input, `Window.Update` or `Invalidate`. A second root, `(*app).settingsWindowView` (`internal/app/settings_host.go:87`), draws the Settings window through `internal/app/settingsui`.
+The paragraphs below are the short version; `docs/subsystems/` holds the contracts, source links and verification commands. Read the owning page before changing a subsystem, and update it when a responsibility, interface, state transition or failure behavior changes.
 
-Frame conventions that keep this correct:
-
-- `a.later(fn)` (`app.go:402`) defers a mutation to the next frame. Use it whenever an action would change the collection being built (add/close a tab or pane).
-- `a.changed()` (`app.go:425`) marks the layout dirty and arms a 700 ms `time.AfterFunc`; `a.persistLayout` (`app.go:449`) writes once 550 ms have passed without a change.
-- `a.invalidate()` (`window.go:183`) requests a redraw of both windows after state changes made outside the view.
-- Slow work never runs in a view. Background results land through `Window.Update` and are dropped when a sequence/generation counter moved on — see `git.Page.Seq`/`DiffSeq` (`internal/git/git.go:77-78`) and `assetView.pdfGen` (`internal/app/assetview.go:84`).
+**Immediate-mode UI, one state struct.** `internal/app/app.go` holds every piece of app state as plain fields on `*app`; there are no reducers, observables or stores. `(*app).view` (`internal/app/view.go`) rebuilds the whole element tree each frame from that state, and `(*app).settingsWindowView` (`internal/app/settings_host.go`) draws the Settings window as a second root. The frame conventions — `a.later`, `a.changed`/`a.persistLayout`, `a.invalidate`, widget identity and the generation counters that drop stale background results — are in [docs/subsystems/ui-shell.md](docs/subsystems/ui-shell.md).
 
 **One traced path (open → edit → save).** Tree row click → `(*app).openRel` → `store.ByRelPath` → `(*app).openNote` → `pane.Note`; the pane renders `Note.Buffer()`, a single `*editor.Buffer` shared by every pane showing that file. `⌘S` → menu/palette command → `(*app).saveNow` → `store.SaveAll` → `store.Save` → the project's `fs.Backend` (`fs.WriteFileAtomic` for a direct file, `session.Client.WriteFile` for a server-backed one) → `buf.MarkSaved()`. Edits stay in memory until an explicit save.
 
-**Terminals live in a second process.** `internal/session` is a Unix-socket server (`session.Serve`, `server.go:59`) speaking JSON lines, `ProtocolVersion = 3` (`proto.go:40`). The app spawns it by re-executing itself with `-server` (`spawn_unix.go:19`), so quitting the app detaches PTYs instead of killing them; reopening reattaches by session id. A remote server is started without a transient flag and stays alive while any terminal session exists, so a dropped SSH connection does not end its shells; `mojian-server -stop` ends it explicitly. Terminal panes are `terminal.Terminal` (MyGo's libghostty plugin) bound to a `session.Stream`. Each layout terminal records `Server` (`local` or an SSH host) so it reattaches to the server that owns it.
+**Terminals live in a second process.** `internal/session` is a Unix-socket server speaking JSON lines (`ProtocolVersion = 3`) that the app spawns by re-executing itself with `-server`, so quitting the app detaches PTYs instead of killing them and reopening reattaches by session id. A remote server is started without a transient flag and stays alive while any terminal session exists, so a dropped SSH connection does not end its shells; `mojian-server -stop` ends it explicitly. Protocol rules, spawn, forwarding and the host pool: [docs/subsystems/session-and-remote.md](docs/subsystems/session-and-remote.md).
 
-**Server projects.** `internal/app/server.go` opens local projects through the local session server on macOS and Linux; the browser keeps its in-memory editor. `internal/project.Store` holds an `fs.Backend` (`internal/fs`): `fs.Direct` (tests/browser neighbours), `fs.Memory`, or `fs.Server` (`local` distinguishes a local server from a remote one). `session.Client.ListTree` lists names, sizes, times, kinds and an asset's content hash, a note is read when it opens, and saves and file operations write through the same client. There is no local mirror. `Store.Refresh` reconciles the one listing into notes, assets and the tree; `internal/fs/direct.go` keeps the eager local listing, `internal/fs/server.go` the lazy one. For remote projects, `internal/remote/remote.go` uploads the embedded Linux server + `libghostty-vt` from `internal/remotebin`, opens an `ssh -N -L` forward to the remote socket, and detaches without shutting the server down. Settings › Hosts is the only host source: the app no longer scans `~/.ssh/config`, and each host has a Set Up Server action that uploads the binaries and checks the server answers over the forward. Connections are pooled by host, shared by every loaded project and kept while one uses them; the first connection and project opening run off the UI thread behind a loading card (`openRemoteProjectAsync`). Git runs through the project's server (`internal/app/git_bridge.go`); pictures and PDFs are fetched into a local viewer cache.
+**Server projects.** `internal/project.Store` holds an `fs.Backend`: `fs.Direct`, `fs.Memory`, or `fs.Server` (`local` distinguishes a local server from a remote one), and `session.Client.ListTree` lists the project while a note's text is read only when it opens — there is no local mirror, and `Store.Refresh` reconciles that one listing into notes, assets and the tree. Storage rules: [docs/subsystems/projects-and-storage.md](docs/subsystems/projects-and-storage.md); provisioning, forwarding and the host pool: [docs/subsystems/session-and-remote.md](docs/subsystems/session-and-remote.md).
 
 **Cross-package contracts.** `git.Host` (`internal/git/git.go:52`) is the only interface the Git page uses to reach the window; `*app` implements it in `internal/app/git_bridge.go`. `internal/app/theme_bridge.go` exists so `app` touches `internal/theme` through one file, and `platform_bridge.go` / `remote_bridge.go` do the same for `internal/platform` and `internal/remote`.
 
-**Persistence.** `settings.json` and `layouts/<fnv64a(projectDir)>.json` live in `mygo.App.Path(mygo.PathUserData)` (`app.go:227`, `328`). Environment overrides: `MOJIAN_VAULT` (project folder), `MOJIAN_DIR` (data/socket/log dir). The preference schema itself is `internal/prefs.Prefs`.
+**Persistence.** `settings.json` and `layouts/<fnv64a(projectDir)>.json` live in `mygo.App.Path(mygo.PathUserData)`; `MOJIAN_VAULT` selects the project folder and `MOJIAN_DIR` the data/socket/log directory. The preference schema is `internal/prefs.Prefs`; the compatibility rules for the files and the layout JSON are in [docs/subsystems/persistence-and-layout.md](docs/subsystems/persistence-and-layout.md).
 
 ## Key Directories
 
@@ -36,6 +31,7 @@ Frame conventions that keep this correct:
 |`main.go`|Entry point: `-server` runs the session server; otherwise it reads the optional folder or file argument and calls `app.Run` with it.|
 |`cmd/mojian-server/`|The per-user server uploaded to SSH hosts. Never installed as a service.|
 |`cmd/harness/`|Dev-only MCP server (mygo-mcp) that renders the real views headlessly over disposable projects.|
+| `docs/subsystems/` | Contract pages for the UI shell, storage, session/remote, Git and persistence; AGENTS.md is the index. |
 | `internal/app/` | The window in one package: shell, tabs, panes, Explorer, pickers, palette, Settings, file operations, SSH, asset viewers. |
 | `internal/session/` | PTY server and client, wire protocol, remote file ops, spawn/lock, platform stubs. |
 | `internal/git/` | Working-tree diff page: status/diff reading, parsing, view. |
@@ -44,9 +40,8 @@ Frame conventions that keep this correct:
 | `internal/icons/` | Lucide action icons and Material Icon Theme file icons, cached from embedded SVG. |
 | `internal/assets/` | `embed.FS` of icons, brand marks and JetBrains Mono. |
 | `internal/motion/` | `ui.ElementTransition` values (`Page`, `Tab`, `Tree`, `Row`, `Pane`, `Colors`), springs for interruptible changes. |
-| `internal/remotebin/` | Embedded Linux `mojian-server` binaries and libghostty `.so` files (generated). |
-| `test/` | Black-box integration tests (`package integration`, import path `mojian/test`). |
-| `tools/build-remote.sh` | Cross-compiles the remote server into `internal/remotebin`. |
+| `internal/remotebin/` | Embedded Linux `mojian-server` binaries and libghostty `.so` files (generated); `build.sh` rebuilds the servers. |
+| `internal/testutil/` | Fixtures shared by tests: `WriteVault` writes a throwaway project, `InitRepo` commits it in a fresh Git repository. |
 | `resources/` | `resources/icon.png` is the app icon embedded at build. |
 
 ## Development Commands
@@ -61,7 +56,7 @@ go run ./cmd/harness      # long-running MCP server; real views, no window
 CGO_ENABLED=0 go test ./...
 go test ./internal/app -run '^TestGitPage$' -v
 go test -race ./internal/session ./internal/app
-sh tools/build-remote.sh  # rebuild embedded Linux servers (needed after server/protocol changes)
+go generate ./internal/remotebin  # rebuild embedded Linux servers (needed after server/protocol changes)
 ```
 
 `mygo` is pinned as a Go tool in `go.mod`; there is no global install, no Makefile, no justfile, no Bun/Node. `go tool mygo migrate-ui .` previews UI API migrations for MyGo version bumps (`-write` applies).
@@ -112,7 +107,7 @@ To add a fixture, register it in `cmd/harness/main.go` and add its factory in `c
 | `internal/app/app.go` | `app` struct, `Run`, open, project list, layout debounce, `fail`/`later`. |
 | `internal/app/window.go` | Window/tray lifecycle, Settings window opener, theme application. |
 | `internal/app/settings_file.go` | `settingsFile`, load/save/reset persistence, font getters. |
-| `internal/app/panes.go` | Opening notes/assets, tabs, pane close/zoom/selection. |
+| `internal/app/pane_actions.go` | Opening notes/assets, tabs, pane close/zoom/selection. |
 | `internal/app/menu.go` | Menu construction, command dispatch, window title, reveal project. |
 | `internal/app/model.go` | `pane`/`tab`, the `node` split tree, pane directions, moves and split shares. |
 | `internal/app/layout.go` | Layout snapshot/restore and its JSON format. |
@@ -120,7 +115,8 @@ To add a fixture, register it in `cmd/harness/main.go` and add its factory in `c
 | `internal/project/` | `Store`, `Note`, `Asset` and `TreeNode`: listing, save, rename/copy/move, asset cache, editor buffers. |
 | `internal/fs/` | Project storage: `Backend`, `Direct`, `Memory`, `Server`, path guards, atomic writes and cached-file names. |
 | `internal/prefs/` | The one preference schema, defaults and range validation. |
-| `internal/app/listui.go` | Thin bridge to `internal/app/widgets`. |
+| `internal/app/widgets_bridge.go` | Thin bridge to `internal/app/widgets`. |
+| `internal/app/aliases.go` | The window's names for the project model and the Explorer's draft type. |
 | `internal/app/widgets/` | Shared list navigation, command dialog shell and file picker row. |
 | `internal/welcome/` | Welcome and sample note text, in the platform's key spelling. |
 | `internal/app/settingsui/` | Settings window: search rail, table-driven pages, keyboard recorder, font picker. |
@@ -151,17 +147,17 @@ To add a fixture, register it in `cmd/harness/main.go` and add its factory in `c
 
 ## Runtime/Tooling Preferences
 
-- **Go 1.27.3**, module `mojian`. No cgo anywhere (`mygo build` and `tools/build-remote.sh` set `CGO_ENABLED=0`); keep it that way. MyGo `v0.8.3` — check the pinned source at `$(go list -m -f '{{.Dir}}' github.com/egoist/mygo)` before using an API, especially `ui/doc.go` and the widget's implementation comments.
+- **Go 1.27.3**, module `mojian`. No cgo anywhere (`mygo build` and `internal/remotebin/build.sh` set `CGO_ENABLED=0`); keep it that way. MyGo `v0.8.3` — check the pinned source at `$(go list -m -f '{{.Dir}}' github.com/egoist/mygo)` before using an API, especially `ui/doc.go` and the widget's implementation comments.
 - No linter or formatter config exists; `gofmt` and `go vet` are the standard. `go tool mygo vet .` additionally rejects stored UI build values and goroutine captures.
 - Build output is `build/<os>-<arch>/`; `/build/`, `/.mygo/` and the root `mojian` binary are gitignored. Do not commit them.
-- `internal/remotebin/*.so` and `internal/remotebin/mojian-server-linux-*` are build artifacts embedded by `go:embed`; regenerate with `tools/build-remote.sh`, never hand-edit.
+- `internal/remotebin/mojian-server-linux-*` and the `.so` files are build artifacts embedded by `go:embed`, never hand-edit. `go generate ./internal/remotebin` rebuilds the servers; the Linux `libghostty-vt-*.so` files are the assets the pinned MyGo's `plugins/terminal/mygo-plugin.json` names, so copy them with their SHA-256 checked after a MyGo upgrade.
 - `resources/icon.png` is the app icon for Finder/Dock and is embedded at build; the brand marks the app draws come from `internal/assets/brand`.
-- No CI: verification is local. Run before yielding: `go test ./...`, `go tool mygo vet .`, and `go tool mygo dev` when the change is visible (a screenshot or the running app, not just a green test).
+- No pull-request CI; `.github/workflows/release.yml` runs `go test ./...` on tag pushes. Verification is local otherwise. Run before yielding: `go test ./...`, `go tool mygo vet .`, and `go tool mygo dev` when the change is visible (a screenshot or the running app, not just a green test).
 
 ## Testing & QA
 
 - **Framework:** stdlib `testing` only — no testify, gomock, golden files or coverage thresholds. Test functions live in `_test.go` files; no subtests, no `t.Parallel()`, no benchmarks.
-- **White-box tests** sit beside the code (`package app`, `session`, `git`, `icons`) and read unexported state. **Black-box tests** live in `test/` (`package integration`) with real temp folders and real Git; `test/helpers.go` exports `WriteVault` and `InitRepo` (the latter isolates Git with `GIT_CONFIG_GLOBAL=/dev/null`).
+- **White-box tests** sit beside the code (`package app`, `session`, `git`, `icons`) and read unexported state. **Black-box tests** use an external test package beside the code (`package git_test`) with real temp folders and real Git; the fixtures they share live in `internal/testutil`, where `Main` gives a test binary a temporary home and clears `MOJIAN_VAULT`, `MOJIAN_DIR` and Git's user/system config, `WriteVault` writes a throwaway project, and `InitRepo` commits it in a fresh repository. `internal/app`, `internal/session` and `internal/git` call `Main` from `TestMain`, so a test binary cannot read the developer's home or an inherited `MOJIAN_*` path; the only thing taken from the real home is MyGo's downloaded `libghostty-vt`, handed over as `MYGO_GHOSTTY_VT`.
 - **UI tests** render headlessly with `ui.NewTester(a.view, 1100, 700)` (Settings: `settingsWindowView`, 900×640) and assert on `HasText`/`Texts`, clicks, typing and keys. Call `registerFonts()` before measuring text. Code that uses `a.later` needs an extra `tt.Frame()` — often two.
 - **Setup patterns:** `t.TempDir()` plus `t.Setenv` for `MOJIAN_VAULT`, `MOJIAN_DIR` and `HOME`. Terminal tests start `session.Serve` in a goroutine and poll `session.SocketPath()` with a 3 s deadline. PTY and socket tests are Unix-only via build tags. Never add `t.Parallel()` to tests that set env or bind sockets.
 - **Injection seams** exist for tests, keep them working: `app.shellStarter`, `trashPath`, `provisionRemoteFn`, `readClipboardFiles`/`writeClipboardFiles`, `remoteConn` values in the `remotes` pool, and the `dataDir`/`layoutPath`/`settingsPath` fields.

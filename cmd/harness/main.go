@@ -1,5 +1,7 @@
-// Command harness serves Mojian's real views to an MCP client, so an
-// agent can inspect, click and screenshot the interface without a window.
+// Package main is the development MCP server that renders Mojian's real
+// views headlessly over disposable projects, so an agent can inspect,
+// click and screenshot the interface without a window. The app never
+// imports it.
 //
 //	go run ./cmd/harness
 //

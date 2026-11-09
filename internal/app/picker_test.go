@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	integration "mojian/test"
+	"mojian/internal/testutil"
 )
 
 func TestPickerListsSymlinksAndHiddenFolders(t *testing.T) {
@@ -63,7 +63,7 @@ func TestProjectOpenedThroughASymlinkListsItsFiles(t *testing.T) {
 	if err := os.MkdirAll(real, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	integration.WriteVault(t, real, map[string]string{"a.md": "# A\n"})
+	testutil.WriteVault(t, real, map[string]string{"a.md": "# A\n"})
 	link := filepath.Join(root, "Link")
 	if err := os.Symlink(real, link); err != nil {
 		t.Skipf("symlinks need a Unix file system: %v", err)

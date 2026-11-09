@@ -1,5 +1,5 @@
-// Mojian is a quiet text editor in MyGo's native UI. The app lives in
-// internal/app; this file starts it, and its terminal session server.
+// Package main starts Mojian, the MyGo app, and its terminal session
+// server; the window itself lives in internal/app.
 //
 //	go tool mygo dev    the app, rebuilt as the code changes
 //	go test ./...       the model, the store and the view, without a window

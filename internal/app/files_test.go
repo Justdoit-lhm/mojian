@@ -7,8 +7,7 @@ import (
 	"time"
 
 	"mojian/internal/fs"
-
-	integration "mojian/test"
+	"mojian/internal/testutil"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -219,8 +218,8 @@ func TestPickerOpensChosenProject(t *testing.T) {
 	root := t.TempDir()
 	alpha := filepath.Join(root, "Alpha")
 	beta := filepath.Join(root, "Beta")
-	integration.WriteVault(t, alpha, map[string]string{"a.md": "# A\n"})
-	integration.WriteVault(t, beta, map[string]string{"b.py": "print(1)\n"})
+	testutil.WriteVault(t, alpha, map[string]string{"a.md": "# A\n"})
+	testutil.WriteVault(t, beta, map[string]string{"b.py": "print(1)\n"})
 	a := &app{workspace: &workspace{treeOpen: true}, dataDir: t.TempDir()}
 	s, err := openStoreAt(alpha)
 	if err != nil {

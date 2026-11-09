@@ -1,4 +1,4 @@
-package integration
+package git_test
 
 import (
 	"os"
@@ -8,15 +8,16 @@ import (
 	"testing"
 
 	"mojian/internal/git"
+	"mojian/internal/testutil"
 )
 
 func TestWorkingTreeStatusAndDiff(t *testing.T) {
 	dir := t.TempDir()
-	WriteVault(t, dir, map[string]string{
+	testutil.WriteVault(t, dir, map[string]string{
 		"a.md": "# A\n\nold\n", "b.js": "const b = 1;\n",
 		"sub/d.txt": "d\n",
 	})
-	InitRepo(t, dir)
+	testutil.InitRepo(t, dir)
 	if err := os.WriteFile(filepath.Join(dir, "a.md"), []byte("# A\n\nnew line\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -55,8 +56,8 @@ func TestWorkingTreeStatusAndDiff(t *testing.T) {
 func TestNestedProjectPaths(t *testing.T) {
 	root := t.TempDir()
 	sub := filepath.Join(root, "sub")
-	WriteVault(t, sub, map[string]string{"a.md": "# A\n\nold\n"})
-	InitRepo(t, root)
+	testutil.WriteVault(t, sub, map[string]string{"a.md": "# A\n\nold\n"})
+	testutil.InitRepo(t, root)
 	if err := os.WriteFile(filepath.Join(sub, "a.md"), []byte("# A\n\nnew\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -77,8 +78,8 @@ func TestRenameDiffKeepsTheRename(t *testing.T) {
 		body.WriteString(strings.Repeat("x", i%3))
 		body.WriteString("\n")
 	}
-	WriteVault(t, dir, map[string]string{"pack.go": body.String()})
-	InitRepo(t, dir)
+	testutil.WriteVault(t, dir, map[string]string{"pack.go": body.String()})
+	testutil.InitRepo(t, dir)
 	if err := os.Rename(filepath.Join(dir, "pack.go"), filepath.Join(dir, "moved.go")); err != nil {
 		t.Fatal(err)
 	}

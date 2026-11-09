@@ -1,6 +1,8 @@
-// Mojian is a quiet text editor in MyGo's native UI. Tabs hold
-// workspaces, workspaces hold editors, and every editor shows a file's
-// source with syntax highlighting.
+// Package app is Mojian's window in one package: the immediate-mode
+// view, its actions, Settings, Explorer, palettes, file operations and
+// SSH-driven remote projects. Every piece of window state is a plain
+// field on *app, so the view and the actions that mutate it stay
+// together.
 //
 //	go tool mygo dev    the app, rebuilt as the code changes
 //	go test ./...       the model, the store and the view, without a window

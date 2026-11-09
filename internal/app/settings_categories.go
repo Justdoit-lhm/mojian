@@ -1,9 +1,9 @@
 package app
 
 import (
-	"mojian/internal/app/commands"
 	"runtime"
 
+	"mojian/internal/app/commands"
 	"mojian/internal/settings"
 )
 

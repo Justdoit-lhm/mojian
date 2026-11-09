@@ -1,3 +1,5 @@
+// Package icons renders Lucide action icons and Material Icon Theme file
+// icons from embedded SVG, caching each document by name.
 package icons
 
 import (

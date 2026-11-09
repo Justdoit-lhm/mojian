@@ -1,3 +1,6 @@
+// Package git reads and draws the working tree's status and diff: the
+// runner interface that reaches local or server-side Git, the parser for
+// its output, the page state, and the view the window shows.
 package git
 
 import (

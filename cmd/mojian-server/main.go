@@ -1,5 +1,6 @@
-// mojian-server runs Mojian's session and project server on a remote
-// machine. Mojian uploads it over SSH; it is not installed as a service.
+// Package main is Mojian's session and project server, the binary Mojian
+// uploads to an SSH host; `-stop` ends a running one. It is never
+// installed as a service.
 package main
 
 import (

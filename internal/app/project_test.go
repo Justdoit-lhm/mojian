@@ -8,7 +8,7 @@ import (
 
 	"mojian/internal/remote"
 	"mojian/internal/session"
-	integration "mojian/test"
+	"mojian/internal/testutil"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -18,8 +18,8 @@ func TestProjectSwitch(t *testing.T) {
 	root := t.TempDir()
 	alpha := filepath.Join(root, "Alpha")
 	beta := filepath.Join(root, "Beta")
-	integration.WriteVault(t, alpha, map[string]string{"alpha.md": "# Alpha\n"})
-	integration.WriteVault(t, beta, map[string]string{"beta.py": "print('beta')\n"})
+	testutil.WriteVault(t, alpha, map[string]string{"alpha.md": "# Alpha\n"})
+	testutil.WriteVault(t, beta, map[string]string{"beta.py": "print('beta')\n"})
 
 	data := t.TempDir()
 	a := &app{
@@ -102,7 +102,7 @@ func TestProjectSwitch(t *testing.T) {
 func TestProjectChip(t *testing.T) {
 	registerFonts()
 	dir := filepath.Join(t.TempDir(), "Quiet")
-	integration.WriteVault(t, dir, map[string]string{"note.md": "# A note\n", "app.js": "console.log(1);\n"})
+	testutil.WriteVault(t, dir, map[string]string{"note.md": "# A note\n", "app.js": "console.log(1);\n"})
 	a := &app{workspace: &workspace{treeOpen: true}, dataDir: t.TempDir()}
 	s, err := openStoreAt(dir)
 	if err != nil {
@@ -140,7 +140,7 @@ func TestRemoteWorkspaceSwitchUsesTheCache(t *testing.T) {
 	startLocalServerForTest(t)
 	root := t.TempDir()
 	dir := filepath.Join(root, "App")
-	integration.WriteVault(t, dir, map[string]string{"main.go": "package main\n"})
+	testutil.WriteVault(t, dir, map[string]string{"main.go": "package main\n"})
 	a := &app{workspace: &workspace{treeOpen: true}, dataDir: t.TempDir()}
 	s, err := openStoreAt(dir)
 	if err != nil {
