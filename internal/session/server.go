@@ -765,6 +765,11 @@ func walkTree(root string) ([]FileEntry, error) {
 	var out []FileEntry
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
+			if path == root {
+				// An unreadable root must not look like an empty project:
+				// that would wipe the tree while the files still exist.
+				return err
+			}
 			return nil
 		}
 		if path == root {

@@ -62,6 +62,9 @@ the save path, path guards and the asset cache.
   `internal/testutil/testutil.go` (fixtures).
 - A path that escapes the project root is rejected by `cleanRel`/`joinRoot` rather than clamped; the
   file operation surfaces the error to `a.fail`.
+- A listing that cannot read the project root (for example a denied macOS folder permission) returns
+  that error instead of an empty listing, so the store and Explorer keep their previous tree. An
+  unreadable folder below a readable root is skipped so the rest of the project stays usable.
 - `Memory` lists nothing and refuses file operations with `errReadOnly` (its `Write` is a no-op); the browser build keeps its editor in memory.
 
 ## Verification

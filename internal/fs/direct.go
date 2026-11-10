@@ -33,6 +33,10 @@ func (d *Direct) List() ([]session.FileEntry, map[string]string, error) {
 	bodies := map[string]string{}
 	err := filepath.WalkDir(d.root, func(path string, de os.DirEntry, err error) error {
 		if err != nil {
+			if path == d.root {
+				// A denied root is an error, not an empty project.
+				return err
+			}
 			return nil // an unreadable folder is skipped, not fatal
 		}
 		if de.IsDir() {

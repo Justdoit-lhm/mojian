@@ -211,3 +211,25 @@ func TestListTreeCacheAndFresh(t *testing.T) {
 		t.Fatalf("mutation did not clear the cache: %d %v", len(entries), err)
 	}
 }
+
+func TestListTreeReportsUnreadableRoot(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can read an unreadable directory")
+	}
+	c, dir := startOpsServer(t)
+	root := filepath.Join(dir, "locked")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "a.md"), []byte("# A\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(root, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(root, 0o755)
+	entries, err := c.ListTreeFresh(root)
+	if err == nil {
+		t.Fatalf("an unreadable root listed as %d entries", len(entries))
+	}
+}

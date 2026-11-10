@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- A project listing that cannot read its root now reports an error
+  instead of looking like an empty project. Denying macOS access to a
+  folder no longer wipes its Explorer tree while the files still exist;
+  the error banner names the permission failure and the tree stays.
+
 ## 0.2.20
 
 - The session server caches a project listing for five seconds. File
