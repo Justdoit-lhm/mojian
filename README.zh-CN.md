@@ -9,7 +9,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/ox0pine/mojian?style=flat&amp;labelColor=1F1B16&amp;color=1F1B16" alt="MIT 许可证" width="86" height="22"></a>
 </p>
 
-墨间是一款直接打开普通文件夹的原生纯文本编辑器。编辑文件、预览图片与 PDF、运行常驻终端，并在平铺工作区中查看 Git diff。没有数据库、账号、WebView 或 cgo。
+墨间是一款直接打开普通文件夹的原生纯文本编辑器。编辑文件、预览图片与 PDF、运行常驻终端，并在平铺工作区中查看 Git diff。没有数据库、账号、WebView 或 cgo。支持 macOS 13+、Linux 与 Windows 10 1809+。
 
 [下载最新版本](https://github.com/ox0pine/mojian/releases) · [English](README.md) · [从源码构建](#从源码构建)
 
@@ -21,8 +21,8 @@
 - **标签页即工作区。** 每个标签页包含一棵拆分树，装着编辑器、图片与 PDF 查看器和终端。
 - **终端常驻。** shell 运行在独立的会话服务器中，重新打开墨间时接回。
 - **内置 Git diff。** 不离开窗口即可查看已暂存、未暂存和未跟踪的改动。
-- **通过 SSH 的远程项目。** 文件、Git 和终端直接在配置的主机上运行。
-- **单个 Go 二进制的原生界面。** [MyGo](https://mygo.egoist.dev) 在 macOS 上用 Metal、在 Linux 上用 GTK 3 绘制界面。没有 Electron，也没有 JavaScript 构建。
+- **通过 SSH 的远程项目。** 在 macOS 与 Linux 上，文件、Git 和终端直接在配置的主机上运行。
+- **单个 Go 二进制的原生界面。** [MyGo](https://mygo.egoist.dev) 在 macOS 上用 Metal、在 Linux 上用 GTK 3、在 Windows 上用 Direct3D 11 绘制界面。没有 Electron，也没有 JavaScript 构建。
 
 ## 安装
 
@@ -54,9 +54,26 @@ sudo apt install ./mojian_<版本>_<架构>.deb
 sh install.sh
 ```
 
+### Windows
+
+墨间需要 Windows 10 1809 或更高版本。
+
+| 架构 | 下载 |
+|---|---|
+| x64 | `mojian-setup-<版本>-amd64.exe` |
+| ARM64 | `mojian-setup-<版本>-arm64.exe` |
+
+安装器为当前用户安装，不需要管理员权限。目前构建未签名，SmartScreen 可能提示。启用更新时，可以一行安装：
+
+```powershell
+irm https://github.com/ox0pine/mojian/releases/latest/download/install.ps1 | iex
+```
+
+Windows 目前是仅本地客户端：本地文件、Git、图片、Poppler PDF 和本地终端可用；SSH 与远程项目暂不可用。
+
 ## 项目与文件
 
-macOS 用 `Cmd+O`，Linux 用 `Ctrl+O` 打开文件夹。项目徽标切换最近项目，服务器徽标在本地与已配置的 SSH 主机之间切换。每个项目保留自己的标签页、窗格和最近文件。
+macOS 用 `Cmd+O`，Linux 与 Windows 用 `Ctrl+O` 打开文件夹。项目徽标切换最近项目；在 macOS 与 Linux 上，服务器徽标在本地与已配置的 SSH 主机之间切换。每个项目保留自己的标签页、窗格和最近文件。
 
 也可以在终端里直接指定项目文件夹或文件：
 
@@ -68,7 +85,7 @@ mojian ~/git/abc/README.md      # 文件，其所在文件夹成为项目
 
 文件会在该项目已保存布局的当前窗格中打开。应用包内的可执行文件位于 `Mojian.app/Contents/MacOS/Mojian`；把它链接为 `mojian` 即可使用上面的命令，`mojian --help` 查看用法。
 
-从终端启动后命令会立即返回：结束终端或按 Ctrl+C 不再影响已打开的窗口。由 Finder 等无终端方式启动时保持原样；脱离终端后的窗口错误写入数据目录下的 `app.log`。
+从终端启动后命令会立即返回：结束终端或按 Ctrl+C 不再影响已打开的窗口。由 Finder 等无终端方式启动时保持原样；脱离终端后的窗口错误写入数据目录下的 `app.log`。在 Windows 上，应用包内的 `Mojian.exe` 可以直接运行，也可以把所在目录加入 `PATH` 后使用 `Mojian` 命令。
 
 要在 zsh 或 bash 中直接运行 `mojian`，可在 **设置 › 高级 › Shell command** 中把别名写入 `~/.zshrc` 或 bash 的启动文件；同一行可以更新或移除。
 
@@ -94,9 +111,9 @@ mojian ~/git/abc/README.md      # 文件，其所在文件夹成为项目
 
 双击标签页重命名，双击窗格标题放大，或右键标签页查看更多操作。
 
-按 `Ctrl` 加反引号键（macOS 上是 `⌃` 加反引号）在项目根目录切换终端。终端也是窗格，可以像其他窗格一样拆分、移动、放大和关闭。在 macOS 和 Linux 上，退出墨间后 shell 仍然存活，重新打开会接回。
+按 `Ctrl` 加反引号键（macOS 上是 `⌃` 加反引号）在项目根目录切换终端。终端也是窗格，可以像其他窗格一样拆分、移动、放大和关闭。在 macOS、Linux 和 Windows 上，退出墨间后 shell 仍然存活，重新打开会接回。
 
-按 `Shift+Cmd+S` / `Ctrl+Shift+S` 打开到 **设置 › 主机** 中某个主机的 SSH 终端。
+在 macOS 或 Linux 上，按 `Shift+Cmd+S` / `Ctrl+Shift+S` 打开到 **设置 › 主机** 中某个主机的 SSH 终端。
 
 ## 写作与预览
 
@@ -142,7 +159,7 @@ Markdown 窗格可在标题栏切换源码与预览。**设置 › 编辑器** �
 - **安装更新** 下载并校验签名。
 - **重启更新** 应用已暂存的更新并重新启动墨间。
 
-自动更新要求安装位置可写，例如 macOS 应用包或 Linux 用户目录安装。安装在 `/opt` 的 `.deb` 由包管理器负责更新。
+自动更新要求安装位置可写，例如 macOS 应用包、Linux 用户目录安装或 Windows 安装器。安装在 `/opt` 的 `.deb` 由包管理器负责更新。
 
 ## 快捷键
 
@@ -175,7 +192,7 @@ Markdown 窗格可在标题栏切换源码与预览。**设置 › 编辑器** �
 
 有两个 Ghostty 键位留给编辑器：`⌘[` / `⌘]` 减少 / 增加缩进，`⌘Enter` 在下方插入一行。
 
-终端与 SSH 快捷键仅在 macOS 和 Linux 上可用。
+在 Windows 上，`Cmd` 键位对应 `Ctrl`；**设置 › 快捷键** 会显示实际按键。终端快捷键在 macOS、Linux 和 Windows 上可用；SSH 快捷键仅在 macOS 和 Linux 上可用。
 
 ## 从源码构建
 
@@ -208,9 +225,10 @@ go run ./cmd/harness -addr 127.0.0.1:8090
 ```sh
 go tool mygo build -platform darwin/arm64,darwin/amd64
 go tool mygo build -platform linux/amd64,linux/arm64
+go tool mygo build -platform windows/amd64,windows/arm64
 ```
 
-产物位于 `build/<系统>-<架构>/`。macOS 生成 `.app` 与 `.dmg`；Linux 生成 `.tar.gz` 与 `.deb`。
+产物位于 `build/<系统>-<架构>/`。macOS 生成 `.app` 与 `.dmg`；Linux 生成 `.tar.gz` 与 `.deb`；Windows 生成应用与 `mojian-setup-<版本>-<架构>.exe`。
 
 修改会话协议或 `cmd/mojian-server` 后，重新生成嵌入的远程二进制：
 
@@ -226,7 +244,8 @@ go generate ./internal/remotebin
 
 - macOS：`mojian-<版本>-arm64.dmg` 和 `mojian-<版本>-amd64.dmg`
 - Linux：`mojian-<版本>-linux-{amd64,arm64}.tar.gz`、对应的 `.deb` 包和 `install.sh`
-- 签名更新包（`*-darwin-*.tar.gz`、`*-linux-*.tar.gz`）与 `update-<target>.json` 清单
+- Windows：`mojian-setup-<版本>-{amd64,arm64}.exe`、`install.ps1` 和 `mojian-<版本>-windows-{amd64,arm64}.tar.gz`
+- 签名更新包（`*-darwin-*.tar.gz`、`*-linux-*.tar.gz`、`*-windows-*.tar.gz`）与 `update-<target>.json` 清单
 - `SHA256SUMS`
 
 ## 设计

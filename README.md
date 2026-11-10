@@ -9,7 +9,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/ox0pine/mojian?style=flat&amp;labelColor=1F1B16&amp;color=1F1B16" alt="MIT license" width="86" height="22"></a>
 </p>
 
-Mojian is a native plain-text editor for ordinary folders. Edit files, preview images and PDFs, run persistent terminals, and inspect Git diffs in tiled workspaces. No database, account, webview, or cgo.
+Mojian is a native plain-text editor for ordinary folders. Edit files, preview images and PDFs, run persistent terminals, and inspect Git diffs in tiled workspaces. No database, account, webview, or cgo. Runs on macOS 13+, Linux, and Windows 10 1809+.
 
 [Download the latest release](https://github.com/ox0pine/mojian/releases) · [简体中文](README.zh-CN.md) · [Build from source](#build-from-source)
 
@@ -68,11 +68,11 @@ The installer installs for the current user, without administrator rights. Build
 irm https://github.com/ox0pine/mojian/releases/latest/download/install.ps1 | iex
 ```
 
-Windows is a local-only client in 0.3.0: local files, Git, images, PDFs with Poppler, and local terminals work; SSH and remote projects are not available there yet.
+Windows is supported as a local-only client: local files, Git, images, PDFs with Poppler, and local terminals work; SSH and remote projects are not available there yet.
 
 ## Projects and files
 
-Press `Cmd+O` on macOS or `Ctrl+O` on Linux to open a folder. The project chip switches between recent projects, and the server chip switches between Local and configured SSH hosts. Each project keeps its own tabs, panes, and recent files.
+Press `Cmd+O` on macOS or `Ctrl+O` on Linux and Windows to open a folder. The project chip switches between recent projects; on macOS and Linux the server chip switches between Local and configured SSH hosts. Each project keeps its own tabs, panes, and recent files.
 
 From a terminal, pass the project folder or a file:
 
@@ -82,7 +82,7 @@ mojian ~/git/abc                # a project folder
 mojian ~/git/abc/README.md      # a file, with its folder as the project
 ```
 
-The file opens in the focused pane of the project's saved layout. The app bundle's binary is `Mojian.app/Contents/MacOS/Mojian`: link it as `mojian` to use the name in these examples, and run `mojian --help` for the usage.
+The file opens in the focused pane of the project's saved layout. The app bundle's binary is `Mojian.app/Contents/MacOS/Mojian`: link it as `mojian` to use the name in these examples, and run `mojian --help` for the usage. On Windows, run the installed `Mojian.exe` directly, or add its folder to `PATH` to use `Mojian` in these examples.
 
 A launch from a terminal detaches at once: the prompt returns, and closing the terminal or pressing Ctrl+C no longer ends the window. A launch without a terminal, such as from Finder, stays in place, and errors from a detached window go to `app.log` in Mojian's data folder.
 
@@ -160,7 +160,7 @@ Open **Settings › Updates** to check the latest signed GitHub release:
 - **Install Update** downloads it and verifies its signature.
 - **Restart to Update** applies a staged update and relaunches Mojian.
 
-Self-updates require a writable installation, such as the macOS app bundle or the per-user Linux archive. A `.deb` installed in `/opt` is updated by its package manager instead.
+Self-updates require a writable installation, such as the macOS app bundle, the per-user Linux archive, or the Windows installer. A `.deb` installed in `/opt` is updated by its package manager instead.
 
 ## Keyboard shortcuts
 
@@ -193,7 +193,7 @@ The labels in Mojian follow the platform. These are the default bindings; **Sett
 
 Two Ghostty keys stay with the editor: `⌘[` / `⌘]` indent and outdent, and `⌘Enter` inserts a line below.
 
-Terminal shortcuts are available on macOS, Linux and Windows. SSH shortcuts are available on macOS and Linux only.
+On Windows, `Cmd` bindings become `Ctrl`; **Settings › Keyboard** shows the active keys. Terminal shortcuts are available on macOS, Linux and Windows. SSH shortcuts are available on macOS and Linux only.
 
 ## Build from source
 
@@ -231,9 +231,10 @@ settings. The endpoint has no authentication, so keep it on loopback.
 ```sh
 go tool mygo build -platform darwin/arm64,darwin/amd64
 go tool mygo build -platform linux/amd64,linux/arm64
+go tool mygo build -platform windows/amd64,windows/arm64
 ```
 
-Build output lives under `build/<os>-<arch>/`. macOS produces `.app` and `.dmg`; Linux produces `.tar.gz` and `.deb`.
+Build output lives under `build/<os>-<arch>/`. macOS produces `.app` and `.dmg`; Linux produces `.tar.gz` and `.deb`; Windows produces the app and `mojian-setup-<version>-<arch>.exe`.
 
 After changing the session protocol or `cmd/mojian-server`, rebuild the embedded remote binaries:
 
