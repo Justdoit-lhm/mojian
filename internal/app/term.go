@@ -359,8 +359,12 @@ func (a *app) rethemeTerminals() {
 }
 
 // sessions returns the control connection to the session server, starting
-// it when needed.
+// it when needed. A server stopped from Settings stays stopped until it
+// is started there again.
 func (a *app) sessions() (*session.Client, error) {
+	if a.localServerStopped {
+		return nil, errors.New("the local server is stopped; start it in Settings › Hosts")
+	}
 	if a.sessionClient != nil {
 		select {
 		case <-a.sessionClient.Closed():

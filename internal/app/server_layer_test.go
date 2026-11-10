@@ -13,6 +13,8 @@ import (
 	"mojian/internal/remote"
 	"mojian/internal/session"
 	"mojian/internal/testutil"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func TestLocalProjectStoreUsesSessionServer(t *testing.T) {
@@ -239,5 +241,104 @@ func TestLocalServerFileOperations(t *testing.T) {
 	}
 	if data, err := os.ReadFile(filepath.Join(root, dest)); err != nil || string(data) != "# Move\n" {
 		t.Fatalf("moved outside file: %q %v", data, err)
+	}
+}
+
+// startLocalServerAgain brings up another server in the test binary
+// after a test stopped the first one. The app spawns a new process; a
+// test binary cannot, so the test starts Serve itself.
+func startLocalServerAgain(t *testing.T) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		if _, err := os.Stat(session.SocketPath()); os.IsNotExist(err) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the stopped server did not remove its socket")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	time.Sleep(50 * time.Millisecond)
+	client, done := startTestSessionServer(t, os.Getenv("MOJIAN_DIR"))
+	t.Cleanup(func() {
+		_ = client.Close()
+		_ = session.Stop()
+		<-done
+	})
+}
+
+func TestLocalServerStopsAndRestarts(t *testing.T) {
+	startLocalServerForTest(t)
+	t.Cleanup(func() { _ = session.Stop() })
+	root := t.TempDir()
+	testutil.WriteVault(t, root, map[string]string{"a.md": "# A\n"})
+	a := &app{workspace: &workspace{treeOpen: true}, dataDir: t.TempDir()}
+	a.project = root
+	a.openProject(root)
+	if a.store == nil || !a.store.IsServer() {
+		t.Fatal("the project is not backed by the local server")
+	}
+	store := a.store
+	if !a.localServerRunning() {
+		t.Fatal("the local server is not running")
+	}
+
+	a.stopLocalServer()
+	if !a.localServerStopped || a.localServerRunning() {
+		t.Fatalf("after stop: stopped=%v running=%v", a.localServerStopped, a.localServerRunning())
+	}
+	if a.sessionClient != nil {
+		t.Fatal("the stopped server kept its control client")
+	}
+
+	startLocalServerAgain(t)
+	a.startLocalServer()
+	if a.localServerStopped || !a.localServerRunning() {
+		t.Fatalf("after start: stopped=%v running=%v", a.localServerStopped, a.localServerRunning())
+	}
+	if a.store != store {
+		t.Fatal("starting the server replaced the loaded project")
+	}
+	if err := store.Refresh(); err != nil {
+		t.Fatalf("the restarted server did not serve the project: %v", err)
+	}
+}
+
+func TestLocalServerSettingsButtons(t *testing.T) {
+	registerFonts()
+	startLocalServerForTest(t)
+	t.Cleanup(func() { _ = session.Stop() })
+	a := newProjectApp(t)
+	a.settings.Cat = settingsHosts
+	tt := ui.NewTester(a.settingsWindowView, 900, 1200)
+	tt.Frame()
+	if !tt.HasText("Stop Server") {
+		t.Fatalf("a running local server has no stop button: %q", tt.Texts())
+	}
+	if err := tt.Click("Stop Server"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !tt.HasText("Stop this server? Its terminals and the processes in them end.") {
+		t.Fatalf("stopping the local server has no confirmation: %q", tt.Texts())
+	}
+	if err := tt.Click("Stop"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !a.localServerStopped {
+		t.Fatal("the local server did not stop")
+	}
+	if !tt.HasText("Start Server") {
+		t.Fatalf("a stopped local server has no start button: %q", tt.Texts())
+	}
+	startLocalServerAgain(t)
+	if err := tt.Click("Start Server"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.localServerStopped || !a.localServerRunning() {
+		t.Fatalf("the local server did not start: stopped=%v running=%v", a.localServerStopped, a.localServerRunning())
 	}
 }

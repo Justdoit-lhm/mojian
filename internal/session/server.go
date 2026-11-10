@@ -33,7 +33,6 @@ import (
 const (
 	scrollback  = 8 << 20
 	resyncDelay = 150 * time.Millisecond
-	idleTimeout = 10 * time.Minute
 	// maxLine bounds one JSON request or response, and readFileLimit the
 	// bytes of a file sent in one.
 	maxLine        = 64 << 20
@@ -51,8 +50,6 @@ type Server struct {
 	started  time.Time
 	quit     chan struct{}
 	once     sync.Once
-	controls int
-	idleFrom time.Time
 }
 
 // Serve runs the session server until it is shut down.
@@ -82,13 +79,13 @@ func Serve() error {
 	}
 	s := &Server{
 		sessions: map[string]*session{}, order: nil, started: time.Now(),
-		quit: make(chan struct{}), idleFrom: time.Now(),
+		quit: make(chan struct{}),
 	}
 	go func() {
 		<-s.quit
 		_ = ln.Close()
 	}()
-	go s.watchIdle()
+	go s.pruneLoop()
 	log.Printf("session: serving on %s (pid %d)", sock, os.Getpid())
 	for {
 		conn, err := ln.Accept()
@@ -113,23 +110,15 @@ func Serve() error {
 			}
 			return err
 		}
-		s.mu.Lock()
-		s.idleFrom = time.Now()
-		s.mu.Unlock()
-		go func() {
-			defer func() {
-				s.mu.Lock()
-				s.idleFrom = time.Now()
-				s.mu.Unlock()
-			}()
-			s.handle(conn)
-		}()
+		go func() { s.handle(conn) }()
 	}
 }
 
 func (s *Server) shutdown() { s.once.Do(func() { close(s.quit) }) }
 
-func (s *Server) watchIdle() {
+// pruneLoop forgets exited sessions; the server itself runs until it is
+// stopped explicitly.
+func (s *Server) pruneLoop() {
 	t := time.NewTicker(30 * time.Second)
 	defer t.Stop()
 	for {
@@ -139,33 +128,20 @@ func (s *Server) watchIdle() {
 		case <-t.C:
 		}
 		s.pruneExited()
-		s.mu.Lock()
-		idle := len(s.sessions) == 0 && s.controls == 0 && time.Since(s.idleFrom) > idleTimeout
-		s.mu.Unlock()
-		if idle {
-			s.shutdown()
-			return
-		}
 	}
 }
 
 // pruneExited forgets sessions whose shell has finished, so a dead
-// terminal does not keep the server alive forever or hide a live
-// session behind the same id.
+// terminal does not hide a live session behind the same id.
 func (s *Server) pruneExited() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	removed := false
 	for id, ss := range s.sessions {
 		if !ss.hasExited() {
 			continue
 		}
 		delete(s.sessions, id)
 		s.order = removeString(s.order, id)
-		removed = true
-	}
-	if removed && len(s.sessions) == 0 {
-		s.idleFrom = time.Now()
 	}
 }
 
@@ -198,16 +174,7 @@ func (s *Server) handle(conn net.Conn) {
 }
 
 func (s *Server) control(conn net.Conn, r *bufio.Reader, first []byte) {
-	s.mu.Lock()
-	s.controls++
-	s.mu.Unlock()
-	defer func() {
-		s.mu.Lock()
-		s.controls--
-		s.idleFrom = time.Now()
-		s.mu.Unlock()
-		_ = conn.Close()
-	}()
+	defer conn.Close()
 	var wmu sync.Mutex
 	reply := func(res Response) {
 		b, _ := json.Marshal(res)
@@ -350,9 +317,6 @@ func (s *Server) do(req Request) (any, error) {
 		s.mu.Lock()
 		delete(s.sessions, req.SID)
 		s.order = removeString(s.order, req.SID)
-		if len(s.sessions) == 0 {
-			s.idleFrom = time.Now()
-		}
 		s.mu.Unlock()
 		go ss.kill()
 		return nil, nil

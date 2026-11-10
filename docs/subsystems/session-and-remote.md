@@ -49,9 +49,9 @@ the host list and connection pool the app keeps.
    through that socket; `Provision` returns the live `Conn` it ended with, and the app keeps it in
    the pool.
 4. The remote server stays alive while any of its sessions exists, so a dropped SSH connection does
-   not end its shells. With no sessions and no control connection it exits after ten minutes.
-   `mojian-server -stop` ends it explicitly; Settings › Hosts offers **Start Server** and
+   not end its shells. It never stops on its own: Settings › Hosts offers **Start Server** and
    **Stop Server** for each configured host, and a stop asks before ending its terminals.
+   `mojian-server -stop` ends it explicitly.
 
 ## Contracts and failure behavior
 

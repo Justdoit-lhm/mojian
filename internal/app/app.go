@@ -109,8 +109,11 @@ type app struct {
 	pendingUpdate    *update.Release
 	updateErr        string
 
-	shellStarter  func() (*termTab, error) // tests replace this
-	sessionClient *session.Client
+	shellStarter       func() (*termTab, error) // tests replace this
+	sessionClient      *session.Client
+	localServerStopped bool
+	localServerErr     string
+	localStopAsk       bool
 	// harness marks the headless fixtures of cmd/harness: no native
 	// windows or session servers, only the fixture's disposable project.
 	harness bool

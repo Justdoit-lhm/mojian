@@ -54,7 +54,7 @@ func (a *app) settingsHostsPage(c *ui.Context, k *colors) {
 			}
 		})
 	})
-	a.settings.Note(c, k, "Set Up Server uploads mojian-server and libghostty-vt to ~/.local/share/mojian on the host, using your SSH key. No root, no service and no open port: the app reaches it through an SSH forward. The server keeps running when Mojian or the SSH connection disconnects and after its last terminal exits it stops by itself after ten minutes. Stop Server ends it and its terminals now; Start Server brings it back.")
+	a.settings.Note(c, k, "Set Up Server uploads mojian-server and libghostty-vt to ~/.local/share/mojian on the host, using your SSH key. No root, no service and no open port: the app reaches it through an SSH forward. A server keeps running when Mojian or the SSH connection disconnects and never stops on its own: Stop Server ends it and its terminals, and Start Server brings it back. The Local row controls this machine's server the same way.")
 }
 
 func (a *app) addHostChecked() {
@@ -123,6 +123,8 @@ func (a *app) hostSettingsRow(c *ui.Context, k *colors, host, label, detail stri
 		})
 		if host != "" {
 			a.hostSetupRow(c, k, host)
+		} else {
+			a.localServerRow(c, k)
 		}
 		if host != "" && a.hostRemoveAddr == host {
 			ui.Row(c).Padding(0, 6, 10, 6).Gap(8).AlignItems(ui.Center).Children(func() {
@@ -201,6 +203,51 @@ func (a *app) hostSetupRow(c *ui.Context, k *colors, host string) {
 				if settingsButton(c, "Stop", true).TextColor(k.Danger).Clicked() {
 					a.hostStopAddr = ""
 					a.stopHostServer(host)
+				}
+			})
+		}
+	})
+}
+
+// localServerRow shows this machine's session server and controls it.
+func (a *app) localServerRow(c *ui.Context, k *colors) {
+	running := a.localServerRunning()
+	msg := "Server not started"
+	col := k.TextFaint
+	switch {
+	case a.localServerErr != "":
+		msg = a.localServerErr
+		col = k.Danger
+	case running:
+		msg = "Server running"
+		col = k.TextMuted
+	case a.localServerStopped:
+		msg = "Server stopped"
+		col = k.TextMuted
+	}
+	ui.Column(c).Gap(4).Children(func() {
+		row := ui.Row(c).Padding(0, 6, 6, 6).Gap(8).AlignItems(ui.Center)
+		row.Children(func() {
+			ui.Text(c, msg).FontSize(11).TextColor(col).Grow(1).SingleLine().Ellipsis("…")
+			if running {
+				if settingsButton(c, "Stop Server", false).Clicked() {
+					a.localStopAsk = true
+					a.invalidate()
+				}
+			} else if settingsButton(c, "Start Server", false).Clicked() {
+				a.startLocalServer()
+			}
+		})
+		if a.localStopAsk {
+			ui.Row(c).Padding(0, 2, 10, 8).Gap(8).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, "Stop this server? Its terminals and the processes in them end.").
+					FontSize(11.5).TextColor(k.TextMuted).Grow(1).LineHeight(1.35)
+				if settingsButton(c, "Cancel", false).Clicked() {
+					a.localStopAsk = false
+					a.invalidate()
+				}
+				if settingsButton(c, "Stop", true).TextColor(k.Danger).Clicked() {
+					a.stopLocalServer()
 				}
 			})
 		}

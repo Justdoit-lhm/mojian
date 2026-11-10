@@ -9,8 +9,10 @@
 - Settings › Hosts now controls each server: **Stop Server** (after a
   confirmation that its terminals end) and **Start Server** bring the
   remote process down and back, and starting uploads a missing binary.
-  The server still survives Mojian and SSH disconnects while a terminal
-  is open, and exits by itself ten minutes after its last one.
+  The server survives Mojian and SSH disconnects and never stops on its
+  own. The **Local** row controls this machine's server the same way;
+  while it is stopped, opening a local project asks for it to be started
+  again instead of spawning one behind the user's back.
 
 ## 0.2.13
 
