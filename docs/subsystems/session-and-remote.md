@@ -68,7 +68,9 @@ the host list and connection pool the app keeps.
   control channel is dropped by `remoteForHost` and dialed again on the next use.
 - Settings › Hosts is the only host source; the app does not scan `~/.ssh/config`.
 - Opening a remote project runs off the UI thread behind the loading card, so an unreachable host
-  cannot block the window.
+  cannot block the window. The card's Cancel button cancels the task's context, which kills the
+  `ssh` commands it waits on and closes the card at once; a result the cancelled task still
+  produces is dropped, and a folder-picker connection made only for that attempt is released.
 - Missing or unreachable binaries surface as an error from `Provision`; the app reports it and keeps
   the project closed rather than editing a stale listing.
 

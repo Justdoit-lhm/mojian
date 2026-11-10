@@ -9,6 +9,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"hash/fnv"
 	"log"
@@ -55,6 +56,7 @@ type app struct {
 	remoteBusy     bool
 	remoteBusyMsg  string
 	remoteTaskSeq  int
+	remoteCancel   context.CancelFunc
 	remoteDirsSeq  int
 	remoteDirsBusy bool
 	projectOpen    bool

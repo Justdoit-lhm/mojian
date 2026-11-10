@@ -44,7 +44,7 @@ func (a *app) openRemotePicker(host string) {
 	if existing != nil {
 		msg = "Reading folders on " + a.hostLabel(host) + "…"
 	}
-	seq, win := a.beginRemoteTask(msg)
+	seq, win, ctx := a.beginRemoteTask(msg)
 	if seq == 0 {
 		return
 	}
@@ -52,12 +52,12 @@ func (a *app) openRemotePicker(host string) {
 		rc := existing
 		var err error
 		if rc == nil {
-			rc, err = remote.Dial(host)
+			rc, err = remote.DialContext(ctx, host)
 		}
 		home := cachedHome
 		var dirs []session.FileEntry
 		if err == nil && home == "" {
-			home, err = remote.SSHOutput(host, `printf %s "$HOME"`)
+			home, err = remote.SSHOutputContext(ctx, host, `printf %s "$HOME"`)
 		}
 		if err == nil {
 			onWindow(win, func() { a.setRemoteBusyMsg(seq, "Reading folders on "+a.hostLabel(host)+"…") })

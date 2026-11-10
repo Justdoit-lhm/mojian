@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -85,12 +86,12 @@ func (a *app) reconnectActiveRemoteAsync() {
 		a.invalidate()
 		return
 	}
-	seq, win := a.beginRemoteTask("Reconnecting to " + a.hostLabel(host) + "…")
+	seq, win, ctx := a.beginRemoteTask("Reconnecting to " + a.hostLabel(host) + "…")
 	if seq == 0 {
 		return
 	}
 	go func() {
-		rc, err := remote.Dial(host)
+		rc, err := remote.DialContext(ctx, host)
 		onWindow(win, func() {
 			if !a.endRemoteTask(seq) {
 				if rc != nil {
@@ -128,12 +129,12 @@ func (a *app) reconnectWorkspaceAsync(ws *workspace, host string) {
 		a.fail(fmt.Errorf("could not save the open project: %w", err))
 		return
 	}
-	seq, win := a.beginRemoteTask("Reconnecting to " + a.hostLabel(host) + "…")
+	seq, win, ctx := a.beginRemoteTask("Reconnecting to " + a.hostLabel(host) + "…")
 	if seq == 0 {
 		return
 	}
 	go func() {
-		rc, err := remote.Dial(host)
+		rc, err := remote.DialContext(ctx, host)
 		onWindow(win, func() {
 			if !a.endRemoteTask(seq) {
 				if rc != nil {
@@ -275,7 +276,7 @@ func (a *app) openRemoteProjectAsync(host, remotePath string) {
 	}
 	a.layoutDirty = false
 	existing := a.remoteForHost(host)
-	seq, win := a.beginRemoteTask("Opening " + filepath.Base(remotePath) + " on " + a.hostLabel(host) + "…")
+	seq, win, ctx := a.beginRemoteTask("Opening " + filepath.Base(remotePath) + " on " + a.hostLabel(host) + "…")
 	if seq == 0 {
 		a.dropPickerRemote()
 		return
@@ -285,7 +286,7 @@ func (a *app) openRemoteProjectAsync(host, remotePath string) {
 		rc := existing
 		var err error
 		if rc == nil {
-			rc, err = remote.Dial(host)
+			rc, err = remote.DialContext(ctx, host)
 		}
 		var s *store
 		if err == nil {
@@ -363,20 +364,22 @@ func (a *app) rememberRemoteProject(p remoteProject) {
 	a.hostService().SetProjects(out)
 }
 
-// beginRemoteTask covers the window with a loading state and returns
-// the sequence that guards its result.
-func (a *app) beginRemoteTask(msg string) (int, *mygo.Window) {
+// beginRemoteTask covers the window with a loading state and returns the
+// sequence that guards its result and the context that stops its work.
+func (a *app) beginRemoteTask(msg string) (int, *mygo.Window, context.Context) {
 	if a.remoteBusy {
-		return 0, nil
+		return 0, nil, nil
 	}
 	a.remoteTaskSeq++
+	ctx, cancel := context.WithCancel(context.Background())
+	a.remoteCancel = cancel
 	a.remoteBusy = true
 	a.remoteBusyMsg = msg
 	a.invalidate()
 	if a.win != nil {
-		return a.remoteTaskSeq, a.win
+		return a.remoteTaskSeq, a.win, ctx
 	}
-	return a.remoteTaskSeq, a.settingsWin
+	return a.remoteTaskSeq, a.settingsWin, ctx
 }
 
 // setRemoteBusyMsg changes the line under the spinner, once the task may
@@ -397,8 +400,34 @@ func (a *app) endRemoteTask(seq int) bool {
 	}
 	a.remoteBusy = false
 	a.remoteBusyMsg = ""
+	a.stopRemoteTask()
 	a.invalidate()
 	return true
+}
+
+// cancelRemoteTask stops the connection behind the loading card and
+// uncovers the window; every result that task still produces is dropped
+// by its sequence.
+func (a *app) cancelRemoteTask() {
+	if !a.remoteBusy {
+		return
+	}
+	a.remoteTaskSeq++
+	a.remoteBusy = false
+	a.remoteBusyMsg = ""
+	a.stopRemoteTask()
+	// A picker connection made for the folder that was about to open has
+	// no user once the card is gone. The open project's host is kept by
+	// remoteKeep, so this does not release it.
+	a.dropPickerRemote()
+	a.invalidate()
+}
+
+func (a *app) stopRemoteTask() {
+	if a.remoteCancel != nil {
+		a.remoteCancel()
+		a.remoteCancel = nil
+	}
 }
 
 // onWindow runs fn on the window's thread when this build has one.
@@ -420,7 +449,7 @@ func (a *app) remoteBusyView(c *ui.Context, k *colors) {
 		back := ui.Box(c).Absolute().Left(0).Top(0).Right(0).Bottom(0).
 			Center().Background(k.Backdrop).Modal()
 		back.Children(func() {
-			panel := ui.Row(c).Width(330).Padding(18, 20).Gap(14).Radius(radius).
+			panel := ui.Row(c).Width(390).Padding(18, 20).Gap(14).Radius(radius).
 				Background(k.Panel).Border(1, k.PanelBorder).
 				Shadow(0, 18, 44, -8, k.ShadowFocused).AlignItems(ui.Center).
 				Focusable().Focus()
@@ -431,6 +460,9 @@ func (a *app) remoteBusyView(c *ui.Context, k *colors) {
 						FontWeight(600).TextColor(k.Text)
 					ui.Text(c, a.remoteBusyMsg).FontSize(11.5).TextColor(k.TextMuted).
 						LineHeight(1.35)
+				})
+				a.pickerButton(c, k, "Cancel", false, func() {
+					a.cancelRemoteTask()
 				})
 			})
 		})

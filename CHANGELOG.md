@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- The window-wide connection card has a Cancel button on its right: it
+  kills the SSH commands the attempt is waiting on, closes the card at
+  once, and leaves the project that was on screen untouched. A result
+  the cancelled attempt still produces is dropped.
+
 ## 0.2.13
 
 - Choosing a server in the server chip or Settings › Hosts now returns to
