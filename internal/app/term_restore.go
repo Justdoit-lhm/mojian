@@ -67,10 +67,18 @@ func (a *app) startRestoredTerminal(p *pane) {
 		}
 	}
 	// The terminal belongs to the server that already owns the project.
-	// Do not dial a new remote connection from a view: a missing one is
-	// shown as an error with a retry.
+	// A view never dials SSH itself, but a remote terminal on the project
+	// on screen may wait for the project's connection to come back after
+	// a window reopen; attach then instead of showing a dead end.
 	client, err := a.terminalClientExisting(t.Spec)
 	if err != nil {
+		if a.win != nil && t.Spec.Server != "" && t.Spec.Server != localServerID &&
+			t.Spec.Server == a.serverAlias && !a.remoteBusy {
+			t.connecting = true
+			a.reconnectActiveRemoteAsync()
+			a.invalidate()
+			return
+		}
 		t.startErr = err.Error()
 		a.invalidate()
 		return

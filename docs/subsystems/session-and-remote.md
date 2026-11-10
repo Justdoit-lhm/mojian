@@ -68,13 +68,18 @@ the host list and connection pool the app keeps.
   once and without the window-wide loading card, using the home cached in `remoteHomes`. Choosing
   the server already on screen opens the picker, so another folder on it can be opened. A dead
   control channel is dropped by `remoteForHost` and dialed again on the next use.
-- Settings › Hosts is the only host source; the app does not scan `~/.ssh/config`. Each host's row
-  sets up, starts and stops that host's server; stopping removes the pooled connection and the
-  terminal views it owned, and starting again reconnects the loaded projects on that host.
+- Settings › Hosts is the only host source; the app does not scan `~/.ssh/config`. Opening the
+  page asks each host once (`remote.ServerRunning`) whether its server socket still exists, so a
+  server left running by the previous launch shows Stop Server rather than Set Up Server. Each
+  host's row sets up, starts and stops that host's server; stopping removes the pooled connection
+  and the terminal views it owned, and starting again reconnects the loaded projects on that host.
 - Opening a remote project runs off the UI thread behind the loading card, so an unreachable host
   cannot block the window. The card's Cancel button cancels the task's context, which kills the
   `ssh` commands it waits on and closes the card at once; a result the cancelled task still
   produces is dropped, and a folder-picker connection made only for that attempt is released.
+- A restored terminal on the project on screen waits for the project's connection instead of
+  showing Try Again; `installRemoteConn` clears the waiting state and the pane attaches. A failed
+  reconnect puts the connection error behind Try Again.
 - Missing or unreachable binaries surface as an error from `Provision`; the app reports it and keeps
   the project closed rather than editing a stale listing.
 

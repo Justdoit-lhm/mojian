@@ -355,6 +355,23 @@ func StopServerContext(ctx context.Context, host string) error {
 	return nil
 }
 
+// ServerRunning reports whether the server on host still has its socket.
+// A host that cannot be reached is reported as not running: the next
+// Start Server or Dial surfaces the SSH error.
+func ServerRunning(ctx context.Context, host string) (bool, error) {
+	if host == "" {
+		return false, fmt.Errorf("no server selected")
+	}
+	info, err := probe(ctx, host)
+	if err != nil {
+		return false, err
+	}
+	if _, err := SSHOutputContext(ctx, host, "test -S "+shellQuote(info.sock)); err != nil {
+		return false, nil
+	}
+	return true, nil
+}
+
 // stop asks the running server to exit, through its own -stop command.
 func (i *Install) stop(ctx context.Context, host string) error {
 	_, err := SSHOutputContext(ctx, host, "MOJIAN_DIR="+shellQuote(i.dir)+

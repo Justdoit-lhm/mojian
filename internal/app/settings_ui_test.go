@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -376,6 +377,34 @@ func TestHostStopServerButton(t *testing.T) {
 	}
 	if !tt.HasText("Server stopped") {
 		t.Fatalf("the stop status is not on the page: %q", tt.Texts())
+	}
+}
+
+func TestRunningServerShowsStopAfterRestart(t *testing.T) {
+	old := hostServerRunningFn
+	hostServerRunningFn = func(ctx context.Context, host string) (bool, error) {
+		if host != "fedora" {
+			t.Fatalf("status host: %q", host)
+		}
+		return true, nil
+	}
+	t.Cleanup(func() { hostServerRunningFn = old })
+
+	registerFonts()
+	a := newProjectApp(t)
+	a.hostService().SetHosts([]hostConfig{{Name: "Fedora", Address: "fedora"}})
+	a.settings.Cat = settingsHosts
+	tt := ui.NewTester(a.settingsWindowView, 900, 1400)
+	tt.Frame()
+	tt.Frame()
+	if !a.hostRunning["fedora"] {
+		t.Fatalf("the probe did not find the running server: %+v", a.hostChecked)
+	}
+	if _, ok := tt.Find("Stop Server"); !ok {
+		t.Fatalf("a server left running has no stop button: %q", tt.Texts())
+	}
+	if _, ok := tt.Find("Set Up Server"); ok {
+		t.Fatalf("a running server still offers setup: %q", tt.Texts())
 	}
 }
 

@@ -148,6 +148,10 @@ type app struct {
 	hostSetupErr    string
 	hostReady       map[string]bool
 	hostStopped     map[string]bool
+	hostRunning     map[string]bool
+	hostChecked     map[string]bool
+	hostChecking    map[string]bool
+	hostCheckSeq    map[string]int
 	shortcutKeys    map[string]string
 	commands        *commands.Registry
 

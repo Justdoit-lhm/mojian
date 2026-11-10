@@ -19,6 +19,10 @@ var provisionRemoteFn = remote.Provision
 // stopRemoteFn is replaceable in tests; the real flow talks SSH.
 var stopRemoteFn = remote.StopServer
 
+// hostServerRunningFn is replaceable in tests; the real flow asks SSH
+// whether the host's socket still exists.
+var hostServerRunningFn = remote.ServerRunning
+
 // openRemotePicker asks the selected server for its home, then shows the
 // directories to choose a project from.
 func (a *app) openRemotePicker(host string) {
@@ -484,6 +488,7 @@ func (a *app) finishHostSetup(host string, setup *remote.Setup, err error) {
 	a.hostReady[host] = true
 	delete(a.hostStopped, host)
 	a.hostStopAddr = ""
+	a.setHostRunning(host, true)
 	state := "already running"
 	if setup.Uploaded {
 		state = "uploaded"
@@ -538,6 +543,7 @@ func (a *app) finishHostStop(host string, err error) {
 	delete(a.hostReady, host)
 	a.hostSetupErr = ""
 	a.hostSetupMsg = "Server stopped"
+	a.setHostRunning(host, false)
 	if rc := a.remoteConn(host); rc != nil {
 		a.detachRemoteConn(rc)
 	}

@@ -55,6 +55,34 @@ func (a *app) installRemoteConn(rc *remote.Conn) {
 	}
 }
 
+// failTerminalsOn ends the waiting state of terminals on host with the
+// connection error, so their Try Again is real rather than a spinner.
+func (a *app) failTerminalsOn(host string, err error) {
+	if err == nil {
+		return
+	}
+	each := func(ws *workspace) {
+		if ws == nil {
+			return
+		}
+		for _, t := range ws.tabs {
+			for _, p := range t.panes() {
+				if p.Term == nil || p.Term.Spec.Server != host {
+					continue
+				}
+				p.Term.connecting = false
+				p.Term.startErr = err.Error()
+			}
+		}
+	}
+	each(a.workspace)
+	for _, ws := range a.workspaces {
+		if ws != a.workspace {
+			each(ws)
+		}
+	}
+}
+
 // detachTerminalsOn closes the views of terminals owned by host, keeping
 // the sessions on the server for a reattach.
 func detachTerminalsOn(ws *workspace, host string, client *session.Client) {
@@ -69,6 +97,7 @@ func detachTerminalsOn(ws *workspace, host string, client *session.Client) {
 			detachTerminalView(p)
 			p.Term.Client = client
 			p.Term.startErr = ""
+			p.Term.connecting = false
 		}
 	}
 }
@@ -100,6 +129,7 @@ func (a *app) reconnectActiveRemoteAsync() {
 				return
 			}
 			if err != nil {
+				a.failTerminalsOn(host, err)
 				a.fail(err)
 				return
 			}
@@ -143,6 +173,7 @@ func (a *app) reconnectWorkspaceAsync(ws *workspace, host string) {
 				return
 			}
 			if err != nil {
+				a.failTerminalsOn(host, err)
 				a.fail(err)
 				return
 			}

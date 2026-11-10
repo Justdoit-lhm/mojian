@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"testing"
 
 	"mojian/internal/fs"
@@ -119,5 +120,26 @@ func TestInstallRemoteConnPatchesCachedStores(t *testing.T) {
 	}
 	if a.remoteConn("box") != rc {
 		t.Fatal("the connection was not pooled")
+	}
+}
+
+func TestTerminalWaitStateFollowsTheConnection(t *testing.T) {
+	p := &pane{Term: &termTab{Spec: termSpec{Server: "box"}, connecting: true}}
+	tb := &tab{Root: &node{Pane: p}, Focus: p}
+	ws := &workspace{serverAlias: "box", remotePath: "/srv/app", tabs: []*tab{tb}}
+	a := &app{workspace: ws, workspaces: map[string]*workspace{"remote:box:/srv/app": ws}}
+
+	detachTerminalsOn(ws, "box", nil)
+	if p.Term.connecting || p.Term.startErr != "" {
+		t.Fatalf("a new connection did not reset the terminal: connecting=%v err=%q", p.Term.connecting, p.Term.startErr)
+	}
+
+	p.Term.connecting = true
+	a.failTerminalsOn("box", errors.New("unreachable"))
+	if p.Term.connecting {
+		t.Fatal("a failed reconnect left the terminal waiting forever")
+	}
+	if p.Term.startErr != "unreachable" {
+		t.Fatalf("a failed reconnect did not surface its error: %q", p.Term.startErr)
 	}
 }

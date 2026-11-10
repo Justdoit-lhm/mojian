@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Settings › Hosts asks each configured host once whether its server is
+  still running. A server left alive by the previous launch now shows
+  **Stop Server** instead of **Set Up Server**; the row reads "Checking
+  server…" while the SSH probe runs.
+- A restored terminal whose project is still reconnecting waits for that
+  connection and attaches afterwards, instead of showing Try Again. If
+  the reconnect fails, its Try Again shows the connection error.
+
 ## 0.2.14
 
 - An empty project's Explorer prompt — the file-plus icon, "No files
