@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"mojian/internal/fs"
 	"mojian/internal/project"
@@ -29,9 +30,9 @@ func openServerStore(client *session.Client, root, cache string, local bool) (*s
 	return s, nil
 }
 
-// openLocalStore opens a local project through the local session server,
-// so files, Git and terminals share one server. The browser has no
-// session server and keeps its in-memory editor.
+// openLocalStore opens a local project. Windows reads it directly because
+// its session server only serves terminals. macOS and Linux route files,
+// Git and terminals through the local session server.
 func (a *app) openLocalStore(dir string) (*store, error) {
 	if runtime.GOOS == "js" {
 		return openStore()
@@ -41,6 +42,9 @@ func (a *app) openLocalStore(dir string) (*store, error) {
 		return nil, err
 	}
 	abs = resolveProjectRoot(abs)
+	if runtime.GOOS == "windows" {
+		return openStoreAt(abs)
+	}
 	client, err := a.sessions()
 	if err != nil {
 		return nil, err
@@ -61,6 +65,14 @@ func (a *app) localServerRunning() bool {
 			return true
 		}
 	}
+	if runtime.GOOS == "windows" {
+		if time.Since(a.localServerProbe) < time.Second {
+			return a.localServerProbeOK
+		}
+		a.localServerProbe = time.Now()
+		a.localServerProbeOK = session.Ready()
+		return a.localServerProbeOK
+	}
 	_, err := os.Stat(session.SocketPath())
 	return err == nil
 }
@@ -80,6 +92,7 @@ func (a *app) startLocalServer() {
 	a.sessionClient = c
 	a.localServerStopped = false
 	a.localServerErr = ""
+	a.localServerProbe, a.localServerProbeOK = time.Time{}, true
 	a.installLocalConn(c)
 	a.resetLocalTerminals()
 	a.invalidate()
@@ -106,6 +119,7 @@ func (a *app) stopLocalServer() {
 	}
 	a.localServerStopped = true
 	a.localServerErr = ""
+	a.localServerProbe, a.localServerProbeOK = time.Time{}, false
 	a.detachLocalTerminals()
 	a.invalidate()
 }

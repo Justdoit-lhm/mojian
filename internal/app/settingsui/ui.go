@@ -141,17 +141,18 @@ func nativeKeys(s string) string { return platform.NativeKeys(s) }
 
 func terminalsSupported() bool { return platform.TerminalsSupported() }
 
+func remoteSupported() bool { return platform.RemoteSupported() }
+
 // settingsCatAvailable hides the pages of features the platform lacks.
 func settingsCatAvailable(cat int) bool {
 	if cat < 0 || cat >= len(settings.Categories) {
 		return false
 	}
-	if platform.TerminalsSupported() {
-		return true
-	}
 	switch cat {
-	case settings.Terminal, settings.Hosts:
-		return false
+	case settings.Terminal:
+		return terminalsSupported()
+	case settings.Hosts:
+		return terminalsSupported() || remoteSupported()
 	}
 	return true
 }

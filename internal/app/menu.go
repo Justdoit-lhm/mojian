@@ -82,7 +82,7 @@ func (a *app) menu() *mygo.Menu {
 		mygo.Separator(),
 		item(cmdCloseTab),
 	}
-	if terminalsSupported() {
+	if remoteSupported() {
 		fileItems = append(fileItems, mygo.Separator(), item(cmdSSH))
 	}
 	fileItems = append(fileItems, mygo.Separator(), &mygo.MenuItem{Label: "Reveal Project", Click: func(*mygo.MenuItem, *mygo.Window) {

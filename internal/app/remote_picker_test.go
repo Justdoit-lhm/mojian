@@ -10,8 +10,8 @@ import (
 )
 
 func TestRemotePickerReusesConnectionAndHome(t *testing.T) {
-	if !terminalsSupported() {
-		t.Skip("remote projects need terminals")
+	if !remoteSupported() {
+		t.Skip("remote projects are unavailable")
 	}
 	startLocalServerForTest(t)
 	a := newProjectApp(t)

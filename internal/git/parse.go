@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"mojian/internal/gitenv"
+	"mojian/internal/platform"
 )
 
 // ReadStatus reads the repository's branch and changed files under
@@ -190,6 +191,7 @@ func runGit(dir string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
+	platform.HideConsole(cmd)
 	cmd.Env = append(gitEnv(), "GIT_PAGER=cat", "GIT_TERMINAL_PROMPT=0", "LC_ALL=C")
 	var out, errb cappedBuffer
 	out.limit = 2 << 20

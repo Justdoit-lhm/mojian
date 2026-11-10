@@ -322,7 +322,9 @@ func (u *UI) settingsPage(c *ui.Context, k *colors, cat int) {
 		u.settingsGenericPage(c, k, cat)
 	case settingsTerminal:
 		u.settingsGenericPage(c, k, cat)
-		u.settingsNote(c, k, "Remote projects use the shell on the server, not this path.")
+		if remoteSupported() {
+			u.settingsNote(c, k, "Remote projects use the shell on the server, not this path.")
+		}
 	case settingsAppearance:
 		u.settingsAppearancePage(c, k)
 	case settingsKeyboard:

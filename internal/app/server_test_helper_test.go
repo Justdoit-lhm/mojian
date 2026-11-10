@@ -1,7 +1,6 @@
 package app
 
 import (
-	"os"
 	"testing"
 	"time"
 
@@ -20,7 +19,7 @@ func startLocalServerForTest(t *testing.T) {
 	go func() { done <- session.Serve() }()
 	deadline := time.Now().Add(3 * time.Second)
 	for {
-		if _, err := os.Stat(session.SocketPath()); err == nil {
+		if session.Ready() {
 			break
 		}
 		if time.Now().After(deadline) {

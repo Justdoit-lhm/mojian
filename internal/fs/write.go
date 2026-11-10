@@ -1,8 +1,12 @@
 package fs
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
+	"syscall"
+	"time"
 )
 
 // WriteFileAtomic replaces path with data, so a crash leaves the old
@@ -33,5 +37,24 @@ func WriteFileAtomic(path string, data []byte) error {
 	if err := f.Close(); err != nil {
 		return err
 	}
-	return os.Rename(name, path)
+	return renameRetry(name, path)
+}
+
+// renameRetry retries the replace on Windows, where another process
+// holding the destination open makes os.Rename fail with a sharing or
+// access violation.
+func renameRetry(old, new string) error {
+	for attempt := 0; ; attempt++ {
+		err := os.Rename(old, new)
+		if err == nil {
+			return nil
+		}
+		if runtime.GOOS != "windows" || attempt >= 9 {
+			return err
+		}
+		if !errors.Is(err, syscall.Errno(32)) && !errors.Is(err, syscall.Errno(5)) {
+			return err
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 }

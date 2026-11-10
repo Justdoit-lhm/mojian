@@ -111,6 +111,8 @@ type app struct {
 	sessionClient      *session.Client
 	localServerStopped bool
 	localServerErr     string
+	localServerProbe   time.Time
+	localServerProbeOK bool
 	localStopAsk       bool
 	// harness marks the headless fixtures of cmd/harness: no native
 	// windows or session servers, only the fixture's disposable project.

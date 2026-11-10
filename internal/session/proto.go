@@ -152,9 +152,6 @@ func RuntimeDir() string {
 	return Dir()
 }
 
-// SocketPath returns the server's socket, short enough for a Unix path.
-func SocketPath() string { return SocketPathIn(RuntimeDir()) }
-
 // SocketPathIn returns the socket a server started with dir would bind,
 // so a forwarded socket and the server agree even when the path is long.
 func SocketPathIn(dir string, uid ...int) string {

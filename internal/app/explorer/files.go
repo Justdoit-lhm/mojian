@@ -61,7 +61,7 @@ func (u *UI) reveal(rel string) {
 		return
 	}
 	if u.store().IsRemote() {
-		u.fail(errors.New("remote projects have no Finder window"))
+		u.fail(errors.New("remote projects have no local file manager"))
 		return
 	}
 	abs, err := u.store().AbsRel(rel)

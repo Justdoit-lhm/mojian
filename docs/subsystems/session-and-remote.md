@@ -2,22 +2,31 @@
 
 ## Responsibilities
 
-The process that owns terminals and project files: the Unix-socket PTY server, its JSON-lines
-protocol, spawn/reattach/detach, the SSH provisioning of a remote server, the forwarded socket, and
-the host list and connection pool the app keeps.
+The process that owns terminals and project files: the Unix-socket or Windows named-pipe PTY
+server, its JSON-lines protocol, spawn/reattach/detach, the SSH provisioning of a remote server,
+the forwarded socket, and the host list and connection pool the app keeps. Windows is a local-only
+client: it runs the terminal-only part of this server and never uploads or controls a remote one.
 
 ## Source of truth
 
 - [`internal/session/proto.go`](../../internal/session/proto.go) — the wire types,
-  `ProtocolVersion`, `ProtocolError`, and the directory helpers `Dir`, `RuntimeDir`, `SocketPath`,
-  `SocketPathIn`.
+  `ProtocolVersion`, `ProtocolError`, and the directory helpers `Dir`, `RuntimeDir`, `SocketPathIn`.
+- [`internal/session/socket_unix.go`](../../internal/session/socket_unix.go) and
+  [`internal/session/socket_windows.go`](../../internal/session/socket_windows.go) — `SocketPath`,
+  listen/dial and socket cleanup for a Unix socket or a per-user named pipe.
 - [`internal/session/server.go`](../../internal/session/server.go) — `Serve`, the request loop,
-  `session` and `attached` streams, `listTree`, `execCommand`.
-- [`internal/session/client.go`](../../internal/session/client.go) — `Connect`, `ConnectAt`,
+  `session` and `attached` streams, `listTree`.
+- [`internal/session/client.go`](../../internal/session/client.go) — `Connect`, `ConnectAt`, `Ready`,
   `Client`, `Stream`, `Stop`, and the file operations (`ListTree`, `ReadFile`, `WriteFile`,
   `Mkdir`, `Rename`, `Remove`, `Copy`, `Exec`, `Stat`).
-- [`internal/session/spawn_unix.go`](../../internal/session/spawn_unix.go) — `Spawn`, which starts
-  the server as a detached process of this binary.
+- [`internal/session/pty.go`](../../internal/session/pty.go), `pty_unix.go` and `pty_windows.go` —
+  the process seam: `creack/pty` on macOS/Linux, a ConPTY implementation with a job object on
+  Windows.
+- [`internal/session/spawn.go`](../../internal/session/spawn.go),
+  [`internal/session/spawn_unix.go`](../../internal/session/spawn_unix.go) and
+  [`internal/session/spawn_windows.go`](../../internal/session/spawn_windows.go) — `Spawn`, which
+  starts the server as a detached process of this binary, with a Unix `flock` or a Windows
+  `LockFileEx` lock.
 - [`internal/remote/remote.go`](../../internal/remote/remote.go) — `Dial`, `Provision`, `Install`
   (upload, start, forward, stop), `Conn`, `Close`.
 - [`internal/remotehost/`](../../internal/remotehost) — `Service`: the host list, remembered remote
@@ -36,9 +45,10 @@ the host list and connection pool the app keeps.
 
 1. The app re-executes itself with `-server` (`session.Spawn`) so the server is a child that
    detaches from the window. It keeps its socket, lock and log under `session.Dir()`: `MOJIAN_DIR`
-   when set, otherwise `Mojian` inside `os.UserConfigDir()`. A remote server sets
-   `MOJIAN_RUNTIME_DIR` to a path sshd can reach with stream-local forwarding, and keeps a long
-   path's socket under a hashed name through `SocketPathIn`.
+   when set, otherwise `Mojian` inside `os.UserConfigDir()`. macOS and Linux use a Unix socket; a
+   long path's socket moves to a hashed name through `SocketPathIn`. Windows uses a per-user named
+   pipe (`\\.\pipe\mojian-<hash>`) protected by an owner-only SDDL. A remote server sets
+   `MOJIAN_RUNTIME_DIR` to a path sshd can reach with stream-local forwarding.
 2. A terminal pane connects with `session.Connect`, asks for a `session.Stream` on its session id and
    attaches. Quitting the app closes the client, not the PTY: reopening reattaches to the same
    session by id, and each layout terminal records `Server` (`local` or an SSH host) so it
@@ -58,8 +68,11 @@ the host list and connection pool the app keeps.
 - A server of another build answers with a different version; the client returns
   `session.ProtocolError{Server, Client}` and the app does not attach.
 - One socket and one server per data directory: a client dials the socket first and spawns a server
-  only when nothing answers, and `server.lock` (an exclusive `flock`) makes a server that loses the
-  race exit instead of binding a second socket.
+  only when nothing answers, and `server.lock` (an exclusive `flock` or Windows `LockFileEx`) makes
+  a server that loses the race exit instead of binding a second socket.
+- Windows local projects keep files and Git on `fs.Direct`; its session server only owns terminals.
+  `exec` and all remote-host operations are unavailable there, and the app hides SSH and remote
+  project UI.
 - Remote connections are pooled by host and kept while a loaded project uses them, and after
   `Set Up Server` until the last project on that host is removed (`closeRemoteProject`); `CloseAll`
   ends them at quit. Choosing a server that is not the one on screen resumes its most recently
@@ -93,5 +106,7 @@ the host list and connection pool the app keeps.
 ```sh
 go test ./internal/session
 go test -race ./internal/session
+go test ./internal/session -run TestWindowsNamedPipe -v   # Windows
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go vet ./...     # cross-check
 MOJIAN_REMOTE_TEST_HOST=user@host go test ./internal/app -run TestRemoteServerSetupFedora -v -timeout 10m
 ```

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"runtime"
 	"strings"
 
 	"mojian/internal/session"
@@ -17,7 +18,10 @@ func (a *app) terminalCreateOptions(spec termSpec) session.CreateOptions {
 	} else if spec.Server != localServerID {
 		dir = a.remotePath
 	} else if strings.TrimSpace(a.ShellPath) != "" {
-		cmd = []string{a.ShellPath, "-l"}
+		cmd = []string{a.ShellPath}
+		if runtime.GOOS != "windows" {
+			cmd = append(cmd, "-l")
+		}
 	}
 	return session.CreateOptions{Command: cmd, Dir: dir, Cols: 80, Rows: 24}
 }

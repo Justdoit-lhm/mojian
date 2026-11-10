@@ -26,8 +26,8 @@ var hostServerRunningFn = remote.ServerRunning
 // openRemotePicker asks the selected server for its home, then shows the
 // directories to choose a project from.
 func (a *app) openRemotePicker(host string) {
-	if !terminalsSupported() {
-		a.fail(fmt.Errorf("remote projects need macOS or Linux"))
+	if !remoteSupported() {
+		a.fail(fmt.Errorf("remote projects are unavailable in this build"))
 		return
 	}
 	if a.remoteBusy {

@@ -15,7 +15,7 @@ the save path, path guards and the asset cache.
 - [`internal/fs/fs.go`](../../internal/fs/fs.go) — the `Backend` interface, `Kind`, `cleanRel`,
   `joinRoot` and `relOfRoot`. Every path the store accepts goes through the guards.
 - [`internal/fs/direct.go`](../../internal/fs/direct.go) — `Direct`, a plain folder on disk with an
-  eager listing; used by tests and by the browser build's neighbours.
+  eager listing; used by Windows local projects, tests and the browser build's neighbours.
 - [`internal/fs/memory.go`](../../internal/fs/memory.go) — `Memory`, the in-memory editor of the
   browser build; every write returns `errReadOnly`.
 - [`internal/fs/server.go`](../../internal/fs/server.go) — `Server`, a project reached through a
@@ -24,7 +24,8 @@ the save path, path guards and the asset cache.
 - [`internal/app/store.go`](../../internal/app/store.go) — `openStoreAt`, `openStore`,
   `openDefaultStore`, `defaultStoreDir`, `resolveProjectRoot`.
 - [`internal/app/server.go`](../../internal/app/server.go) — `openServerStore` and
-  `openLocalStore`, the local-session-server opener.
+  `openLocalStore`; the latter opens a Windows project through `Direct` and macOS/Linux projects
+  through the local session server.
 - [`internal/app/project.go`](../../internal/app/project.go) and
   [`internal/app/pane_actions.go`](../../internal/app/pane_actions.go) — `openRel`, `openNote`.
 

@@ -219,6 +219,12 @@ func (a *app) restorePane(lp layoutPane, byID map[string]*pane) *pane {
 	p := &pane{ID: nextID("p"), Preview: lp.Preview}
 	switch {
 	case lp.Terminal != nil:
+		if !terminalsSupported() {
+			return nil
+		}
+		if !remoteSupported() && (lp.Terminal.Host != "" || (lp.Terminal.Server != "" && lp.Terminal.Server != localServerID)) {
+			return nil
+		}
 		p.Term = newTermPaneSpec(termSpec{Host: lp.Terminal.Host, Server: lp.Terminal.Server}, lp.Terminal.SID)
 	case lp.Note != "":
 		n := a.store.ByRelPath(lp.Note)

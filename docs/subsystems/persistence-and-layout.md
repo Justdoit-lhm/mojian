@@ -27,8 +27,10 @@ that produce both files, and the environment overrides that move them.
 1. The data directory comes from `mygo.App.Path(mygo.PathUserData)`; `settingsPath` is
    `settings.json` inside it and each project's layout is `layouts/<fnv64a(projectDir)>.json`.
 2. `loadSettings` starts from `prefs.Default()` and unmarshals over it, so a file written by an
-   older version keeps sane values for fields it did not know, then calls `Sanitize`. A missing or
-   unreadable file leaves the defaults in place.
+   older version keeps sane values for fields it did not know, then calls `Sanitize`. On Windows it
+   clears `server`, `remotePath`, `remoteProjects` and `hosts`, so a settings file copied from
+   macOS cannot start a remote connection. A missing or unreadable file leaves the defaults in
+   place.
 3. A preference change calls `saveSettingsSoon`, which debounces the write so dragging a slider
    writes once; the write goes through `fs.WriteFileAtomic`.
 4. A layout change calls `changed`, which marks the layout dirty and arms the timer;
@@ -45,7 +47,10 @@ that produce both files, and the environment overrides that move them.
   `sid`, `host`, `server`. Legacy `columns`/`panes` are still read through `restoreColumns` so old
   layouts survive.
 - A missing layout is not a failure: `restoreLayout` reports false and the window falls back to the
-  first note.
+  first note. A platform without terminals drops every terminal pane; a local-only build such as
+  Windows drops SSH and remote-server panes but keeps local terminals.
+- `saveSettings` writes empty remote fields on Windows, so the sanitized state is durable rather
+  than reappearing on the next launch.
 - A failed read is not an empty layout. An unreadable or malformed file leaves the current state
   alone rather than replacing it with defaults.
 - `MOJIAN_VAULT` selects the project folder; `MOJIAN_DIR` moves the data, socket and log directory

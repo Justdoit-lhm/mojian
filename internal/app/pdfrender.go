@@ -107,7 +107,9 @@ var pdfInfoPagesPattern = regexp.MustCompile(`(?m)^Pages:\s+([0-9]+)`)
 func pdfInfoPages(tool, path string) (int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	out, runErr := exec.CommandContext(ctx, tool, path).CombinedOutput()
+	cmd := exec.CommandContext(ctx, tool, path)
+	hideConsole(cmd)
+	out, runErr := cmd.CombinedOutput()
 	// pdfinfo reports harmless syntax warnings on stderr and still prints
 	// the count, so read it from the combined output first.
 	if m := pdfInfoPagesPattern.FindSubmatch(out); len(m) == 2 {
@@ -150,7 +152,9 @@ func runJXA(script string, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	argv := append([]string{"-l", "JavaScript", "-e", script}, args...)
-	out, err := exec.CommandContext(ctx, tool, argv...).Output()
+	cmd := exec.CommandContext(ctx, tool, argv...)
+	hideConsole(cmd)
+	out, err := cmd.Output()
 	if err != nil {
 		var exit *exec.ExitError
 		if errors.As(err, &exit) {
@@ -184,8 +188,10 @@ func pdftoppmPage(tool, path, dir string, page int) (string, error) {
 	defer cancel()
 	base := filepath.Join(dir, "page")
 	number := strconv.Itoa(page)
-	out, err := exec.CommandContext(ctx, tool, "-png", "-r", "110",
-		"-f", number, "-l", number, path, base).CombinedOutput()
+	cmd := exec.CommandContext(ctx, tool, "-png", "-r", "110",
+		"-f", number, "-l", number, path, base)
+	hideConsole(cmd)
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		if msg := strings.TrimSpace(string(out)); msg != "" {
 			return "", errors.New(msg)
@@ -214,7 +220,9 @@ func pageNumber(path string) int {
 func quickLookPage(tool, path, dir string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, tool, "-t", "-s", "1600", "-o", dir, path).CombinedOutput()
+	cmd := exec.CommandContext(ctx, tool, "-t", "-s", "1600", "-o", dir, path)
+	hideConsole(cmd)
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		if msg := strings.TrimSpace(string(out)); msg != "" {
 			return "", errors.New(msg)

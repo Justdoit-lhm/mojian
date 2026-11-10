@@ -8,8 +8,8 @@ import (
 )
 
 func TestSSHPickerListsHosts(t *testing.T) {
-	if !terminalsSupported() {
-		t.Skip("SSH needs macOS or Linux")
+	if !remoteSupported() {
+		t.Skip("SSH is unavailable")
 	}
 	a := newProjectApp(t)
 	a.settingsPath = ""

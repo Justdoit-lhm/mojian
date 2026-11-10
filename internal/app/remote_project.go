@@ -263,8 +263,8 @@ func (a *app) switchToServer(host string) {
 // at once, without connecting again.
 func (a *app) openRemoteProjectAsync(host, remotePath string) {
 	a.remoteOpening = false
-	if !terminalsSupported() {
-		a.fail(fmt.Errorf("remote projects need macOS or Linux"))
+	if !remoteSupported() {
+		a.fail(fmt.Errorf("remote projects are unavailable in this build"))
 		return
 	}
 	if host == "" || remotePath == "" {

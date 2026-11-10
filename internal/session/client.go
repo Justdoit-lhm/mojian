@@ -1,4 +1,4 @@
-//go:build darwin || linux
+//go:build darwin || linux || windows
 
 package session
 
@@ -10,7 +10,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 )
@@ -89,7 +88,7 @@ func connectAt(path string, spawn bool) (*Client, error) {
 
 // dialAt connects, starting a local server first when spawn is set.
 func dialAt(path string, spawn bool) (*Client, error) {
-	conn, err := net.Dial("unix", path)
+	conn, err := dial(path)
 	if err != nil && spawn {
 		deadline := time.Now().Add(8 * time.Second)
 		for {
@@ -99,7 +98,7 @@ func dialAt(path string, spawn bool) (*Client, error) {
 			_ = Spawn()
 			for i := 0; i < 10; i++ {
 				time.Sleep(30 * time.Millisecond)
-				conn, err = net.Dial("unix", path)
+				conn, err = dial(path)
 				if err == nil {
 					goto connected
 				}
@@ -207,10 +206,20 @@ func (c *Client) Resize(sid string, cols, rows int) error {
 func (c *Client) Shutdown() error { return c.call(Request{Op: "shutdown"}, nil) }
 func (c *Client) Close() error    { return c.conn.Close() }
 
+// Ready reports whether a server answers at the standard path.
+func Ready() bool {
+	conn, err := dialTimeout(SocketPath(), 100*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	_ = conn.Close()
+	return true
+}
+
 // Stop asks the server at the standard socket to shut down. A missing
 // socket means no server is running, which is already the wanted state.
 func Stop() error {
-	conn, err := net.DialTimeout("unix", SocketPath(), time.Second)
+	conn, err := dialTimeout(SocketPath(), time.Second)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil
@@ -254,7 +263,7 @@ func (s *Stream) attach() {
 	if socket == "" {
 		socket = SocketPath()
 	}
-	conn, err := net.Dial("unix", socket)
+	conn, err := dial(socket)
 	if err == nil {
 		b, _ := json.Marshal(Attach{Op: "attach", SID: s.sid, Cols: cols, Rows: rows})
 		_, err = conn.Write(append(b, '\n'))
@@ -404,15 +413,4 @@ func (c *Client) Exec(dir string, args, env []string, timeout time.Duration) (re
 func (c *Client) ListDirs(path string) (out []FileEntry, err error) {
 	err = c.call(Request{Op: "listDirs", Path: path}, &out)
 	return
-}
-
-func spawnExecutable() (string, error) {
-	exe, err := os.Executable()
-	if err != nil {
-		return "", err
-	}
-	if p, err := filepath.EvalSymlinks(exe); err == nil {
-		exe = p
-	}
-	return exe, nil
 }

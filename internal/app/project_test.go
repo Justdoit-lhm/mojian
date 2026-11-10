@@ -134,6 +134,9 @@ func TestProjectChip(t *testing.T) {
 }
 
 func TestCloseRemoteProjectReleasesLastConnection(t *testing.T) {
+	if !remoteSupported() {
+		t.Skip("remote projects are unavailable")
+	}
 	registerFonts()
 	startLocalServerForTest(t)
 	a := newProjectApp(t)
@@ -295,8 +298,8 @@ func TestRemoveUnloadedRecentProject(t *testing.T) {
 }
 
 func TestRemoteWorkspaceSwitchUsesTheCache(t *testing.T) {
-	if !terminalsSupported() {
-		t.Skip("remote projects need terminals")
+	if !remoteSupported() {
+		t.Skip("remote projects are unavailable")
 	}
 	startLocalServerForTest(t)
 	root := t.TempDir()

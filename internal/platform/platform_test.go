@@ -25,14 +25,14 @@ func TestNativeKeys(t *testing.T) {
 
 func TestFileManagerNames(t *testing.T) {
 	for goos, want := range map[string]string{
-		"darwin": "Finder", "linux": "Files",
+		"darwin": "Finder", "linux": "Files", "windows": "Explorer",
 	} {
 		if got := fileManagerNameFor(goos); got != want {
 			t.Errorf("%s: %q, want %q", goos, got, want)
 		}
 	}
 	for goos, want := range map[string]string{
-		"darwin": "Reveal in Finder", "linux": "Reveal in Files",
+		"darwin": "Reveal in Finder", "linux": "Reveal in Files", "windows": "Reveal in Explorer",
 	} {
 		if got := revealLabelFor(goos); got != want {
 			t.Errorf("%s: %q, want %q", goos, got, want)

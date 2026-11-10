@@ -3,7 +3,6 @@ package app
 import (
 	"errors"
 	"fmt"
-	"os"
 
 	"mojian/internal/session"
 
@@ -46,7 +45,7 @@ func warmSessionServer() {
 	if !terminalsSupported() {
 		return
 	}
-	if _, err := os.Stat(session.SocketPath()); err == nil {
+	if session.Ready() {
 		return
 	}
 	_ = session.Spawn()
@@ -64,7 +63,7 @@ func (a *app) terminalDir() string {
 
 func (a *app) toggleTerminal() {
 	if !terminalsSupported() {
-		a.fail(errors.New("terminals need macOS or Linux"))
+		a.fail(errors.New("terminals are unavailable in this build"))
 		return
 	}
 	t := a.terminalTab()
@@ -132,7 +131,7 @@ func (a *app) addSplitTerminalSide(from *pane, tt *termTab, side splitSide) *pan
 // of the active tab, as one of the tab's panes.
 func (a *app) newTerminalPane() {
 	if !terminalsSupported() {
-		a.fail(errors.New("terminals need macOS or Linux"))
+		a.fail(errors.New("terminals are unavailable in this build"))
 		return
 	}
 	if a.store == nil || a.store.IsMemory() {
@@ -207,7 +206,7 @@ func (a *app) defaultTerminalServer() string {
 // the session server. The process outlives the app.
 func (a *app) startTerminalSpec(spec termSpec) (*termTab, error) {
 	if !terminalsSupported() {
-		return nil, errors.New("terminals need macOS or Linux")
+		return nil, errors.New("terminals are unavailable in this build")
 	}
 	if a.shellStarter != nil {
 		return a.shellStarter()

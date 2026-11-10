@@ -8,6 +8,10 @@ import "mojian/internal/platform"
 
 func terminalsSupported() bool { return platform.TerminalsSupported() }
 
+func remoteSupported() bool { return platform.RemoteSupported() }
+
+func hideConsole(cmd any) { platform.HideConsole(cmd) }
+
 func nativeKeys(s string) string { return platform.NativeKeys(s) }
 
 func revealLabel() string { return platform.RevealLabel() }

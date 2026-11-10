@@ -37,6 +37,10 @@ func (a *app) loadSettings() {
 	if json.Unmarshal(data, &s) != nil {
 		return
 	}
+	if !remoteSupported() {
+		s.Server, s.RemotePath = "", ""
+		s.RemoteProjects, s.Hosts = nil, nil
+	}
 	a.Prefs = s.Prefs
 	a.Prefs.Sanitize()
 	a.Theme = themeName(a.Theme)
@@ -82,15 +86,20 @@ func (a *app) saveSettings() {
 	}
 	p := a.Prefs
 	p.Sanitize()
+	server, remotePath := a.serverAlias, a.remotePath
+	remoteProjects, hosts := a.remoteProjects(), a.hosts()
+	if !remoteSupported() {
+		server, remotePath, remoteProjects, hosts = "", "", nil, nil
+	}
 	data, _ := json.MarshalIndent(settingsFile{
 		Prefs:          p,
 		Shortcuts:      a.shortcutKeys,
 		Project:        project,
 		Projects:       a.projects,
-		Server:         a.serverAlias,
-		RemotePath:     a.remotePath,
-		RemoteProjects: a.remoteProjects(),
-		Hosts:          a.hosts(),
+		Server:         server,
+		RemotePath:     remotePath,
+		RemoteProjects: remoteProjects,
+		Hosts:          hosts,
 	}, "", "  ")
 	a.settings.IndexDirty = true
 	if err := fs.WriteFileAtomic(a.settingsPath, data); err != nil {

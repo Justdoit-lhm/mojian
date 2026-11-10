@@ -21,8 +21,8 @@ Mojian is a native plain-text editor for ordinary folders. Edit files, preview i
 - **Tabs as workspaces.** Each tab contains a split tree of editors, image and PDF viewers, and terminals.
 - **Persistent terminals.** Shells run in a detached session server and reattach when Mojian opens again.
 - **Built-in Git diffs.** Inspect staged, unstaged, and untracked work without leaving the window.
-- **Remote projects over SSH.** Files, Git, and terminals run directly on the configured host.
-- **Native UI in one Go binary.** [MyGo](https://mygo.egoist.dev) draws the interface with Metal on macOS and GTK 3 on Linux. No Electron or JavaScript build.
+- **Remote projects over SSH.** Files, Git, and terminals run directly on the configured host on macOS and Linux.
+- **Native UI in one Go binary.** [MyGo](https://mygo.egoist.dev) draws the interface with Metal on macOS, GTK 3 on Linux, and Direct3D 11 on Windows. No Electron or JavaScript build.
 
 ## Installation
 
@@ -52,6 +52,23 @@ For a per-user installation without root, put `install.sh` and `mojian-<version>
 ```sh
 sh install.sh
 ```
+
+### Windows
+
+Mojian requires Windows 10 1809 or later.
+
+| Architecture | Download |
+|---|---|
+| x64 | `mojian-setup-<version>-amd64.exe` |
+| ARM64 | `mojian-setup-<version>-arm64.exe` |
+
+The installer installs for the current user, without administrator rights. Builds are unsigned for now, so SmartScreen may ask before running one. With updates enabled, the one-line install is:
+
+```powershell
+irm https://github.com/ox0pine/mojian/releases/latest/download/install.ps1 | iex
+```
+
+Windows is a local-only client in 0.3.0: local files, Git, images, PDFs with Poppler, and local terminals work; SSH and remote projects are not available there yet.
 
 ## Projects and files
 
@@ -93,9 +110,9 @@ Drag a pane by its header onto another pane's edge to move it. Use `Option+Cmd` 
 
 Double-click a tab to rename it, double-click a pane header to zoom it, or right-click a tab for more actions.
 
-Press `Ctrl` and the backtick key (`⌃` + backtick on macOS) to toggle a terminal at the project root. Terminals are panes, so they can be split, moved, zoomed, and closed like any other pane. On macOS and Linux, quitting Mojian leaves their shells alive and reopening attaches them again.
+Press `Ctrl` and the backtick key (`⌃` + backtick on macOS) to toggle a terminal at the project root. Terminals are panes, so they can be split, moved, zoomed, and closed like any other pane. On macOS, Linux and Windows, quitting Mojian leaves their shells alive and reopening attaches them again.
 
-Press `Shift+Cmd+S` / `Ctrl+Shift+S` to open an SSH terminal to a host from **Settings › Hosts**.
+Press `Shift+Cmd+S` / `Ctrl+Shift+S` on macOS or Linux to open an SSH terminal to a host from **Settings › Hosts**.
 
 ## Writing and previewing
 
@@ -176,7 +193,7 @@ The labels in Mojian follow the platform. These are the default bindings; **Sett
 
 Two Ghostty keys stay with the editor: `⌘[` / `⌘]` indent and outdent, and `⌘Enter` inserts a line below.
 
-Terminal and SSH shortcuts are available on macOS and Linux only.
+Terminal shortcuts are available on macOS, Linux and Windows. SSH shortcuts are available on macOS and Linux only.
 
 ## Build from source
 
@@ -232,7 +249,8 @@ Each release contains:
 
 - macOS: `mojian-<version>-arm64.dmg` and `mojian-<version>-amd64.dmg`
 - Linux: `mojian-<version>-linux-{amd64,arm64}.tar.gz`, matching `.deb` packages, and `install.sh`
-- Signed update archives (`*-darwin-*.tar.gz`, `*-linux-*.tar.gz`) and `update-<target>.json` manifests
+- Windows: `mojian-setup-<version>-{amd64,arm64}.exe`, `install.ps1`, and `mojian-<version>-windows-{amd64,arm64}.tar.gz`
+- Signed update archives (`*-darwin-*.tar.gz`, `*-linux-*.tar.gz`, `*-windows-*.tar.gz`) and `update-<target>.json` manifests
 - `SHA256SUMS`
 
 ## Design

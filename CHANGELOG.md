@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0
+
+- Mojian now runs on Windows as a local-only client. Local projects use
+  `fs.Direct`, Git uses the local Git installation, and terminals use a
+  per-user named-pipe session server with ConPTY.
+- Windows hides SSH, remote projects, and remote host controls. The
+  Windows OpenSSH client may still be used manually inside a terminal,
+  but Mojian does not manage remote projects there yet.
+- Windows releases include amd64 and arm64 installers, update archives,
+  manifests, and `install.ps1`.
+
 ## 0.2.21
 
 - A project listing that cannot read its root now reports an error

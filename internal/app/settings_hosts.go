@@ -11,55 +11,66 @@ import (
 )
 
 func (a *app) settingsHostsPage(c *ui.Context, k *colors) {
-	a.settings.Section(c, k, "ADD HOST", func() {
-		ui.Column(c).Padding(14, 16).Gap(8).Children(func() {
-			var addr, name ui.Element
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				addrField := ui.Row(c).Grow(1).MinWidth(0).Height(30).Padding(0, 9).
-					Gap(7).Radius(radius).Background(k.Hover).AlignItems(ui.Center)
-				addrField.Children(func() {
-					ui.Icon(c, icons.Icon("server")).Size(13, 13).TextColor(k.TextFaint)
-					addr = ui.TextInputBase(c, &a.hostDraftAddr).Grow(1).MinWidth(0).
-						FontSize(12).Placeholder("me@devbox").Label("Host address")
+	if remoteSupported() {
+		a.settings.Section(c, k, "ADD HOST", func() {
+			ui.Column(c).Padding(14, 16).Gap(8).Children(func() {
+				var addr, name ui.Element
+				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+					addrField := ui.Row(c).Grow(1).MinWidth(0).Height(30).Padding(0, 9).
+						Gap(7).Radius(radius).Background(k.Hover).AlignItems(ui.Center)
+					addrField.Children(func() {
+						ui.Icon(c, icons.Icon("server")).Size(13, 13).TextColor(k.TextFaint)
+						addr = ui.TextInputBase(c, &a.hostDraftAddr).Grow(1).MinWidth(0).
+							FontSize(12).Placeholder("me@devbox").Label("Host address")
+					})
+					nameField := ui.Row(c).Width(140).Height(30).Padding(0, 9).
+						Radius(radius).Background(k.Hover).AlignItems(ui.Center)
+					nameField.Children(func() {
+						name = ui.TextInputBase(c, &a.hostDraftName).Grow(1).FontSize(12).
+							Placeholder("Name").Label("Host name")
+					})
+					if addr.Submitted() || name.Submitted() {
+						a.addHostChecked()
+					}
+					if settingsButton(c, "Add", true).Clicked() {
+						a.addHostChecked()
+					}
 				})
-				nameField := ui.Row(c).Width(140).Height(30).Padding(0, 9).
-					Radius(radius).Background(k.Hover).AlignItems(ui.Center)
-				nameField.Children(func() {
-					name = ui.TextInputBase(c, &a.hostDraftName).Grow(1).FontSize(12).
-						Placeholder("Name").Label("Host name")
-				})
-				if addr.Submitted() || name.Submitted() {
-					a.addHostChecked()
-				}
-				if settingsButton(c, "Add", true).Clicked() {
-					a.addHostChecked()
-				}
+				ui.Text(c, "Anything ssh accepts: buildbox, me@devbox, or ssh://me@devbox:2222.").
+					FontSize(11.5).TextColor(k.TextFaint)
 			})
-			ui.Text(c, "Anything ssh accepts: buildbox, me@devbox, or ssh://me@devbox:2222.").
-				FontSize(11.5).TextColor(k.TextFaint)
 		})
-	})
+	}
 	a.settings.Section(c, k, "SERVERS", func() {
 		ui.Column(c).Padding(6).Children(func() {
 			a.hostSettingsRow(c, k, "", "Local", thisComputerName(), a.serverAlias == "")
-			for _, h := range a.hosts() {
-				ui.Divider(c).Margin(0, 10)
-				label := h.Name
-				if label == "" {
-					label = h.Address
+			if remoteSupported() {
+				for _, h := range a.hosts() {
+					ui.Divider(c).Margin(0, 10)
+					label := h.Name
+					if label == "" {
+						label = h.Address
+					}
+					a.hostSettingsRow(c, k, h.Address, label, h.Address, a.serverAlias == h.Address)
 				}
-				a.hostSettingsRow(c, k, h.Address, label, h.Address, a.serverAlias == h.Address)
-			}
-			if len(a.hosts()) == 0 {
-				ui.Text(c, "No SSH servers yet. Add one above.").
-					FontSize(12).TextColor(k.TextFaint).Padding(12, 10)
+				if len(a.hosts()) == 0 {
+					ui.Text(c, "No SSH servers yet. Add one above.").
+						FontSize(12).TextColor(k.TextFaint).Padding(12, 10)
+				}
 			}
 		})
 	})
-	a.settings.Note(c, k, "Set Up Server uploads mojian-server and libghostty-vt to ~/.local/share/mojian on the host, using your SSH key. No root, no service and no open port: the app reaches it through an SSH forward. A server keeps running when Mojian or the SSH connection disconnects and never stops on its own: Stop Server ends it and its terminals, and Start Server brings it back. The Local row controls this machine's server the same way.")
+	if remoteSupported() {
+		a.settings.Note(c, k, "Set Up Server uploads mojian-server and libghostty-vt to ~/.local/share/mojian on the host, using your SSH key. No root, no service and no open port: the app reaches it through an SSH forward. A server keeps running when Mojian or the SSH connection disconnects and never stops on its own: Stop Server ends it and its terminals, and Start Server brings it back. The Local row controls this machine's server the same way.")
+	} else {
+		a.settings.Note(c, k, "The Local row controls this machine's session server.")
+	}
 }
 
 func (a *app) addHostChecked() {
+	if !remoteSupported() {
+		return
+	}
 	addr := strings.TrimSpace(a.hostDraftAddr)
 	name := strings.TrimSpace(a.hostDraftName)
 	if addr == "" {
@@ -339,6 +350,9 @@ func (a *app) hostServerRunning(host string) bool {
 // background, once per launch, so a server left running is known before
 // Settings is opened. checkHostServer skips a host already checked.
 func (a *app) checkHosts() {
+	if !remoteSupported() {
+		return
+	}
 	for _, h := range a.hosts() {
 		if h.Address != "" {
 			a.checkHostServer(h.Address)

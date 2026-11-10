@@ -183,6 +183,9 @@ func TestSettingsShortcutPersistenceAndConflict(t *testing.T) {
 }
 
 func TestSettingsHostsAddEditRemove(t *testing.T) {
+	if !remoteSupported() {
+		t.Skip("remote projects are unavailable")
+	}
 	a := newProjectApp(t)
 	a.hostDraftAddr, a.hostDraftName = "me@devbox", "Dev"
 	a.addHostChecked()
@@ -201,8 +204,8 @@ func TestSettingsHostsAddEditRemove(t *testing.T) {
 }
 
 func TestSettingsHostRemoveButtons(t *testing.T) {
-	if !terminalsSupported() {
-		t.Skip("hosts need terminals")
+	if !remoteSupported() {
+		t.Skip("remote projects are unavailable")
 	}
 	registerFonts()
 	a := newProjectApp(t)
@@ -518,6 +521,9 @@ func TestSettingsPagesHaveHeaders(t *testing.T) {
 // and leaves Appearance with the theme alone. About also matches, on the
 // Fonts row of its SYSTEM card.
 func TestSettingsSearchMergedPages(t *testing.T) {
+	if !terminalsSupported() {
+		t.Skip("terminal page is unavailable")
+	}
 	registerFonts()
 	a := newProjectApp(t)
 	a.settings.Cat = settingsAppearance
@@ -547,6 +553,9 @@ func TestSettingsSearchMergedPages(t *testing.T) {
 }
 
 func TestSettingsHostsHidesRecentRemoteProjects(t *testing.T) {
+	if !remoteSupported() {
+		t.Skip("remote projects are unavailable")
+	}
 	registerFonts()
 	a := newProjectApp(t)
 	a.hostService().SetProjects([]remoteProject{{Host: "buildbox", Path: "/srv/app"}})
@@ -559,8 +568,8 @@ func TestSettingsHostsHidesRecentRemoteProjects(t *testing.T) {
 }
 
 func TestFinishHostSetupKeepsConnection(t *testing.T) {
-	if !terminalsSupported() {
-		t.Skip("remote projects need terminals")
+	if !remoteSupported() {
+		t.Skip("remote projects are unavailable")
 	}
 	startLocalServerForTest(t)
 	a := newProjectApp(t)
@@ -584,6 +593,9 @@ func TestFinishHostSetupKeepsConnection(t *testing.T) {
 }
 
 func TestSettingsShellCommandInstallsAndRemoves(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("zsh/bash only")
+	}
 	registerFonts()
 	a := newProjectApp(t)
 	a.ShellCommand = "zsh"

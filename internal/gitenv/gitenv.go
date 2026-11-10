@@ -5,6 +5,7 @@ package gitenv
 
 import (
 	"os"
+	"runtime"
 	"strings"
 )
 
@@ -20,10 +21,17 @@ var drop = map[string]bool{
 func Env(extra ...string) []string {
 	out := make([]string, 0, len(os.Environ())+len(extra))
 	for _, kv := range os.Environ() {
-		if i := strings.IndexByte(kv, '='); i > 0 && drop[kv[:i]] {
+		if i := strings.IndexByte(kv, '='); i > 0 && dropEnv(kv[:i]) {
 			continue
 		}
 		out = append(out, kv)
 	}
 	return append(out, extra...)
+}
+
+func dropEnv(key string) bool {
+	if runtime.GOOS == "windows" {
+		key = strings.ToUpper(key)
+	}
+	return drop[key]
 }

@@ -13,8 +13,8 @@ import (
 // does not scan ~/.ssh/config: a host is added once, in Settings, and the
 // system ssh still reads its own config for aliases, ProxyJump and keys.
 func (a *app) openSSHPicker() {
-	if !terminalsSupported() {
-		a.fail(errors.New("SSH terminals need macOS or Linux"))
+	if !remoteSupported() {
+		a.fail(errors.New("SSH terminals are unavailable in this build"))
 		return
 	}
 	a.sshQuery = ""

@@ -13,9 +13,11 @@ import (
 )
 
 func (u *UI) settingsAdvancedPage(c *ui.Context, k *colors) {
-	u.settingsSection(c, k, "COMMAND LINE", func() {
-		u.shellCommandRow(c, k)
-	})
+	if runtime.GOOS != "windows" {
+		u.settingsSection(c, k, "COMMAND LINE", func() {
+			u.shellCommandRow(c, k)
+		})
+	}
 	u.settingsSection(c, k, "SETTINGS FILE", func() {
 		path, detail := u.settingsPath(), u.settingsPath()
 		if detail == "" {

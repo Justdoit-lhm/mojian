@@ -36,11 +36,16 @@ func mygoNative() string {
 	if err != nil {
 		return ""
 	}
-	matches, err := filepath.Glob(filepath.Join(cache, "mygo", "natives", "*", "libghostty-vt.*"))
+	dir := filepath.Join(cache, "mygo", "natives", "*")
+	matches, err := filepath.Glob(filepath.Join(dir, "libghostty-vt.*"))
 	if err != nil {
 		return ""
 	}
-	return pickNative(matches)
+	windows, err := filepath.Glob(filepath.Join(dir, "ghostty-vt.dll"))
+	if err != nil {
+		return ""
+	}
+	return pickNative(append(matches, windows...))
 }
 
 // pickNative chooses among the cached libraries: the one built for this
@@ -190,7 +195,7 @@ func InitRepo(t *testing.T, dir string) {
 	run := func(args ...string) {
 		t.Helper()
 		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
-		cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
+		cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_CONFIG_SYSTEM="+os.DevNull)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %v\n%s", args, err, out)
 		}

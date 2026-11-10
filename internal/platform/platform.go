@@ -7,9 +7,14 @@ import (
 	"strings"
 )
 
-// TerminalsSupported reports whether the session server, and with it
-// terminals, SSH and remote projects, runs on this platform.
+// TerminalsSupported reports whether this platform can run a terminal.
 func TerminalsSupported() bool {
+	return runtime.GOOS == "darwin" || runtime.GOOS == "linux" || runtime.GOOS == "windows"
+}
+
+// RemoteSupported reports whether this build can reach SSH hosts and
+// remote projects. Windows is a local-only client.
+func RemoteSupported() bool {
 	return runtime.GOOS == "darwin" || runtime.GOOS == "linux"
 }
 
@@ -98,16 +103,22 @@ func shortcutKey(r rune) string {
 }
 
 func fileManagerNameFor(goos string) string {
-	if goos == "darwin" {
+	switch goos {
+	case "darwin":
 		return "Finder"
+	case "windows":
+		return "Explorer"
 	}
 	return "Files"
 }
 
 // ThisComputerName labels the local server on the Hosts page.
 func ThisComputerName() string {
-	if runtime.GOOS == "darwin" {
+	switch runtime.GOOS {
+	case "darwin":
 		return "This Mac"
+	case "windows":
+		return "This PC"
 	}
 	return "This Computer"
 }

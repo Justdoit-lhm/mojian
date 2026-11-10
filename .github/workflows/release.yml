@@ -1,9 +1,9 @@
 name: Release
 
 # A release is a tag: pushing vX.Y.Z tests the tree, builds macOS for
-# Apple Silicon and Intel and Linux for amd64 and arm64, then creates or
-# fills the draft release of that version. The draft is published only
-# after every asset is uploaded.
+# Apple Silicon and Intel, Linux for amd64 and arm64, and Windows for
+# amd64 and arm64, then creates or fills the draft release of that
+# version. The draft is published only after every asset is uploaded.
 on:
   push:
     tags: ["v*"]
@@ -42,6 +42,11 @@ jobs:
           manifest="$(go list -m -f '{{.Dir}}' github.com/egoist/mygo)/plugins/terminal/mygo-plugin.json"
           case "$(go env GOOS)" in
             darwin) targets="darwin-arm64 darwin-amd64"; cache="$HOME/Library/Caches" ;;
+            windows)
+              targets="windows-amd64 windows-arm64"
+              cache="${LOCALAPPDATA:-$HOME/AppData/Local}"
+              cache="${cache//\\//}"
+              ;;
             *) targets="linux-amd64 linux-arm64"; cache="${XDG_CACHE_HOME:-$HOME/.cache}" ;;
           esac
           pick() { jq -r --arg t "$1" '.libraries[] | select(.name=="libghostty-vt") | .files[$t].'"$2" "$manifest"; }
@@ -129,9 +134,56 @@ jobs:
             build/linux-arm64/update-*.json
           if-no-files-found: error
 
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Ensure jq
+        run: |
+          if ! command -v jq >/dev/null 2>&1; then
+            choco install jq -y --no-progress
+            echo 'C:\ProgramData\chocolatey\bin' >> "$GITHUB_PATH"
+          fi
+      - *check-tag
+      - *seed-native
+      - name: Test
+        run: go test ./...
+      - name: Build
+        env:
+          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
+        run: go tool mygo build -platform windows/amd64,windows/arm64
+      - name: Check the artifacts
+        run: |
+          version="$(jq -r .version mygo.json)"
+          for arch in amd64 arm64; do
+            test -f "build/windows-$arch/mojian-$version-windows-$arch.tar.gz"
+            test -f "build/windows-$arch/update-windows-$arch.json"
+            test -f "build/windows-$arch/mojian-setup-$version-$arch.exe"
+          done
+          test -f build/windows-amd64/install.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            build/windows-amd64/*.exe
+            build/windows-amd64/*.tar.gz
+            build/windows-amd64/update-*.json
+            build/windows-amd64/install.ps1
+            build/windows-arm64/*.exe
+            build/windows-arm64/*.tar.gz
+            build/windows-arm64/update-*.json
+          if-no-files-found: error
+
   release:
     name: Publish
-    needs: [macos, linux]
+    needs: [macos, linux, windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -142,6 +194,10 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: linux
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows
           path: dist
       - name: Flatten the artifacts
         run: |
@@ -163,6 +219,13 @@ jobs:
           test -f "dist/update-linux-amd64.json"
           test -f "dist/update-linux-arm64.json"
           test -f "dist/install.sh"
+          test -f "dist/mojian-$version-windows-amd64.tar.gz"
+          test -f "dist/mojian-$version-windows-arm64.tar.gz"
+          test -f "dist/mojian-setup-$version-amd64.exe"
+          test -f "dist/mojian-setup-$version-arm64.exe"
+          test -f "dist/update-windows-amd64.json"
+          test -f "dist/update-windows-arm64.json"
+          test -f "dist/install.ps1"
           ls -lh dist
       - name: Create the draft release
         env:
@@ -183,9 +246,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          (cd dist && sha256sum *.dmg *.tar.gz *.deb *.json install.sh > SHA256SUMS)
+          (cd dist && sha256sum *.dmg *.tar.gz *.deb *.exe *.json install.sh install.ps1 > SHA256SUMS)
           gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber \
-            dist/*.dmg dist/*.tar.gz dist/*.deb dist/*.json dist/install.sh dist/SHA256SUMS
+            dist/*.dmg dist/*.tar.gz dist/*.deb dist/*.exe dist/*.json dist/install.sh dist/install.ps1 dist/SHA256SUMS
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}

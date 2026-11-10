@@ -1,11 +1,10 @@
-//go:build darwin || linux
+//go:build darwin || linux || windows
 
 package session
 
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -18,15 +17,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"mojian/internal/filekind"
-	"mojian/internal/gitenv"
 
-	"github.com/creack/pty"
 	"github.com/egoist/mygo/plugins/terminal"
 )
 
@@ -38,8 +35,6 @@ const (
 	maxLine        = 64 << 20
 	readFileLimit  = 32 << 20
 	writeFileLimit = 32 << 20
-	execOutLimit   = 2 << 20
-	execErrLimit   = 64 << 10
 )
 
 // Server owns the sessions and their pseudo-terminals.
@@ -80,15 +75,10 @@ func Serve() error {
 	}
 	defer lock.Close()
 	sock := SocketPath()
-	_ = os.Remove(sock)
-	ln, err := net.Listen("unix", sock)
+	removeSocket(sock)
+	ln, err := listen(sock)
 	if err != nil {
 		return err
-	}
-	if err := os.Chmod(sock, 0o600); err != nil {
-		_ = ln.Close()
-		_ = os.Remove(sock)
-		return fmt.Errorf("session: securing the socket: %w", err)
 	}
 	s := &Server{
 		sessions: map[string]*session{}, order: nil, started: time.Now(),
@@ -114,7 +104,7 @@ func Serve() error {
 				for _, ss := range all {
 					ss.kill()
 				}
-				_ = os.Remove(sock)
+				removeSocket(sock)
 				return nil
 			default:
 			}
@@ -387,8 +377,7 @@ type session struct {
 	id      string
 	shell   string
 	created time.Time
-	cmd     *exec.Cmd
-	pty     *os.File
+	proc    ptyProcess
 
 	mu         sync.Mutex
 	vt         *terminal.Terminal
@@ -441,23 +430,23 @@ func newSession(id string, o CreateOptions) (*session, error) {
 	if dir == "" {
 		dir, _ = os.UserHomeDir()
 	}
-	cmd := exec.Command(argv[0], argv[1:]...)
-	cmd.Dir = dir
-	cmd.Env = sessionEnv(o.Env)
-	p, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
+	proc, err := startPTY(argv, dir, sessionEnv(o.Env), cols, rows)
 	if err != nil {
 		return nil, err
 	}
 	pr, pw := io.Pipe()
 	vt, err := terminal.New(terminal.Options{Conn: discard{pr}, Scrollback: scrollback})
 	if err != nil {
-		_ = p.Close()
-		_ = cmd.Process.Kill()
+		_ = pr.Close()
+		_ = pw.Close()
+		_ = proc.Kill()
+		_ = proc.Close()
+		_, _ = proc.Wait()
 		return nil, err
 	}
 	vt.Resize(cols, rows)
 	s := &session{
-		id: id, shell: name, created: time.Now(), cmd: cmd, pty: p,
+		id: id, shell: name, created: time.Now(), proc: proc,
 		vt: vt, clients: map[*attached]struct{}{},
 		cols: cols, rows: rows, done: make(chan struct{}),
 	}
@@ -467,15 +456,15 @@ func newSession(id string, o CreateOptions) (*session, error) {
 		close(readDone)
 	}()
 	go func() {
-		code := cmd.Wait()
+		code, _ := proc.Wait()
 		select {
 		case <-readDone:
 		case <-time.After(200 * time.Millisecond):
-			_ = p.Close()
+			_ = proc.Close()
 			<-readDone
 		}
 		s.mu.Lock()
-		s.exited, s.code = true, exitCode(code)
+		s.exited, s.code = true, code
 		for a := range s.clients {
 			a.finish()
 		}
@@ -496,15 +485,7 @@ func commandArgs(command []string) ([]string, string, error) {
 		}
 		return append([]string{path}, command[1:]...), filepath.Base(command[0]), nil
 	}
-	sh := os.Getenv("SHELL")
-	if sh == "" {
-		sh = "/bin/sh"
-	}
-	path, err := exec.LookPath(sh)
-	if err != nil {
-		return nil, "", err
-	}
-	return []string{path, "-l"}, filepath.Base(sh), nil
+	return defaultShell()
 }
 
 func sessionEnv(extra []string) []string {
@@ -512,6 +493,9 @@ func sessionEnv(extra []string) []string {
 	hasLang := false
 	for _, kv := range os.Environ() {
 		k, _, _ := strings.Cut(kv, "=")
+		if runtime.GOOS == "windows" {
+			k = strings.ToUpper(k)
+		}
 		switch {
 		case k == "TERM", k == "COLORTERM", k == "TERM_PROGRAM", k == "TERM_PROGRAM_VERSION",
 			k == "TERM_SESSION_ID", k == "TMUX", k == "TMUX_PANE", k == "STY", k == "WINDOWID",
@@ -535,7 +519,7 @@ func sessionEnv(extra []string) []string {
 func (s *session) read() {
 	buf := make([]byte, 64<<10)
 	for {
-		n, err := s.pty.Read(buf)
+		n, err := s.proc.Read(buf)
 		if n > 0 {
 			data := append([]byte(nil), buf[:n]...)
 			s.mu.Lock()
@@ -603,7 +587,7 @@ func (s *session) input(p []byte) {
 	exited := s.exited
 	s.mu.Unlock()
 	if !exited {
-		_, _ = s.pty.Write(p)
+		_, _ = s.proc.Write(p)
 	}
 }
 
@@ -625,7 +609,7 @@ func (s *session) resize(cols, rows int) {
 	}
 	s.mu.Unlock()
 	if changed && !exited {
-		_ = pty.Setsize(s.pty, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
+		_ = s.proc.Resize(cols, rows)
 	}
 }
 
@@ -652,31 +636,15 @@ func (s *session) kill() {
 	s.mu.Lock()
 	exited := s.exited
 	s.mu.Unlock()
-	pid := 0
-	if s.cmd != nil && s.cmd.Process != nil {
-		pid = s.cmd.Process.Pid
-	}
-	if !exited && pid > 0 {
-		// The shell starts in its own session (pty.Start sets Setsid), so
-		// its foreground jobs are in its process group, not ours: signal
-		// the group, or a terminal running npm/ssh/vim leaves them behind.
-		if err := syscall.Kill(-pid, syscall.SIGINT); err != nil {
-			_ = s.cmd.Process.Signal(os.Interrupt)
-		}
+	if !exited {
+		_ = s.proc.Interrupt()
 	}
 	select {
 	case <-s.done:
 	case <-time.After(time.Second):
-		if pid > 0 {
-			_ = syscall.Kill(-pid, syscall.SIGKILL)
-			if s.cmd.Process != nil {
-				_ = s.cmd.Process.Kill()
-			}
-		}
+		_ = s.proc.Kill()
 	}
-	if s.pty != nil {
-		_ = s.pty.Close()
-	}
+	_ = s.proc.Close()
 }
 
 // hasExited reports whether the session's program has finished.
@@ -694,21 +662,8 @@ func (s *session) info() SessionInfo {
 		Exited: s.exited, ExitCode: s.code,
 	}
 	s.mu.Unlock()
-	if s.cmd.Process != nil {
-		in.PID = s.cmd.Process.Pid
-	}
+	in.PID = s.proc.Pid()
 	return in
-}
-
-func exitCode(err error) int {
-	if err == nil {
-		return 0
-	}
-	var ee *exec.ExitError
-	if errors.As(err, &ee) {
-		return ee.ExitCode()
-	}
-	return -1
 }
 
 type discard struct{ r *io.PipeReader }
@@ -865,67 +820,6 @@ func copyTree(from, to string) error {
 		return err
 	}
 	return out.Close()
-}
-
-// execCommand runs a command for the app (Git, mostly) with a deadline
-// and a cap on what it may print.
-func execCommand(req Request) (ExecResult, error) {
-	if len(req.Args) == 0 {
-		return ExecResult{}, errors.New("exec needs a command")
-	}
-	timeout := time.Duration(req.Timeout) * time.Millisecond
-	if timeout <= 0 {
-		timeout = 10 * time.Second
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, req.Args[0], req.Args[1:]...)
-	cmd.Dir = req.Dir
-	cmd.Env = execEnv(req.Env)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Cancel = func() error {
-		if cmd.Process == nil {
-			return nil
-		}
-		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-	}
-	cmd.WaitDelay = 2 * time.Second
-	var out, errb limitedWriter
-	out.limit, errb.limit = execOutLimit, execErrLimit
-	cmd.Stdout, cmd.Stderr = &out, &errb
-	err := cmd.Run()
-	res := ExecResult{Stdout: out.String(), Stderr: errb.String()}
-	if ee, ok := err.(*exec.ExitError); ok {
-		res.Code = ee.ExitCode()
-	}
-	if ctx.Err() != nil {
-		return res, errors.New("command timed out")
-	}
-	if err != nil && res.Code == 0 {
-		return res, err
-	}
-	return res, nil
-}
-
-// execEnv starts from the server's environment, without the Git
-// variables a launching shell may have set, then adds the command's.
-func execEnv(extra []string) []string { return gitenv.Env(extra...) }
-
-// limitedWriter keeps the first limit bytes and drops the rest.
-type limitedWriter struct {
-	bytes.Buffer
-	limit int
-}
-
-func (w *limitedWriter) Write(p []byte) (int, error) {
-	if left := w.limit - w.Len(); left > 0 {
-		if len(p) > left {
-			w.Buffer.Write(p[:left])
-		} else {
-			w.Buffer.Write(p)
-		}
-	}
-	return len(p), nil
 }
 
 // writeFileAtomic replaces path without leaving a half-written file, and
