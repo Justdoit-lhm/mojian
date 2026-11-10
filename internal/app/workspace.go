@@ -97,6 +97,8 @@ func (a *app) activateWorkspace(ws *workspace) {
 	}
 	a.initWorkspaces()
 	a.workspace = ws
+	a.reloadStore = nil
+	a.reloadSeq++
 	if ws.key != "" {
 		a.workspaces[ws.key] = ws
 	}

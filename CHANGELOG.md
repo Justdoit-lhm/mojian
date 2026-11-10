@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Refreshing a server project no longer blocks the window: the listing is
+  read in the background and applied when it arrives, with a spinner in
+  the Explorer header. Gaining window focus reuses a listing younger than
+  15 seconds; the Refresh button still forces one.
+- Listing a project skips data and model files (`.mat`, `.pt`, `.npy`,
+  `.h5`, `.safetensors`, …) without opening them, and treats an unknown
+  extension over 4 MB as data instead of reading its head. A project with
+  20,000 data files now lists in about 45 ms instead of reading every
+  file; the embedded Linux servers are rebuilt for the change.
+
 ## 0.2.18
 
 - A finished connection no longer loses its SSH forward when the loading

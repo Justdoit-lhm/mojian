@@ -2,9 +2,11 @@ package app
 
 import (
 	"runtime"
+	"time"
 
 	"mojian/internal/app/explorer"
 	"mojian/internal/project"
+	"mojian/internal/session"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -28,15 +30,19 @@ func (h explorerHost) Changed()                                { h.a.changed() }
 func (h explorerHost) CloseNotes(match func(*note) bool)       { h.a.closeNotes(match) }
 func (h explorerHost) CloseAssets(match func(*assetFile) bool) { h.a.closeAssets(match) }
 func (h explorerHost) AfterRefresh()                           { h.a.afterRefresh() }
-func (h explorerHost) RefreshGit()                             { h.a.refreshGit() }
-func (h explorerHost) GitOpen() bool                           { return h.a.git.Open }
-func (h explorerHost) AutoRefreshGit() bool                    { return !h.a.NoGitAutoRefresh }
-func (h explorerHost) FilteredNotes() []*note                  { return h.a.filteredNotes() }
-func (h explorerHost) ActiveWorkspaceKey() string              { return h.a.activeWorkspaceKey() }
-func (h explorerHost) NativeWindow() bool                      { return h.a.win != nil }
-func (h explorerHost) RemotePath() string                      { return h.a.remotePath }
-func (h explorerHost) ServerAlias() string                     { return h.a.serverAlias }
-func (h explorerHost) Tip(label, id string) string             { return h.a.tip(label, commandByID(id)) }
+func (h explorerHost) ReloadProject(force bool)                { h.a.reloadProject(force) }
+func (h explorerHost) Refreshing() bool {
+	return h.a.reloadStore != nil && h.a.reloadStore == h.a.store
+}
+func (h explorerHost) RefreshGit()                 { h.a.refreshGit() }
+func (h explorerHost) GitOpen() bool               { return h.a.git.Open }
+func (h explorerHost) AutoRefreshGit() bool        { return !h.a.NoGitAutoRefresh }
+func (h explorerHost) FilteredNotes() []*note      { return h.a.filteredNotes() }
+func (h explorerHost) ActiveWorkspaceKey() string  { return h.a.activeWorkspaceKey() }
+func (h explorerHost) NativeWindow() bool          { return h.a.win != nil }
+func (h explorerHost) RemotePath() string          { return h.a.remotePath }
+func (h explorerHost) ServerAlias() string         { return h.a.serverAlias }
+func (h explorerHost) Tip(label, id string) string { return h.a.tip(label, commandByID(id)) }
 
 func (h explorerHost) ResetRenamedStates(notes []*note, before map[*note]string) {
 	h.a.resetRenamedStates(notes, before)
@@ -82,9 +88,80 @@ func (a *app) explorerUI() *explorer.UI {
 	return &a.explorer
 }
 
-func (a *app) sidebar(c *ui.Context, k *colors)          { a.explorerUI().Sidebar(c, k) }
-func (a *app) toggleTree()                               { a.explorerUI().ToggleTree() }
-func (a *app) refreshProject()                           { a.explorerUI().RefreshProject() }
+func (a *app) sidebar(c *ui.Context, k *colors) { a.explorerUI().Sidebar(c, k) }
+func (a *app) toggleTree()                      { a.explorerUI().ToggleTree() }
+
+// focusReloadAfter is how long a focus refresh reuses the last listing;
+// a remote project can take seconds to list.
+const focusReloadAfter = 15 * time.Second
+
+// refreshProject reads the project now; explicit refreshes and tests
+// bypass the focus throttle.
+func (a *app) refreshProject() { a.reloadProject(true) }
+
+// refreshProjectOnFocus runs when the window gains focus; a project
+// listed moments ago is reused, since a remote listing can be slow.
+func (a *app) refreshProjectOnFocus() { a.reloadProject(false) }
+
+// reloadProject reads the project's listing. A server project is listed
+// away from the UI thread and applied when the listing arrives; a direct
+// project is small enough to read in place. force skips the throttle.
+func (a *app) reloadProject(force bool) {
+	s := a.store
+	if s == nil || s.IsMemory() {
+		return
+	}
+	if !force && a.lastReloadFor == s && time.Since(a.lastReload) < focusReloadAfter {
+		return
+	}
+	if a.reloadStore == s {
+		return
+	}
+	a.lastReloadFor, a.lastReload = s, time.Now()
+	if !s.IsServer() {
+		if err := s.Refresh(); err != nil {
+			a.fail(err)
+			return
+		}
+		a.explorerUI().RefreshApplied()
+		return
+	}
+	a.reloadStore = s
+	a.reloadSeq++
+	seq := a.reloadSeq
+	win := a.win
+	a.invalidate()
+	if win == nil {
+		entries, bodies, err := s.List()
+		a.finishReload(s, seq, entries, bodies, err)
+		return
+	}
+	go func() {
+		entries, bodies, err := s.List()
+		onWindow(win, func() {
+			a.finishReload(s, seq, entries, bodies, err)
+		})
+	}()
+}
+
+// finishReload applies a listing on the UI thread; a result for a store
+// that is no longer loaded is dropped.
+func (a *app) finishReload(s *store, seq int, entries []session.FileEntry, bodies map[string]string, err error) {
+	if a.reloadStore != s || a.reloadSeq != seq {
+		return
+	}
+	a.reloadStore = nil
+	if a.store != s {
+		return
+	}
+	if err != nil {
+		a.fail(err)
+		a.invalidate()
+		return
+	}
+	s.Apply(entries, bodies)
+	a.explorerUI().RefreshApplied()
+}
 func (a *app) revealInTree(n *note)                      { a.explorerUI().RevealInTree(n) }
 func (a *app) revealRel(rel string)                      { a.explorerUI().RevealRel(rel) }
 func (a *app) startNewFile()                             { a.explorerUI().StartNewFile() }

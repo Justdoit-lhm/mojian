@@ -89,15 +89,12 @@ func (u *UI) toggleDir(rel string) {
 }
 
 // RefreshProject reads the project from disk, so files made in a terminal
-// appear in the tree, and closes editors whose file disappeared.
-func (u *UI) RefreshProject() {
-	if u.store() == nil || u.store().IsMemory() {
-		return
-	}
-	if err := u.store().Refresh(); err != nil {
-		u.fail(err)
-		return
-	}
+// appear in the tree. The host may do it in the background.
+func (u *UI) RefreshProject() { u.ReloadProject(true) }
+
+// RefreshApplied finishes a listing that the host read and applied: the
+// tree keeps its selection, vanished editors close, and Git refreshes.
+func (u *UI) RefreshApplied() {
 	u.afterRefresh()
 	u.keepTreeSelection()
 	if u.gitOpen() && !u.autoRefreshGit() {

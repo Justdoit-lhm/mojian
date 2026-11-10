@@ -48,6 +48,8 @@ type Host interface {
 
 	CloseNotes(func(*project.Note) bool)
 	CloseAssets(func(*project.Asset) bool)
+	ReloadProject(force bool)
+	Refreshing() bool
 	AfterRefresh()
 	RefreshGit()
 	GitOpen() bool
@@ -98,6 +100,7 @@ func (u *UI) openNoteInTab(n *project.Note)               { u.OpenNoteInTab(n) }
 func (u *UI) openAssetInTab(f *project.Asset)             { u.OpenAssetInTab(f) }
 func (u *UI) closeNotes(match func(*project.Note) bool)   { u.CloseNotes(match) }
 func (u *UI) closeAssets(match func(*project.Asset) bool) { u.CloseAssets(match) }
+func (u *UI) refreshing() bool                            { return u.Refreshing() }
 func (u *UI) afterRefresh()                               { u.AfterRefresh() }
 func (u *UI) refreshGit()                                 { u.RefreshGit() }
 func (u *UI) gitOpen() bool                               { return u.GitOpen() }

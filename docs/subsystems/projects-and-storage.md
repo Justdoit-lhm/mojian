@@ -38,14 +38,20 @@ the save path, path guards and the asset cache.
    `session.Client.WriteFile` for a local server and the same call over the SSH forward for a remote
    one. The save ends with `buf.MarkSaved()`.
 3. `Store.Refresh` reads one listing and reconciles it into notes, assets and the tree: notes keep
-   their buffers and dirty state, vanished files drop out, assets keep their cached copy.
+   their buffers and dirty state, vanished files drop out, assets keep their cached copy. The read
+   is split into `Store.List` (backend only, safe off the UI thread) and `Store.Apply` (mutates the
+   store on the UI thread). The Explorer re-reads a server project in the background and shows a
+   spinner while it runs; a window focus reuses a listing younger than 15 seconds.
 
 ## Contracts and failure behavior
 
 - Edits stay in memory until an explicit save. Nothing in the app writes a buffer on a timer.
 - A server project has no local mirror. `Server.List` names files with their size, time, kind and an
   asset's content hash; a note's text is read when it opens. `Direct` keeps the eager listing,
-  `Server` the lazy one.
+  `Server` the lazy one. Listing classifies by extension first: data and model files (`.mat`, `.pt`,
+  `.npy`, `.h5`, …) are skipped without opening them, and an unknown extension over 4 MB is treated
+  as data rather than reading its head. This keeps a project with hundreds of thousands of data
+  files listable in milliseconds.
 - Everything user-visible on disk that is not a project file (settings, layouts, cached assets) goes
   through `fs.WriteFileAtomic`; never write in place.
 - Direct `os.WriteFile` outside these paths is a guard failure: `internal/archtest` allows it only in

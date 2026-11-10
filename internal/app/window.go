@@ -105,7 +105,7 @@ func (a *app) createWindow(stateKey string) *mygo.Window {
 	})
 	a.win = win
 	win.OnFocus(func() {
-		a.refreshProject()
+		a.refreshProjectOnFocus()
 	})
 	win.OnClose(func(e *mygo.CloseEvent) {
 		if a.quitting || a.saveSkipped {
@@ -137,6 +137,8 @@ func (a *app) windowClosed() {
 	a.closeWorkspaces()
 	a.workspaces = nil
 	a.win = nil
+	a.reloadStore = nil
+	a.reloadSeq++
 	// A connection task belongs to the window that opened it: its result
 	// would update a closed window, so cancel it or the next window opens
 	// on a loading card that never clears.

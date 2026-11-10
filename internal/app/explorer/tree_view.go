@@ -65,7 +65,9 @@ func (u *UI) sidebarHeader(c *ui.Context, k *colors) {
 			Tooltip(u.tip("New Folder", "new-folder")).Clicked() {
 			u.later(func() { u.StartNewFolder() })
 		}
-		if iconButton(c, k, "refresh-cw", "Refresh Project", 24, 14).
+		if u.refreshing() {
+			ui.Spinner(c).Size(14, 14).Label("Refreshing project")
+		} else if iconButton(c, k, "refresh-cw", "Refresh Project", 24, 14).
 			Tooltip("Refresh Project").Clicked() {
 			u.later(func() { u.RefreshProject() })
 		}

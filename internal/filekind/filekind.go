@@ -58,7 +58,17 @@ var binaryExts = map[string]bool{
 	".ttf": true, ".otf": true, ".exe": true, ".dylib": true, ".so": true,
 	".a": true, ".o": true, ".class": true, ".jar": true, ".wasm": true,
 	".sqlite": true, ".db": true, ".mojian-tmp": true,
+	// Data and model files: never opened to guess their kind, so a large
+	// project's listing does not read a head of every checkpoint.
+	".mat": true, ".pt": true, ".pth": true, ".ckpt": true, ".npy": true,
+	".npz": true, ".h5": true, ".hdf5": true, ".pkl": true, ".pickle": true,
+	".onnx": true, ".safetensors": true, ".tflite": true, ".parquet": true,
+	".feather": true, ".arrow": true, ".lmdb": true, ".pb": true,
 }
+
+// headLimit is the largest unknown file whose head is read to tell text
+// from binary. A bigger file with no known extension is data, not prose.
+const headLimit = 4 << 20
 
 // assetExts are the files the viewer shows: pictures MyGo can decode,
 // and PDFs it previews through the system.
@@ -107,6 +117,13 @@ func ClassifyFile(path string) (Kind, error) {
 		return Other, nil
 	case editor.LanguageFor(path) != nil || textExts[ext]:
 		return Text, nil
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return Other, err
+	}
+	if info.Size() > headLimit {
+		return Other, nil
 	}
 	f, err := os.Open(path)
 	if err != nil {

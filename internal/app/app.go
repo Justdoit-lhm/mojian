@@ -155,6 +155,10 @@ type app struct {
 	lastChange    time.Time
 	layoutTimer   *time.Timer
 	settingsTimer *time.Timer
+	reloadStore   *store
+	reloadSeq     int
+	lastReload    time.Time
+	lastReloadFor *store
 	loaded        bool
 	quitting      bool
 	saveSkipped   bool

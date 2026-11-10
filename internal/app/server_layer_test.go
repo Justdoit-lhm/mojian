@@ -342,3 +342,51 @@ func TestLocalServerSettingsButtons(t *testing.T) {
 		t.Fatalf("the local server did not start: stopped=%v running=%v", a.localServerStopped, a.localServerRunning())
 	}
 }
+
+func TestServerProjectRefreshAppliesListing(t *testing.T) {
+	client, done := startTestSessionServer(t, t.TempDir())
+	defer client.Close()
+	defer func() { _ = client.Shutdown(); <-done }()
+	root := t.TempDir()
+	testutil.WriteVault(t, root, map[string]string{"a.md": "# A\n"})
+	s, err := openServerStore(client, root, t.TempDir(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &app{workspace: &workspace{store: s, treeOpen: true, openDirs: map[string]bool{}}, dataDir: t.TempDir()}
+	if err := os.WriteFile(filepath.Join(root, "new.md"), []byte("# New\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a.reloadProject(true)
+	if a.reloadStore != nil {
+		t.Fatal("the listing stayed in flight")
+	}
+	if s.ByRelPath("new.md") == nil {
+		t.Fatal("the refreshed listing did not reach the store")
+	}
+}
+
+func TestFocusRefreshIsThrottled(t *testing.T) {
+	client, done := startTestSessionServer(t, t.TempDir())
+	defer client.Close()
+	defer func() { _ = client.Shutdown(); <-done }()
+	root := t.TempDir()
+	testutil.WriteVault(t, root, map[string]string{"a.md": "# A\n"})
+	s, err := openServerStore(client, root, t.TempDir(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &app{workspace: &workspace{store: s, treeOpen: true, openDirs: map[string]bool{}}, dataDir: t.TempDir()}
+	a.reloadProject(true)
+	if err := os.WriteFile(filepath.Join(root, "later.md"), []byte("# Later\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a.reloadProject(false)
+	if s.ByRelPath("later.md") != nil {
+		t.Fatal("a focus refresh ignored the throttle window")
+	}
+	a.reloadProject(true)
+	if s.ByRelPath("later.md") == nil {
+		t.Fatal("the forced refresh did not apply the listing")
+	}
+}

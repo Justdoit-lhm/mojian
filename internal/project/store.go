@@ -49,18 +49,17 @@ func (s *Store) IsRemote() bool { return s.FS.Kind() == fs.KindServerRemote }
 
 func (s *Store) Client() *session.Client { return s.FS.Client() }
 
-// Refresh reads the project's listing. The direct backend also brings
-// the text bodies, so it stays eager; a server project lists names and
-// reads a file when it opens.
-func (s *Store) Refresh() error {
+// List reads the project's listing without touching the store, so a
+// caller can fetch a server project away from the UI thread.
+func (s *Store) List() ([]session.FileEntry, map[string]string, error) {
 	if s.IsMemory() {
-		s.BuildTree()
-		return nil
+		return nil, nil, nil
 	}
-	entries, bodies, err := s.FS.List()
-	if err != nil {
-		return err
-	}
+	return s.FS.List()
+}
+
+// Apply installs a listing read by List. It must run on the UI thread.
+func (s *Store) Apply(entries []session.FileEntry, bodies map[string]string) {
 	s.Entries = entries
 	s.Dirs = map[string]bool{"": true}
 	seen := make(map[string]bool, len(entries))
@@ -122,6 +121,19 @@ func (s *Store) Refresh() error {
 	s.Notes = kept
 	sort.SliceStable(s.Notes, func(i, j int) bool { return s.Notes[i].Mod.After(s.Notes[j].Mod) })
 	s.BuildTree()
+}
+
+// Refresh reads the project's listing and applies it at once.
+func (s *Store) Refresh() error {
+	if s.IsMemory() {
+		s.BuildTree()
+		return nil
+	}
+	entries, bodies, err := s.List()
+	if err != nil {
+		return err
+	}
+	s.Apply(entries, bodies)
 	return nil
 }
 

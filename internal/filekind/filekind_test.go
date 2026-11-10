@@ -19,6 +19,10 @@ func TestClassify(t *testing.T) {
 		{"image.png", nil, Asset},
 		{"paper.pdf", nil, Asset},
 		{"archive.zip", nil, Other},
+		{"model.pt", nil, Other},
+		{"data.mat", nil, Other},
+		{"weights.safetensors", nil, Other},
+		{"matrix.npy", nil, Other},
 		{"blob.unknown", []byte{0, 1, 2}, Other},
 		{"binary.unknown", []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, Other},
 	}
@@ -55,5 +59,35 @@ func TestSkipDirHidesGeneratedTreesAndRemoteTrash(t *testing.T) {
 	}
 	if SkipDir("src") {
 		t.Error("src is skipped")
+	}
+}
+
+func TestClassifyFileSkipsHugeUnknownHeads(t *testing.T) {
+	dir := t.TempDir()
+	big := filepath.Join(dir, "dataset.unknown")
+	if err := os.WriteFile(big, make([]byte, headLimit+1), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if kind, err := ClassifyFile(big); err != nil || kind != Other {
+		t.Fatalf("large unknown file: %v %v", kind, err)
+	}
+	log := filepath.Join(dir, "server.log")
+	if err := os.WriteFile(log, make([]byte, headLimit+1), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if kind, err := ClassifyFile(log); err != nil || kind != Text {
+		t.Fatalf("large log: %v %v", kind, err)
+	}
+}
+
+func TestClassifyFileKnownDataNeedsNoRead(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "dataset.mat")
+	if err := os.WriteFile(path, []byte("not really text"), 0o000); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(path, 0o644)
+	if kind, err := ClassifyFile(path); err != nil || kind != Other {
+		t.Fatalf("unreadable data file: %v %v", kind, err)
 	}
 }
