@@ -37,9 +37,16 @@ the save path, path guards and the asset cache.
 2. `⌘S` runs `(*app).saveNow` → `store.SaveAll` → `store.Save` → the project's `fs.Backend`. A
    `Direct` backend writes with `fs.WriteFileAtomic`; a `Server` backend calls
    `session.Client.WriteFile` for a local server and the same call over the SSH forward for a remote
-   one. The save ends with `buf.MarkSaved()`.
+   one. Before writing, `Store.Save` reads the current file and compares its exact bytes with
+   `Note.Saved`, the baseline from the last load or successful save. A mismatch returns
+   `project.ErrFileChanged`; a read failure also aborts the save. The buffer is serialized with
+   `Buffer.WriteTo`, preserving its LF or CRLF line endings. Only a successful write updates the
+   baseline and calls `buf.MarkSaved()`.
 3. `Store.Refresh` reads one listing and reconciles it into notes, assets and the tree: notes keep
-   their buffers and dirty state, vanished files drop out, assets keep their cached copy. The read
+   their shared buffers; a direct listing reloads changed clean notes in place with `Buffer.Reset`,
+   while dirty notes retain both their edits and saved baseline. Vanished clean files drop out;
+   vanished dirty files stay available for recovery and are not silently recreated on save.
+   Assets keep their cached copy. The read
    is split into `Store.List` (backend only, safe off the UI thread) and `Store.Apply` (mutates the
    store on the UI thread). The Explorer re-reads a server project in the background and shows a
    spinner while it runs; a window focus and opening the file sidebar reuse a listing younger than
@@ -48,6 +55,14 @@ the save path, path guards and the asset cache.
 ## Contracts and failure behavior
 
 - Edits stay in memory until an explicit save. Nothing in the app writes a buffer on a timer.
+- A save conflict leaves both disk and the dirty buffer intact and identifies the file in the
+  existing error banner. Users must preserve their local edits separately before reloading.
+  Content comparison detects changes even if size and modification time are unchanged. It is a
+  pre-write check, not an inter-process lock: another writer can still race between the read and
+  atomic replacement. Server-backed projects use the same check through the existing read/write
+  protocol; their metadata-only listings do not automatically reload already loaded clean notes.
+- `Note.Saved` holds exact on-disk bytes, including line endings. `Note.Text` remains normalized
+  once an editor buffer exists; it must not be used to serialize a file for saving.
 - A server project has no local mirror. `Server.List` names files with their size, time, kind and an
   asset's content hash; a note's text is read when it opens. `Direct` keeps the eager listing,
   `Server` the lazy one. Listing classifies by extension first: data and model files (`.mat`, `.pt`,
@@ -71,6 +86,8 @@ the save path, path guards and the asset cache.
 ## Verification
 
 ```sh
+go test ./internal/project
+
 go test ./internal/app -run 'TestProjectSwitch|TestLocalProjectStoreUsesSessionServer|TestRemoteProjectReadsAndSavesOnTheServer'
 go test ./internal/archtest -run TestDirectWritesStayInTheAllowlist
 ```

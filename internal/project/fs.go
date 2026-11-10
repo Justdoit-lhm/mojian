@@ -16,9 +16,7 @@ func (s *Store) LoadNote(n *Note) error {
 	if err != nil {
 		return err
 	}
-	n.Saved = string(data)
-	n.Title = NoteTitle(n.Saved, n.Path)
-	n.Loaded = true
+	n.load(string(data))
 	return nil
 }
 

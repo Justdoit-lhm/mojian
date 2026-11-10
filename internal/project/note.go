@@ -83,6 +83,30 @@ func (n *Note) Text() string {
 	return n.Saved
 }
 
+// fileText serializes the buffer with its original line ending. Text
+// remains LF-normalized for editor and preview consumers.
+func (n *Note) fileText() (string, error) {
+	if n.Buf == nil {
+		return n.Saved, nil
+	}
+	var body strings.Builder
+	if _, err := n.Buf.WriteTo(&body); err != nil {
+		return "", err
+	}
+	return body.String(), nil
+}
+
+// load updates a clean note from disk without replacing the buffer shared
+// by its open panes, and keeps Saved as the exact on-disk bytes.
+func (n *Note) load(body string) {
+	n.Saved = body
+	n.Title = NoteTitle(body, n.Path)
+	n.Loaded = true
+	if n.Buf != nil {
+		n.Buf.Reset(body)
+	}
+}
+
 // Dirty reports whether the note has edits that are not on disk.
 func (n *Note) Dirty() bool { return n.Buf != nil && n.Buf.Modified() }
 

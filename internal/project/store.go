@@ -1,6 +1,7 @@
 package project
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sort"
@@ -87,10 +88,8 @@ func (s *Store) Apply(entries []session.FileEntry, bodies map[string]string) {
 			seen[rel] = true
 			if n := s.ByRel[rel]; n != nil {
 				n.Mod = e.Mod
-				if body, ok := bodies[rel]; ok && !n.Loaded {
-					n.Saved = body
-					n.Title = NoteTitle(body, n.Path)
-					n.Loaded = true
+				if body, ok := bodies[rel]; ok && !n.Dirty() && (!n.Loaded || body != n.Saved) {
+					n.load(body)
 				}
 				continue
 			}
@@ -119,7 +118,8 @@ func (s *Store) Apply(entries []session.FileEntry, bodies map[string]string) {
 	}
 	s.Assets = assets
 	// A file removed or moved outside the app leaves the store. Dirty
-	// notes stay: their text is still in memory and may be saved again.
+	// notes stay so their unsaved text can be recovered without recreating
+	// or overwriting a file changed outside the app.
 	kept := s.Notes[:0]
 	for _, n := range s.Notes {
 		if !seen[n.Rel] && !n.Dirty() {
@@ -195,11 +195,27 @@ func relPath(dir, p string) string {
 	return filepath.Base(p)
 }
 
-// Save writes n if it changed.
+// ErrFileChanged reports that a note's on-disk content no longer matches
+// the bytes it was loaded from or last saved as.
+var ErrFileChanged = errors.New("file changed outside mojian")
+
+// Save writes n if it changed, refusing to overwrite external edits.
 func (s *Store) Save(n *Note) error {
-	body := n.Text()
+	body, err := n.fileText()
+	if err != nil {
+		return fmt.Errorf("serializing %s: %w", n.Rel, err)
+	}
 	if body == n.Saved {
 		return nil
+	}
+	if !s.IsMemory() {
+		current, err := s.FS.Read(n.Rel)
+		if err != nil {
+			return fmt.Errorf("checking %s before saving: %w", n.Rel, err)
+		}
+		if string(current) != n.Saved {
+			return fmt.Errorf("%s: %w; local edits were kept; copy them elsewhere before reloading", n.Rel, ErrFileChanged)
+		}
 	}
 	if err := s.FS.Write(n.Rel, []byte(body)); err != nil {
 		return err
