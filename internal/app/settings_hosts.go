@@ -273,6 +273,17 @@ func (a *app) hostServerRunning(host string) bool {
 	return rc != nil && rc.Healthy()
 }
 
+// checkHosts asks every configured host about its server in the
+// background, once per launch, so a server left running is known before
+// Settings is opened. checkHostServer skips a host already checked.
+func (a *app) checkHosts() {
+	for _, h := range a.hosts() {
+		if h.Address != "" {
+			a.checkHostServer(h.Address)
+		}
+	}
+}
+
 // checkHostServer asks the host once whether its server still has a
 // socket, so a server left running from the last launch shows Stop
 // Server instead of Set Up Server.

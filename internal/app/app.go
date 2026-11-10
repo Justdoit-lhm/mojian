@@ -246,6 +246,7 @@ func (a *app) open() {
 			// so an unreachable host cannot delay the launch.
 			a.treeOpen = true
 			a.win = a.createWindow("main")
+			a.checkHosts()
 			a.updateTitle()
 			a.openRemoteProjectAsync(a.serverAlias, a.remotePath)
 			return
@@ -289,12 +290,14 @@ func (a *app) open() {
 		// Reopening a window on a remote project reconnects behind the
 		// loading card instead of holding the window back.
 		a.win = a.createWindow("main")
+		a.checkHosts()
 		a.registerActiveWorkspace()
 		a.updateTitle()
 		a.reconnectActiveRemoteAsync()
 		return
 	}
 	a.win = a.createWindow("main")
+	a.checkHosts()
 	a.registerActiveWorkspace()
 	a.updateTitle()
 }

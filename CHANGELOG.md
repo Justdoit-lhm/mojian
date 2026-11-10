@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Mojian checks every configured host's server in the background when it
+  launches, before the saved project reconnects, so a server left running
+  is known without opening Settings and the project connects against the
+  real state. Dial also checks the socket first and reuses a running
+  server instead of starting a second process; a stale socket falls back
+  to starting it and forwarding again.
+
 ## 0.2.15
 
 - Settings › Hosts asks each configured host once whether its server is

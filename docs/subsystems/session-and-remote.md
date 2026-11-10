@@ -44,10 +44,10 @@ the host list and connection pool the app keeps.
    session by id, and each layout terminal records `Server` (`local` or an SSH host) so it
    reattaches to the server that owns it.
 3. A remote host is provisioned once: `remote.Provision` uploads the binaries from
-   `internal/remotebin` (comparing hashes first), starts `mojian-server` with `nohup`, and opens
-   `ssh -N -L` so a local temporary socket reaches the remote one. `remote.Dial` talks to the server
-   through that socket; `Provision` returns the live `Conn` it ended with, and the app keeps it in
-   the pool.
+   `internal/remotebin` (comparing hashes first), starts `mojian-server` with `nohup` when its socket is
+   not there, and opens `ssh -N -L` so a local temporary socket reaches the remote one. `remote.Dial`
+   talks to the server through that socket; `Provision` returns the live `Conn` it ended with, and the
+   app keeps it in the pool.
 4. The remote server stays alive while any of its sessions exists, so a dropped SSH connection does
    not end its shells. It never stops on its own: Settings › Hosts offers **Start Server** and
    **Stop Server** for each configured host, and a stop asks before ending its terminals.
@@ -68,11 +68,12 @@ the host list and connection pool the app keeps.
   once and without the window-wide loading card, using the home cached in `remoteHomes`. Choosing
   the server already on screen opens the picker, so another folder on it can be opened. A dead
   control channel is dropped by `remoteForHost` and dialed again on the next use.
-- Settings › Hosts is the only host source; the app does not scan `~/.ssh/config`. Opening the
-  page asks each host once (`remote.ServerRunning`) whether its server socket still exists, so a
-  server left running by the previous launch shows Stop Server rather than Set Up Server. Each
-  host's row sets up, starts and stops that host's server; stopping removes the pooled connection
-  and the terminal views it owned, and starting again reconnects the loaded projects on that host.
+- Settings › Hosts is the only host source; the app does not scan `~/.ssh/config`. At launch, and
+  when the page opens, the app asks each host once (`remote.ServerRunning`) whether its server
+  socket still exists, so a server left running by the previous launch shows Stop Server rather
+  than Set Up Server. Each host's row sets up, starts and stops that host's server; stopping
+  removes the pooled connection and the terminal views it owned, and starting again reconnects the
+  loaded projects on that host.
 - Opening a remote project runs off the UI thread behind the loading card, so an unreachable host
   cannot block the window. The card's Cancel button cancels the task's context, which kills the
   `ssh` commands it waits on and closes the card at once; a result the cancelled task still

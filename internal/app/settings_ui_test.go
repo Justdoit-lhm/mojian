@@ -408,6 +408,29 @@ func TestRunningServerShowsStopAfterRestart(t *testing.T) {
 	}
 }
 
+func TestCheckHostsProbesEveryHostOnLaunch(t *testing.T) {
+	old := hostServerRunningFn
+	seen := map[string]bool{}
+	hostServerRunningFn = func(ctx context.Context, host string) (bool, error) {
+		seen[host] = true
+		return host == "fedora", nil
+	}
+	t.Cleanup(func() { hostServerRunningFn = old })
+
+	a := newProjectApp(t)
+	a.hostService().SetHosts([]hostConfig{
+		{Name: "Fedora", Address: "fedora"},
+		{Name: "Dev", Address: "me@devbox"},
+	})
+	a.checkHosts()
+	if !seen["fedora"] || !seen["me@devbox"] {
+		t.Fatalf("launch checked %v", seen)
+	}
+	if !a.hostRunning["fedora"] || a.hostRunning["me@devbox"] {
+		t.Fatalf("launch status: %+v", a.hostRunning)
+	}
+}
+
 func TestSettingsTableRendersEveryGenericRow(t *testing.T) {
 	registerFonts()
 	a := newProjectApp(t)

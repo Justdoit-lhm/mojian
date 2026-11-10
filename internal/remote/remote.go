@@ -252,8 +252,11 @@ func DialContext(ctx context.Context, host string) (*Conn, error) {
 	if _, err := info.upload(ctx, host, false); err != nil {
 		return nil, err
 	}
-	if err := info.start(ctx, host); err != nil {
-		return nil, err
+	running := info.socketExists(ctx, host)
+	if !running {
+		if err := info.start(ctx, host); err != nil {
+			return nil, err
+		}
 	}
 	rc, err := info.forward(ctx, host)
 	if err == nil {
@@ -261,6 +264,16 @@ func DialContext(ctx context.Context, host string) (*Conn, error) {
 	}
 	var pe *session.ProtocolError
 	if !errors.As(err, &pe) {
+		if running {
+			// The socket outlived its server: start this build and try
+			// the forward once more.
+			if startErr := info.start(ctx, host); startErr != nil {
+				return nil, err
+			}
+			if rc, retryErr := info.forward(ctx, host); retryErr == nil {
+				return rc, nil
+			}
+		}
 		return nil, err
 	}
 	// The running server was another protocol. Stop it through its own
@@ -370,6 +383,13 @@ func ServerRunning(ctx context.Context, host string) (bool, error) {
 		return false, nil
 	}
 	return true, nil
+}
+
+// socketExists reports whether the server socket is already on the host,
+// so Dial can connect to a running server instead of starting another.
+func (i *Install) socketExists(ctx context.Context, host string) bool {
+	_, err := SSHOutputContext(ctx, host, "test -S "+shellQuote(i.sock))
+	return err == nil
 }
 
 // stop asks the running server to exit, through its own -stop command.
