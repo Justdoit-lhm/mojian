@@ -344,3 +344,25 @@ func TestRemoteWorkspaceSwitchUsesTheCache(t *testing.T) {
 		t.Fatalf("switch back: server=%q path=%q store=%p", a.serverAlias, a.remotePath, a.store)
 	}
 }
+
+func TestEmptyExplorerPromptIsCentered(t *testing.T) {
+	registerFonts()
+	s, err := openStoreAt(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &app{workspace: &workspace{store: s, treeOpen: true, openDirs: map[string]bool{}}}
+	tt := ui.NewTester(a.view, 1100, 700)
+	tt.Frame()
+	header, ok := tt.Find("Explorer")
+	if !ok {
+		t.Fatalf("no Explorer header: %q", tt.Texts())
+	}
+	prompt, ok := tt.Find("No files here")
+	if !ok {
+		t.Fatalf("no empty prompt: %q", tt.Texts())
+	}
+	if prompt.Y < header.Y+200 {
+		t.Fatalf("the empty prompt sits near the top: header y=%.1f prompt y=%.1f", header.Y, prompt.Y)
+	}
+}

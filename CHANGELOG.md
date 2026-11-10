@@ -1,7 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.2.14
 
+- An empty project's Explorer prompt — the file-plus icon, "No files
+  here" and the New File button — now sits in the middle of the sidebar
+  under the search field instead of hugging its top edge.
 - The window-wide connection card has a Cancel button on its right: it
   kills the SSH commands the attempt is waiting on, closes the card at
   once, and leaves the project that was on screen untouched. A result

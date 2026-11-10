@@ -22,18 +22,15 @@ func (u *UI) Sidebar(c *ui.Context, k *colors) {
 	card.Children(func() {
 		u.sidebarHeader(c, k)
 		u.sidebarSearch(c, k)
+		if u.emptyTreeVisible() {
+			u.emptyTree(c, k)
+			return
+		}
 		scroll := ui.Scroll(c).Grow(1).MinHeight(0).Padding(2, 6)
 		scroll.PopoverMenu(func(m *ui.Menu) { u.NodeMenu(m, "", true) })
 		scroll.Children(func() {
 			if strings.TrimSpace(u.TreeQuery()) != "" {
 				u.searchResults(c, k)
-				return
-			}
-			if u.store().Tree == nil {
-				return
-			}
-			if len(u.store().Tree.Children) == 0 && u.TreeDraft() == nil {
-				u.emptyTree(c, k)
 				return
 			}
 			u.treeChildren(c, k, u.store().Tree, 0)
@@ -42,6 +39,16 @@ func (u *UI) Sidebar(c *ui.Context, k *colors) {
 	if u.TreeReveal() != "" {
 		u.SetTreeReveal("")
 	}
+}
+
+// emptyTreeVisible reports whether the Explorer shows its empty prompt
+// instead of the scrollable tree.
+func (u *UI) emptyTreeVisible() bool {
+	if strings.TrimSpace(u.TreeQuery()) != "" {
+		return false
+	}
+	tree := u.store().Tree
+	return tree != nil && len(tree.Children) == 0 && u.TreeDraft() == nil
 }
 
 func (u *UI) sidebarHeader(c *ui.Context, k *colors) {
@@ -267,23 +274,26 @@ func (u *UI) treeDraftRow(c *ui.Context, k *colors, depth int, dir bool) {
 	})
 }
 
-// emptyTree is shown for a project or folder with no text files yet.
+// emptyTree is shown for a project or folder with no text files yet. It
+// fills the space below the header so its prompt sits in the middle.
 func (u *UI) emptyTree(c *ui.Context, k *colors) {
-	ui.Column(c).Padding(18, 8).Gap(8).Center().Children(func() {
-		ui.Icon(c, icons.Icon("file-plus")).Size(20, 20).TextColor(k.TextFaint)
-		ui.Text(c, "No files here").FontSize(12.5).FontWeight(600).TextColor(k.TextMuted)
-		btn := ui.ButtonBase(c).Padding(5, 10).Radius(radius).
-			Cursor(ui.CursorPointer).Label("New File").Background(k.Hover)
-		if btn.Hovered() {
-			btn.Background(k.Pressed)
-		}
-		if btn.Clicked() {
-			u.later(func() { u.StartNewFile() })
-		}
-		btn.Children(func() {
-			ui.Text(c, "New File").FontSize(12).FontWeight(500).TextColor(k.Text)
+	ui.Column(c).Grow(1).MinHeight(0).Padding(18, 8).Gap(8).Center().
+		PopoverMenu(func(m *ui.Menu) { u.NodeMenu(m, "", true) }).
+		Children(func() {
+			ui.Icon(c, icons.Icon("file-plus")).Size(20, 20).TextColor(k.TextFaint)
+			ui.Text(c, "No files here").FontSize(12.5).FontWeight(600).TextColor(k.TextMuted)
+			btn := ui.ButtonBase(c).Padding(5, 10).Radius(radius).
+				Cursor(ui.CursorPointer).Label("New File").Background(k.Hover)
+			if btn.Hovered() {
+				btn.Background(k.Pressed)
+			}
+			if btn.Clicked() {
+				u.later(func() { u.StartNewFile() })
+			}
+			btn.Children(func() {
+				ui.Text(c, "New File").FontSize(12).FontWeight(500).TextColor(k.Text)
+			})
 		})
-	})
 }
 
 // searchResults lists the files matching the search field.
