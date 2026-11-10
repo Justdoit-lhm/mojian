@@ -26,6 +26,9 @@
     --paper: #FBF7EF;
     --cursor: #E4653F;
     --blush: #E9A088;
+    /* Windows keeps its own Fluent blue, so the third download reads as Windows at a glance. */
+    --win: #0F6CBD;
+    --win-hover: #0A5AA6;
     --glass: rgba(15, 20, 26, .46);
     --glass-line: rgba(247, 244, 236, .18);
     --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Segoe UI", "Microsoft YaHei", Inter, Helvetica, Arial, sans-serif;
@@ -111,8 +114,8 @@
   .dl.mac:hover { background-color: #FFFFFF; box-shadow: 0 1px 0 rgba(255, 255, 255, .6) inset, 0 16px 34px -10px rgba(0, 0, 0, .68); }
   .dl.linux { color: var(--paper); background: var(--glass); border: 1px solid var(--glass-line); backdrop-filter: blur(16px) saturate(1.25); -webkit-backdrop-filter: blur(16px) saturate(1.25); box-shadow: 0 12px 30px -14px rgba(0, 0, 0, .7); }
   .dl.linux:hover { background-color: rgba(15, 20, 26, .64); }
-  .dl.win { color: #fff; background: var(--cursor); box-shadow: 0 1px 0 rgba(255, 255, 255, .22) inset, 0 12px 30px -12px rgba(0, 0, 0, .7); }
-  .dl.win:hover { background-color: #D95A36; box-shadow: 0 1px 0 rgba(255, 255, 255, .26) inset, 0 16px 34px -12px rgba(0, 0, 0, .72); }
+  .dl.win { color: #fff; background: var(--win); box-shadow: 0 1px 0 rgba(255, 255, 255, .22) inset, 0 12px 30px -12px rgba(0, 0, 0, .7); }
+  .dl.win:hover { background-color: var(--win-hover); box-shadow: 0 1px 0 rgba(255, 255, 255, .26) inset, 0 16px 34px -12px rgba(0, 0, 0, .72); }
 
   .more {
     display: flex; justify-content: center; flex-wrap: wrap; gap: 4px 20px;
