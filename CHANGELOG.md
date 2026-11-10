@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.15
 
 - Settings › Hosts asks each configured host once whether its server is
   still running. A server left alive by the previous launch now shows
