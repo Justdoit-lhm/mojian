@@ -50,6 +50,19 @@ type Server struct {
 	started  time.Time
 	quit     chan struct{}
 	once     sync.Once
+	// trees caches listTree results; a file operation clears it and a
+	// short TTL picks up changes made outside the server.
+	trees map[string]treeCacheEntry
+}
+
+// treeCacheTTL bounds how long a listing is reused. The app's explicit
+// refresh asks for a fresh listing, so this only serves repeated listing
+// calls such as a focus refresh or opening the sidebar.
+const treeCacheTTL = 5 * time.Second
+
+type treeCacheEntry struct {
+	entries []FileEntry
+	at      time.Time
 }
 
 // Serve runs the session server until it is shut down.
@@ -238,7 +251,7 @@ func (s *Server) do(req Request) (any, error) {
 		}
 		return out, nil
 	case "listTree":
-		return listTree(req.Path)
+		return s.listTree(req.Path, req.Fresh)
 	case "readFile":
 		info, err := os.Stat(req.Path)
 		if err != nil {
@@ -255,6 +268,7 @@ func (s *Server) do(req Request) (any, error) {
 		if err := writeFileAtomic(req.Path, req.Data); err != nil {
 			return nil, err
 		}
+		s.invalidateTrees()
 		return nil, nil
 	case "stat":
 		return statEntry(req.Path)
@@ -262,18 +276,36 @@ func (s *Server) do(req Request) (any, error) {
 		if req.Path == "" || req.To == "" {
 			return nil, errors.New("copy needs paths")
 		}
-		return nil, copyTree(req.Path, req.To)
+		err := copyTree(req.Path, req.To)
+		if err == nil {
+			s.invalidateTrees()
+		}
+		return nil, err
 	case "exec":
-		return execCommand(req)
+		out, err := execCommand(req)
+		s.invalidateTrees()
+		return out, err
 	case "mkdir":
-		return nil, os.MkdirAll(req.Path, 0o755)
+		err := os.MkdirAll(req.Path, 0o755)
+		if err == nil {
+			s.invalidateTrees()
+		}
+		return nil, err
 	case "rename":
 		if req.Path == "" || req.To == "" {
 			return nil, errors.New("rename needs paths")
 		}
-		return nil, os.Rename(req.Path, req.To)
+		err := os.Rename(req.Path, req.To)
+		if err == nil {
+			s.invalidateTrees()
+		}
+		return nil, err
 	case "remove":
-		return nil, os.RemoveAll(req.Path)
+		err := os.RemoveAll(req.Path)
+		if err == nil {
+			s.invalidateTrees()
+		}
+		return nil, err
 	case "listDirs":
 		entries, err := os.ReadDir(req.Path)
 		if err != nil {
@@ -698,7 +730,38 @@ func fileHash(path string) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-func listTree(root string) ([]FileEntry, error) {
+// invalidateTrees drops every cached listing; a file operation may have
+// changed one root, and there are only a few.
+func (s *Server) invalidateTrees() {
+	s.mu.Lock()
+	s.trees = nil
+	s.mu.Unlock()
+}
+
+// listTree walks a project, reusing a recent result unless fresh is set.
+func (s *Server) listTree(root string, fresh bool) ([]FileEntry, error) {
+	if !fresh {
+		s.mu.Lock()
+		cached, ok := s.trees[root]
+		s.mu.Unlock()
+		if ok && time.Since(cached.at) < treeCacheTTL {
+			return append([]FileEntry(nil), cached.entries...), nil
+		}
+	}
+	entries, err := walkTree(root)
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	if s.trees == nil {
+		s.trees = map[string]treeCacheEntry{}
+	}
+	s.trees[root] = treeCacheEntry{entries: entries, at: time.Now()}
+	s.mu.Unlock()
+	return entries, nil
+}
+
+func walkTree(root string) ([]FileEntry, error) {
 	var out []FileEntry
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {

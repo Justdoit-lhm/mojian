@@ -56,10 +56,12 @@ type Request struct {
 	Create *CreateOptions `json:"create,omitempty"`
 	Path   string         `json:"path,omitempty"`
 	To     string         `json:"to,omitempty"`
-	Data   []byte         `json:"data,omitempty"`
-	Dir    string         `json:"dir,omitempty"`
-	Args   []string       `json:"args,omitempty"`
-	Env    []string       `json:"env,omitempty"`
+	// Fresh asks listTree to bypass the server's listing cache.
+	Fresh bool     `json:"fresh,omitempty"`
+	Data  []byte   `json:"data,omitempty"`
+	Dir   string   `json:"dir,omitempty"`
+	Args  []string `json:"args,omitempty"`
+	Env   []string `json:"env,omitempty"`
 	// Timeout is how long a command may run, in milliseconds.
 	Timeout int `json:"timeout,omitempty"`
 }

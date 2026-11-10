@@ -174,11 +174,40 @@ func TestListTreeHashesAssetsByContent(t *testing.T) {
 	if err := os.Chtimes(path, info.ModTime(), info.ModTime()); err != nil {
 		t.Fatal(err)
 	}
-	entries, err = c.ListTree(root)
+	entries, err = c.ListTreeFresh(root)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(entries) != 1 || entries[0].Hash == "" || entries[0].Hash == firstHash {
 		t.Fatalf("changed asset hash: %+v", entries)
+	}
+}
+
+func TestListTreeCacheAndFresh(t *testing.T) {
+	c, dir := startOpsServer(t)
+	root := filepath.Join(dir, "project")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "a.md"), []byte("# A\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if entries, err := c.ListTree(root); err != nil || len(entries) != 1 {
+		t.Fatalf("first listing: %d %v", len(entries), err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "b.md"), []byte("# B\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if entries, err := c.ListTree(root); err != nil || len(entries) != 1 {
+		t.Fatalf("cached listing did not reuse the walk: %d %v", len(entries), err)
+	}
+	if entries, err := c.ListTreeFresh(root); err != nil || len(entries) != 2 {
+		t.Fatalf("fresh listing: %d %v", len(entries), err)
+	}
+	if err := c.WriteFile(filepath.Join(root, "c.md"), []byte("# C\n")); err != nil {
+		t.Fatal(err)
+	}
+	if entries, err := c.ListTree(root); err != nil || len(entries) != 3 {
+		t.Fatalf("mutation did not clear the cache: %d %v", len(entries), err)
 	}
 }

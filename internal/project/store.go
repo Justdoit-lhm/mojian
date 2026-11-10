@@ -58,6 +58,17 @@ func (s *Store) List() ([]session.FileEntry, map[string]string, error) {
 	return s.FS.List()
 }
 
+// ListFresh is List that asks a server backend to re-walk the project
+// instead of reusing its listing cache.
+func (s *Store) ListFresh() ([]session.FileEntry, map[string]string, error) {
+	if f, ok := s.FS.(interface {
+		ListFresh() ([]session.FileEntry, map[string]string, error)
+	}); ok {
+		return f.ListFresh()
+	}
+	return s.List()
+}
+
 // Apply installs a listing read by List. It must run on the UI thread.
 func (s *Store) Apply(entries []session.FileEntry, bodies map[string]string) {
 	s.Entries = entries
@@ -123,13 +134,15 @@ func (s *Store) Apply(entries []session.FileEntry, bodies map[string]string) {
 	s.BuildTree()
 }
 
-// Refresh reads the project's listing and applies it at once.
+// Refresh reads the project's listing and applies it at once. It asks a
+// server backend for a fresh walk, since an explicit refresh must see
+// files changed outside the app.
 func (s *Store) Refresh() error {
 	if s.IsMemory() {
 		s.BuildTree()
 		return nil
 	}
-	entries, bodies, err := s.List()
+	entries, bodies, err := s.ListFresh()
 	if err != nil {
 		return err
 	}

@@ -92,6 +92,16 @@ func (r *Server) List() ([]session.FileEntry, map[string]string, error) {
 	return entries, nil, nil
 }
 
+// ListFresh asks the server to re-walk the project instead of reusing
+// its short-lived listing cache.
+func (r *Server) ListFresh() ([]session.FileEntry, map[string]string, error) {
+	entries, err := r.ctl().ListTreeFresh(r.root)
+	if err != nil {
+		return nil, nil, fmt.Errorf("listing the server project: %w", err)
+	}
+	return entries, nil, nil
+}
+
 func (r *Server) Read(rel string) ([]byte, error) {
 	var data []byte
 	err := at(r, rel, func(p string) error {

@@ -369,6 +369,12 @@ func (c *Client) ListTree(root string) (out []FileEntry, err error) {
 	err = c.call(Request{Op: "listTree", Path: root}, &out)
 	return
 }
+
+// ListTreeFresh is ListTree that bypasses the server's listing cache.
+func (c *Client) ListTreeFresh(root string) (out []FileEntry, err error) {
+	err = c.call(Request{Op: "listTree", Path: root, Fresh: true}, &out)
+	return
+}
 func (c *Client) ReadFile(path string) (data []byte, err error) {
 	err = c.call(Request{Op: "readFile", Path: path}, &data)
 	return

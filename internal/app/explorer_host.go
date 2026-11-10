@@ -132,12 +132,24 @@ func (a *app) reloadProject(force bool) {
 	win := a.win
 	a.invalidate()
 	if win == nil {
-		entries, bodies, err := s.List()
-		a.finishReload(s, seq, entries, bodies, err)
+		if force {
+			entries, bodies, err := s.ListFresh()
+			a.finishReload(s, seq, entries, bodies, err)
+		} else {
+			entries, bodies, err := s.List()
+			a.finishReload(s, seq, entries, bodies, err)
+		}
 		return
 	}
 	go func() {
-		entries, bodies, err := s.List()
+		var entries []session.FileEntry
+		var bodies map[string]string
+		var err error
+		if force {
+			entries, bodies, err = s.ListFresh()
+		} else {
+			entries, bodies, err = s.List()
+		}
 		onWindow(win, func() {
 			a.finishReload(s, seq, entries, bodies, err)
 		})

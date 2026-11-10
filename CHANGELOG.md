@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- The session server caches a project listing for five seconds. File
+  writes, mkdir, rename, remove, copy and exec clear it, and the app's
+  Refresh button asks for a fresh walk, so a repeated listing (opening the
+  sidebar, regaining focus) costs a round trip instead of walking the
+  whole project again.
 - Opening the file sidebar reuses the listing from the last 15 seconds,
   so it no longer starts another remote listing each time; the Refresh
   button still forces one.

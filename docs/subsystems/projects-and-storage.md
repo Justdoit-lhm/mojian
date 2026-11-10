@@ -51,8 +51,10 @@ the save path, path guards and the asset cache.
   asset's content hash; a note's text is read when it opens. `Direct` keeps the eager listing,
   `Server` the lazy one. Listing classifies by extension first: data and model files (`.mat`, `.pt`,
   `.npy`, `.h5`, …) are skipped without opening them, and an unknown extension over 4 MB is treated
-  as data rather than reading its head. This keeps a project with hundreds of thousands of data
-  files listable in milliseconds.
+  as data rather than reading its head. The session server keeps each project's listing for five
+  seconds; `WriteFile`, `Mkdir`, `Rename`, `Remove`, `Copy` and `Exec` clear it, and `ListFresh`
+  bypasses it for the app's explicit Refresh. A repeated listing then costs a round trip instead of
+  walking hundreds of thousands of files again.
 - Everything user-visible on disk that is not a project file (settings, layouts, cached assets) goes
   through `fs.WriteFileAtomic`; never write in place.
 - Direct `os.WriteFile` outside these paths is a guard failure: `internal/archtest` allows it only in
