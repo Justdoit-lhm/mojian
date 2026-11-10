@@ -136,11 +136,15 @@ func (a *app) windowClosed() {
 	}
 	a.closeWorkspaces()
 	a.workspaces = nil
+	a.win = nil
+	// A connection task belongs to the window that opened it: its result
+	// would update a closed window, so cancel it or the next window opens
+	// on a loading card that never clears.
+	a.cancelRemoteTask()
 	if a.layoutTimer != nil {
 		a.layoutTimer.Stop()
 		a.layoutTimer = nil
 	}
-	a.win = nil
 	a.focusReq = nil
 	a.paletteOpen = false
 	a.projectOpen = false

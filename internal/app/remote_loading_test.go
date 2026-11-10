@@ -49,3 +49,20 @@ func TestRemoteBusyCancelStopsTask(t *testing.T) {
 		t.Fatal("Cancel left the task's cancel function behind")
 	}
 }
+
+func TestClosingTheWindowCancelsTheRemoteTask(t *testing.T) {
+	a := newProjectApp(t)
+	seq, _, ctx := a.beginRemoteTask("Reconnecting to Buildbox…")
+	a.windowClosed()
+	if a.remoteBusy {
+		t.Fatal("the closed window left its loading card on")
+	}
+	select {
+	case <-ctx.Done():
+	default:
+		t.Fatal("the window close did not stop the connection task")
+	}
+	if a.endRemoteTask(seq) {
+		t.Fatal("the closed window's task can still publish its result")
+	}
+}

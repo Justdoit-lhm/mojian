@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Closing the window while a server connection task is still running now
+  cancels it, so reopening the window no longer shows a Reconnecting or
+  Opening card that never clears.
+
 ## 0.2.16
 
 - Mojian checks every configured host's server in the background when it
