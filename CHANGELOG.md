@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.21
 
 - A project listing that cannot read its root now reports an error
   instead of looking like an empty project. Denying macOS access to a
