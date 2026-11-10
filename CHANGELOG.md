@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.18
 
 - A finished connection no longer loses its SSH forward when the loading
   card cancels its task context. The forward now outlives the task, so a
