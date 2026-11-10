@@ -3,6 +3,7 @@
 package app
 
 import (
+	"context"
 	"os"
 	"path"
 	"strconv"
@@ -107,5 +108,31 @@ func TestRemoteServerSetupFedora(t *testing.T) {
 	}
 	if data, err := os.ReadFile(local); err != nil || string(data) != string(pic) {
 		t.Fatalf("remote asset cache: %q, %v", data, err)
+	}
+}
+
+// The loading card cancels its task context when the connection lands;
+// the live SSH forward must outlive that context.
+func TestRemoteConnectionSurvivesItsTaskContext(t *testing.T) {
+	host := os.Getenv("MOJIAN_REMOTE_TEST_HOST")
+	if host == "" {
+		t.Skip("set MOJIAN_REMOTE_TEST_HOST=user@host to run this integration test")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	rc, err := remote.DialContext(ctx, host)
+	if err != nil {
+		t.Fatalf("dialing %s: %v", host, err)
+	}
+	defer remote.Close(rc)
+	cancel()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if !rc.Healthy() {
+			t.Fatal("the SSH forward died with the task context")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if _, err := rc.Client.List(); err != nil {
+		t.Fatalf("the connection stopped working: %v", err)
 	}
 }

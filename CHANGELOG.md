@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- A finished connection no longer loses its SSH forward when the loading
+  card cancels its task context. The forward now outlives the task, so a
+  project stays connected after opening instead of dropping immediately
+  and making its terminal show Try Again or reconnect forever. Cancelling
+  a dial still in progress kills its forward.
+
 ## 0.2.17
 
 - Closing the window while a server connection task is still running now

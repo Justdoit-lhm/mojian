@@ -94,7 +94,10 @@ func (i *Install) forward(ctx context.Context, host string) (*Conn, error) {
 	args := append([]string{"-N"}, sshCommon()...)
 	args = append(args, "-o", "ExitOnForwardFailure=yes",
 		"-L", local+":"+i.sock, "--", host)
-	fwd := exec.CommandContext(ctx, "ssh", args...)
+	// The forward outlives the call: canceling the task context after
+	// Dial returns must not kill it. The wait loop below checks ctx and
+	// kills the process itself while the dial is still in progress.
+	fwd := exec.Command("ssh", args...)
 	var ferr bytes.Buffer
 	fwd.Stderr = &ferr
 	if err := fwd.Start(); err != nil {
@@ -135,6 +138,10 @@ func (i *Install) forward(ctx context.Context, host string) (*Conn, error) {
 		if errors.As(err, &pe) {
 			shutdownAt(local)
 		}
+		return fail(err)
+	}
+	if err := ctx.Err(); err != nil {
+		_ = client.Close()
 		return fail(err)
 	}
 	return &Conn{Host: host, Socket: local, forward: fwd, Client: client}, nil

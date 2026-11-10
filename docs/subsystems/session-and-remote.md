@@ -78,8 +78,10 @@ the host list and connection pool the app keeps.
   cannot block the window. The card's Cancel button cancels the task's context, which kills the
   `ssh` commands it waits on and closes the card at once; a result the cancelled task still
   produces is dropped, and a folder-picker connection made only for that attempt is released.
-  Closing the window cancels a task that is still running, since its result would update a window
-  that no longer exists; the next window starts a fresh connection instead of inheriting its card.
+  The `ssh -N` forward is deliberately not tied to that context: a connection handed to the pool
+  outlives the task, and only a dial still in progress is killed by a cancel. Closing the window
+  cancels a task that is still running, since its result would update a window that no longer
+  exists; the next window starts a fresh connection instead of inheriting its card.
 - A restored terminal on the project on screen waits for the project's connection instead of
   showing Try Again; `installRemoteConn` clears the waiting state and the pane attaches. A failed
   reconnect puts the connection error behind Try Again.
