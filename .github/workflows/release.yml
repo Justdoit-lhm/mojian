@@ -172,11 +172,11 @@ jobs:
         with:
           name: windows
           path: |
-            build/windows-amd64/*.exe
+            build/windows-amd64/mojian-setup-*.exe
             build/windows-amd64/*.tar.gz
             build/windows-amd64/update-*.json
             build/windows-amd64/install.ps1
-            build/windows-arm64/*.exe
+            build/windows-arm64/mojian-setup-*.exe
             build/windows-arm64/*.tar.gz
             build/windows-arm64/update-*.json
           if-no-files-found: error
