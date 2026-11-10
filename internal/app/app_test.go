@@ -586,3 +586,20 @@ func TestTabCloseButtonIsAlwaysVisible(t *testing.T) {
 		t.Fatalf("the only tab did not close: %d left", len(a.tabs))
 	}
 }
+
+func TestOpeningTreeReusesRecentListing(t *testing.T) {
+	a := newProjectApp(t)
+	a.refreshProject()
+	if err := os.WriteFile(filepath.Join(a.store.Dir, "later.py"), []byte("x = 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a.treeOpen = false
+	a.toggleTree()
+	if a.store.ByRelPath("later.py") != nil {
+		t.Fatal("opening the tree forced a refresh inside the throttle window")
+	}
+	a.refreshProject()
+	if a.store.ByRelPath("later.py") == nil {
+		t.Fatal("the forced refresh did not pick up the new file")
+	}
+}

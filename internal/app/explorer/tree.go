@@ -92,6 +92,10 @@ func (u *UI) toggleDir(rel string) {
 // appear in the tree. The host may do it in the background.
 func (u *UI) RefreshProject() { u.ReloadProject(true) }
 
+// refreshProjectSoon is RefreshProject that reuses a listing from the
+// last few seconds.
+func (u *UI) refreshProjectSoon() { u.ReloadProject(false) }
+
 // RefreshApplied finishes a listing that the host read and applied: the
 // tree keeps its selection, vanished editors close, and Git refreshes.
 func (u *UI) RefreshApplied() {
@@ -123,7 +127,9 @@ func (u *UI) keepTreeSelection() {
 func (u *UI) ToggleTree() {
 	u.SetTreeOpen(!u.TreeOpen())
 	if u.TreeOpen() {
-		u.RefreshProject()
+		// A focus refresh moments ago already has the files; opening the
+		// sidebar does not need to force another remote listing.
+		u.refreshProjectSoon()
 	} else {
 		u.SetTreeDraft(nil)
 		u.TreeSearch().CancelFocus()

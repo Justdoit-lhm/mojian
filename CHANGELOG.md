@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Opening the file sidebar reuses the listing from the last 15 seconds,
+  so it no longer starts another remote listing each time; the Refresh
+  button still forces one.
+
 ## 0.2.19
 
 - Refreshing a server project no longer blocks the window: the listing is

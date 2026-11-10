@@ -41,7 +41,8 @@ the save path, path guards and the asset cache.
    their buffers and dirty state, vanished files drop out, assets keep their cached copy. The read
    is split into `Store.List` (backend only, safe off the UI thread) and `Store.Apply` (mutates the
    store on the UI thread). The Explorer re-reads a server project in the background and shows a
-   spinner while it runs; a window focus reuses a listing younger than 15 seconds.
+   spinner while it runs; a window focus and opening the file sidebar reuse a listing younger than
+   15 seconds, while the Refresh button forces one.
 
 ## Contracts and failure behavior
 
