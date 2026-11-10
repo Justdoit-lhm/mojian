@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.19
 
 - Refreshing a server project no longer blocks the window: the listing is
   read in the background and applied when it arrives, with a spinner in
