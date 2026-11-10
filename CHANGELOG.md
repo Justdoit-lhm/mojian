@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.17
 
 - Closing the window while a server connection task is still running now
   cancels it, so reopening the window no longer shows a Reconnecting or
