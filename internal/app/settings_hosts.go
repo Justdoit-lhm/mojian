@@ -167,6 +167,59 @@ func (a *app) hostStateFor(host string) *hostState {
 	return st
 }
 
+// serverRowSpec is one server's status line, its primary action and the
+// stop confirmation beneath it.
+type serverRowSpec struct {
+	busy    bool
+	status  string
+	color   ui.Color
+	action  string
+	stopAsk bool
+	search  bool
+	act     func()
+	stop    func()
+	cancel  func()
+}
+
+// serverControlRow draws the status line used by the Local row and every
+// remote host row.
+func (a *app) serverControlRow(c *ui.Context, k *colors, s serverRowSpec) {
+	ui.Column(c).Gap(4).Children(func() {
+		row := ui.Row(c).Padding(0, 6, 6, 6).Gap(8).AlignItems(ui.Center)
+		if s.search {
+			if a.settings.Hits["Set Up Server"] {
+				row.Background(k.PanelSel)
+			}
+			if a.settings.Reveal == "Set Up Server" {
+				row.ScrollIntoView()
+			}
+		}
+		row.Children(func() {
+			if s.busy {
+				ui.Spinner(c).Size(12, 12).Label("Server state")
+			}
+			ui.Text(c, s.status).FontSize(11).TextColor(s.color).Grow(1).SingleLine().Ellipsis("…")
+			if !s.busy && s.action != "" {
+				if settingsButton(c, s.action, false).Clicked() {
+					s.act()
+				}
+			}
+		})
+		if s.stopAsk {
+			ui.Row(c).Padding(0, 2, 10, 8).Gap(8).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, "Stop this server? Its terminals and the processes in them end.").
+					FontSize(11.5).TextColor(k.TextMuted).Grow(1).LineHeight(1.35)
+				if settingsButton(c, "Cancel", false).Clicked() {
+					s.cancel()
+				}
+				if settingsButton(c, "Stop", true).TextColor(k.Danger).Clicked() {
+					s.stop()
+				}
+			})
+		}
+	})
+}
+
 func (a *app) hostSetupRow(c *ui.Context, k *colors, host string) {
 	st := a.hostStateFor(host)
 	busy := a.hostSetupBusy && a.hostSetupAddr == host
@@ -193,51 +246,40 @@ func (a *app) hostSetupRow(c *ui.Context, k *colors, host string) {
 		msg = "Server running"
 		col = k.TextMuted
 	}
-	ui.Column(c).Gap(4).Children(func() {
-		row := ui.Row(c).Padding(0, 6, 6, 6).Gap(8).AlignItems(ui.Center)
-		if a.settings.Hits["Set Up Server"] {
-			row.Background(k.PanelSel)
+	action := ""
+	if !busy {
+		switch {
+		case running:
+			action = "Stop Server"
+		case st.stopped:
+			action = "Start Server"
+		default:
+			action = "Set Up Server"
 		}
-		if a.settings.Reveal == "Set Up Server" {
-			row.ScrollIntoView()
-		}
-		row.Children(func() {
-			if busy {
-				ui.Spinner(c).Size(12, 12).Label("Server state")
+	}
+	a.serverControlRow(c, k, serverRowSpec{
+		busy:    busy,
+		status:  msg,
+		color:   col,
+		action:  action,
+		stopAsk: a.hostStopAddr == host,
+		search:  true,
+		act: func() {
+			if action == "Stop Server" {
+				a.hostStopAddr = host
+				a.invalidate()
+				return
 			}
-			ui.Text(c, msg).FontSize(11).TextColor(col).Grow(1).SingleLine().Ellipsis("…")
-			if !busy {
-				switch {
-				case running:
-					if settingsButton(c, "Stop Server", false).Clicked() {
-						a.hostStopAddr = host
-						a.invalidate()
-					}
-				case st.stopped:
-					if settingsButton(c, "Start Server", false).Clicked() {
-						a.setUpHost(host)
-					}
-				default:
-					if settingsButton(c, "Set Up Server", false).Clicked() {
-						a.setUpHost(host)
-					}
-				}
-			}
-		})
-		if host != "" && a.hostStopAddr == host {
-			ui.Row(c).Padding(0, 2, 10, 8).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, "Stop this server? Its terminals and the processes in them end.").
-					FontSize(11.5).TextColor(k.TextMuted).Grow(1).LineHeight(1.35)
-				if settingsButton(c, "Cancel", false).Clicked() {
-					a.hostStopAddr = ""
-					a.invalidate()
-				}
-				if settingsButton(c, "Stop", true).TextColor(k.Danger).Clicked() {
-					a.hostStopAddr = ""
-					a.stopHostServer(host)
-				}
-			})
-		}
+			a.setUpHost(host)
+		},
+		stop: func() {
+			a.hostStopAddr = ""
+			a.stopHostServer(host)
+		},
+		cancel: func() {
+			a.hostStopAddr = ""
+			a.invalidate()
+		},
 	})
 }
 
@@ -257,32 +299,28 @@ func (a *app) localServerRow(c *ui.Context, k *colors) {
 		msg = "Server stopped"
 		col = k.TextMuted
 	}
-	ui.Column(c).Gap(4).Children(func() {
-		row := ui.Row(c).Padding(0, 6, 6, 6).Gap(8).AlignItems(ui.Center)
-		row.Children(func() {
-			ui.Text(c, msg).FontSize(11).TextColor(col).Grow(1).SingleLine().Ellipsis("…")
+	action := "Start Server"
+	if running {
+		action = "Stop Server"
+	}
+	a.serverControlRow(c, k, serverRowSpec{
+		status:  msg,
+		color:   col,
+		action:  action,
+		stopAsk: a.localStopAsk,
+		act: func() {
 			if running {
-				if settingsButton(c, "Stop Server", false).Clicked() {
-					a.localStopAsk = true
-					a.invalidate()
-				}
-			} else if settingsButton(c, "Start Server", false).Clicked() {
-				a.startLocalServer()
+				a.localStopAsk = true
+				a.invalidate()
+				return
 			}
-		})
-		if a.localStopAsk {
-			ui.Row(c).Padding(0, 2, 10, 8).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, "Stop this server? Its terminals and the processes in them end.").
-					FontSize(11.5).TextColor(k.TextMuted).Grow(1).LineHeight(1.35)
-				if settingsButton(c, "Cancel", false).Clicked() {
-					a.localStopAsk = false
-					a.invalidate()
-				}
-				if settingsButton(c, "Stop", true).TextColor(k.Danger).Clicked() {
-					a.stopLocalServer()
-				}
-			})
-		}
+			a.startLocalServer()
+		},
+		stop: a.stopLocalServer,
+		cancel: func() {
+			a.localStopAsk = false
+			a.invalidate()
+		},
 	})
 }
 

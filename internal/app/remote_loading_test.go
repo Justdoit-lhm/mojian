@@ -45,7 +45,7 @@ func TestRemoteBusyCancelStopsTask(t *testing.T) {
 	if a.endRemoteTask(seq) {
 		t.Fatal("a cancelled task's result still landed")
 	}
-	if a.remoteCancel != nil {
+	if a.remoteTask.cancel != nil {
 		t.Fatal("Cancel left the task's cancel function behind")
 	}
 }

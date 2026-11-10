@@ -389,28 +389,35 @@ func (a *app) rememberRemoteProject(p remoteProject) {
 	a.hostService().SetProjects(out)
 }
 
+// remoteTask is the connection task behind the loading card: its
+// sequence guards results and its cancel stops the work.
+type remoteTask struct {
+	seq    int
+	cancel context.CancelFunc
+}
+
 // beginRemoteTask covers the window with a loading state and returns the
 // sequence that guards its result and the context that stops its work.
 func (a *app) beginRemoteTask(msg string) (int, *mygo.Window, context.Context) {
 	if a.remoteBusy {
 		return 0, nil, nil
 	}
-	a.remoteTaskSeq++
+	a.remoteTask.seq++
 	ctx, cancel := context.WithCancel(context.Background())
-	a.remoteCancel = cancel
+	a.remoteTask.cancel = cancel
 	a.remoteBusy = true
 	a.remoteBusyMsg = msg
 	a.invalidate()
 	if a.win != nil {
-		return a.remoteTaskSeq, a.win, ctx
+		return a.remoteTask.seq, a.win, ctx
 	}
-	return a.remoteTaskSeq, a.settingsWin, ctx
+	return a.remoteTask.seq, a.settingsWin, ctx
 }
 
 // setRemoteBusyMsg changes the line under the spinner, once the task may
 // still publish.
 func (a *app) setRemoteBusyMsg(seq int, msg string) {
-	if !a.remoteBusy || a.remoteTaskSeq != seq {
+	if !a.remoteBusy || a.remoteTask.seq != seq {
 		return
 	}
 	a.remoteBusyMsg = msg
@@ -420,7 +427,7 @@ func (a *app) setRemoteBusyMsg(seq int, msg string) {
 // endRemoteTask uncovers the window; a result of an older task is
 // dropped by its sequence.
 func (a *app) endRemoteTask(seq int) bool {
-	if a.remoteTaskSeq != seq {
+	if a.remoteTask.seq != seq {
 		return false
 	}
 	a.remoteBusy = false
@@ -437,7 +444,7 @@ func (a *app) cancelRemoteTask() {
 	if !a.remoteBusy {
 		return
 	}
-	a.remoteTaskSeq++
+	a.remoteTask.seq++
 	a.remoteBusy = false
 	a.remoteBusyMsg = ""
 	a.stopRemoteTask()
@@ -449,9 +456,9 @@ func (a *app) cancelRemoteTask() {
 }
 
 func (a *app) stopRemoteTask() {
-	if a.remoteCancel != nil {
-		a.remoteCancel()
-		a.remoteCancel = nil
+	if a.remoteTask.cancel != nil {
+		a.remoteTask.cancel()
+		a.remoteTask.cancel = nil
 	}
 }
 
