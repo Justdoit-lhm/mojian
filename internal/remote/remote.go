@@ -332,6 +332,29 @@ func ProvisionContext(ctx context.Context, host string, existing *Conn) (*Setup,
 	return &Setup{Uploaded: uploaded, Path: info.binPath, Protocol: hello.Version, Home: info.home, Conn: rc}, nil
 }
 
+// StopServer asks the server on host to exit. Its terminals and the
+// processes inside them end; the next Dial or Provision starts a fresh
+// server.
+func StopServer(host string) error {
+	return StopServerContext(context.Background(), host)
+}
+
+// StopServerContext is StopServer that stops waiting when ctx is done.
+func StopServerContext(ctx context.Context, host string) error {
+	if host == "" {
+		return fmt.Errorf("no server selected")
+	}
+	info, err := probe(ctx, host)
+	if err != nil {
+		return err
+	}
+	if err := info.stop(ctx, host); err != nil {
+		return err
+	}
+	info.waitStopped(ctx, host)
+	return nil
+}
+
 // stop asks the running server to exit, through its own -stop command.
 func (i *Install) stop(ctx context.Context, host string) error {
 	_, err := SSHOutputContext(ctx, host, "MOJIAN_DIR="+shellQuote(i.dir)+

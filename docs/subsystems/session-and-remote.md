@@ -49,7 +49,9 @@ the host list and connection pool the app keeps.
    through that socket; `Provision` returns the live `Conn` it ended with, and the app keeps it in
    the pool.
 4. The remote server stays alive while any of its sessions exists, so a dropped SSH connection does
-   not end the shells; `mojian-server -stop` ends it explicitly.
+   not end its shells. With no sessions and no control connection it exits after ten minutes.
+   `mojian-server -stop` ends it explicitly; Settings › Hosts offers **Start Server** and
+   **Stop Server** for each configured host, and a stop asks before ending its terminals.
 
 ## Contracts and failure behavior
 
@@ -66,7 +68,9 @@ the host list and connection pool the app keeps.
   once and without the window-wide loading card, using the home cached in `remoteHomes`. Choosing
   the server already on screen opens the picker, so another folder on it can be opened. A dead
   control channel is dropped by `remoteForHost` and dialed again on the next use.
-- Settings › Hosts is the only host source; the app does not scan `~/.ssh/config`.
+- Settings › Hosts is the only host source; the app does not scan `~/.ssh/config`. Each host's row
+  sets up, starts and stops that host's server; stopping removes the pooled connection and the
+  terminal views it owned, and starting again reconnects the loaded projects on that host.
 - Opening a remote project runs off the UI thread behind the loading card, so an unreachable host
   cannot block the window. The card's Cancel button cancels the task's context, which kills the
   `ssh` commands it waits on and closes the card at once; a result the cancelled task still

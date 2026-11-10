@@ -171,7 +171,7 @@ var Rows = []Row{
 
 	// Hosts (custom controls; rows feed search)
 	{ID: "setup-server", Cat: Hosts, Section: "SERVERS", Title: "Set Up Server",
-		Words: "server setup install upload binaries", Kind: Custom},
+		Words: "server setup install upload binaries start stop restart persistent", Kind: Custom},
 
 	// Advanced (custom controls; rows feed search)
 	{ID: "shell-command", Cat: Advanced, Section: "COMMAND LINE", Title: "Shell command",

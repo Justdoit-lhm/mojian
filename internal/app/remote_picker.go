@@ -16,6 +16,9 @@ import (
 // provisionRemoteFn is replaceable in tests; the real flow talks SSH.
 var provisionRemoteFn = remote.Provision
 
+// stopRemoteFn is replaceable in tests; the real flow talks SSH.
+var stopRemoteFn = remote.StopServer
+
 // openRemotePicker asks the selected server for its home, then shows the
 // directories to choose a project from.
 func (a *app) openRemotePicker(host string) {
@@ -479,6 +482,8 @@ func (a *app) finishHostSetup(host string, setup *remote.Setup, err error) {
 		a.hostReady = map[string]bool{}
 	}
 	a.hostReady[host] = true
+	delete(a.hostStopped, host)
+	a.hostStopAddr = ""
 	state := "already running"
 	if setup.Uploaded {
 		state = "uploaded"
@@ -487,6 +492,59 @@ func (a *app) finishHostSetup(host string, setup *remote.Setup, err error) {
 		a.hostSetupMsg = "Server ready"
 	} else {
 		a.hostSetupMsg = "Server " + state + " · " + setup.Path
+	}
+	a.invalidate()
+}
+
+// stopHostServer stops a host's server in the background, so a slow SSH
+// command does not freeze Settings.
+func (a *app) stopHostServer(host string) {
+	if host == "" || a.hostSetupBusy {
+		return
+	}
+	a.hostSetupAddr = host
+	a.hostSetupBusy = true
+	a.hostSetupMsg = "Stopping the server on " + a.hostLabel(host) + "…"
+	a.hostSetupErr = ""
+	a.invalidate()
+	if a.win == nil && a.settingsWin == nil {
+		a.finishHostStop(host, stopRemoteFn(host))
+		return
+	}
+	go func() {
+		err := stopRemoteFn(host)
+		a.onUpdateUI(func() { a.finishHostStop(host, err) })
+	}()
+}
+
+// finishHostStop lands a stop result on the thread that owns Settings and
+// drops the connection and terminal views the stopped server owned.
+func (a *app) finishHostStop(host string, err error) {
+	if a.hostSetupAddr != host {
+		a.hostSetupBusy = false
+		return
+	}
+	a.hostSetupBusy = false
+	if err != nil {
+		a.hostSetupErr = err.Error()
+		a.hostSetupMsg = ""
+		a.invalidate()
+		return
+	}
+	if a.hostStopped == nil {
+		a.hostStopped = map[string]bool{}
+	}
+	a.hostStopped[host] = true
+	delete(a.hostReady, host)
+	a.hostSetupErr = ""
+	a.hostSetupMsg = "Server stopped"
+	if rc := a.remoteConn(host); rc != nil {
+		a.detachRemoteConn(rc)
+	}
+	for _, ws := range a.workspaces {
+		if ws.serverAlias == host {
+			closeWorkspaceTerminals(ws)
+		}
 	}
 	a.invalidate()
 }

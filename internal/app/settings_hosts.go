@@ -54,7 +54,7 @@ func (a *app) settingsHostsPage(c *ui.Context, k *colors) {
 			}
 		})
 	})
-	a.settings.Note(c, k, "Set Up Server uploads mojian-server and libghostty-vt to ~/.local/share/mojian on the host, using your SSH key. No root, no service and no open port: the app reaches it through an SSH forward.")
+	a.settings.Note(c, k, "Set Up Server uploads mojian-server and libghostty-vt to ~/.local/share/mojian on the host, using your SSH key. No root, no service and no open port: the app reaches it through an SSH forward. The server keeps running when Mojian or the SSH connection disconnects and after its last terminal exits it stops by itself after ten minutes. Stop Server ends it and its terminals now; Start Server brings it back.")
 }
 
 func (a *app) addHostChecked() {
@@ -142,6 +142,7 @@ func (a *app) hostSettingsRow(c *ui.Context, k *colors, host, label, detail stri
 // hostSetupRow shows the server state and installs it on demand.
 func (a *app) hostSetupRow(c *ui.Context, k *colors, host string) {
 	busy := a.hostSetupBusy && a.hostSetupAddr == host
+	running := a.hostServerRunning(host)
 	msg := "Server not set up yet"
 	col := k.TextFaint
 	switch {
@@ -154,28 +155,66 @@ func (a *app) hostSetupRow(c *ui.Context, k *colors, host string) {
 	case a.hostSetupAddr == host && a.hostSetupMsg != "":
 		msg = a.hostSetupMsg
 		col = k.TextMuted
-	case a.hostReady[host]:
-		msg = "Server ready"
+	case running:
+		msg = "Server running"
 		col = k.TextMuted
 	}
-	row := ui.Row(c).Padding(0, 6, 6, 6).Gap(8).AlignItems(ui.Center)
-	if a.settings.Hits["Set Up Server"] {
-		row.Background(k.PanelSel)
-	}
-	if a.settings.Reveal == "Set Up Server" {
-		row.ScrollIntoView()
-	}
-	row.Children(func() {
-		if busy {
-			ui.Spinner(c).Size(12, 12).Label("Setting up server")
+	ui.Column(c).Gap(4).Children(func() {
+		row := ui.Row(c).Padding(0, 6, 6, 6).Gap(8).AlignItems(ui.Center)
+		if a.settings.Hits["Set Up Server"] {
+			row.Background(k.PanelSel)
 		}
-		ui.Text(c, msg).FontSize(11).TextColor(col).Grow(1).SingleLine().Ellipsis("…")
-		if !busy {
-			if settingsButton(c, "Set Up Server", false).Clicked() {
-				a.setUpHost(host)
+		if a.settings.Reveal == "Set Up Server" {
+			row.ScrollIntoView()
+		}
+		row.Children(func() {
+			if busy {
+				ui.Spinner(c).Size(12, 12).Label("Server state")
 			}
+			ui.Text(c, msg).FontSize(11).TextColor(col).Grow(1).SingleLine().Ellipsis("…")
+			if !busy {
+				switch {
+				case running:
+					if settingsButton(c, "Stop Server", false).Clicked() {
+						a.hostStopAddr = host
+						a.invalidate()
+					}
+				case a.hostStopped[host]:
+					if settingsButton(c, "Start Server", false).Clicked() {
+						a.setUpHost(host)
+					}
+				default:
+					if settingsButton(c, "Set Up Server", false).Clicked() {
+						a.setUpHost(host)
+					}
+				}
+			}
+		})
+		if host != "" && a.hostStopAddr == host {
+			ui.Row(c).Padding(0, 2, 10, 8).Gap(8).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, "Stop this server? Its terminals and the processes in them end.").
+					FontSize(11.5).TextColor(k.TextMuted).Grow(1).LineHeight(1.35)
+				if settingsButton(c, "Cancel", false).Clicked() {
+					a.hostStopAddr = ""
+					a.invalidate()
+				}
+				if settingsButton(c, "Stop", true).TextColor(k.Danger).Clicked() {
+					a.hostStopAddr = ""
+					a.stopHostServer(host)
+				}
+			})
 		}
 	})
+}
+
+// hostServerRunning reports whether the host's server is known to be up:
+// set up in this session, or reached by a live pooled connection.
+func (a *app) hostServerRunning(host string) bool {
+	if a.hostReady[host] {
+		return true
+	}
+	rc := a.remoteConn(host)
+	return rc != nil && rc.Healthy()
 }
 
 func (a *app) hostEditRow(c *ui.Context, k *colors, host, label string) {
@@ -278,7 +317,9 @@ func (a *app) removeHost(address string) {
 		a.hostService().RemoveHost(address)
 		a.hostService().RemoveProjects(address)
 		a.hostRemoveAddr = ""
+		a.hostStopAddr = ""
 		delete(a.hostReady, address)
+		delete(a.hostStopped, address)
 		delete(a.remoteKeep, address)
 		delete(a.remoteHomes, address)
 		if a.hostSetupAddr == address {

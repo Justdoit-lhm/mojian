@@ -138,11 +138,13 @@ type app struct {
 	hostEditName    string
 	hostEditAddress string
 	hostRemoveAddr  string
+	hostStopAddr    string
 	hostSetupAddr   string
 	hostSetupBusy   bool
 	hostSetupMsg    string
 	hostSetupErr    string
 	hostReady       map[string]bool
+	hostStopped     map[string]bool
 	shortcutKeys    map[string]string
 	commands        *commands.Registry
 

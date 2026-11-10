@@ -327,6 +327,58 @@ func TestHostSetUpButtonInstallsAndShowsStatus(t *testing.T) {
 	}
 }
 
+func TestHostStopServerButton(t *testing.T) {
+	oldProvision, oldStop := provisionRemoteFn, stopRemoteFn
+	provisionRemoteFn = func(host string, existing *remote.Conn) (*remote.Setup, error) {
+		return &remote.Setup{Path: "/home/me/.local/share/mojian/mojian-server"}, nil
+	}
+	stopped := ""
+	stopRemoteFn = func(host string) error {
+		stopped = host
+		return nil
+	}
+	t.Cleanup(func() { provisionRemoteFn, stopRemoteFn = oldProvision, oldStop })
+
+	a := newProjectApp(t)
+	a.hostService().SetHosts([]hostConfig{{Name: "Fedora", Address: "fedora"}})
+	a.settings.Cat = settingsHosts
+	tt := ui.NewTester(a.settingsWindowView, 900, 1400)
+	tt.Frame()
+	if err := tt.Click("Set Up Server"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !tt.HasText("Stop Server") {
+		t.Fatalf("a running server has no stop button: %q", tt.Texts())
+	}
+	if err := tt.Click("Stop Server"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !tt.HasText("Stop this server? Its terminals and the processes in them end.") {
+		t.Fatalf("stopping has no confirmation: %q", tt.Texts())
+	}
+	if err := tt.Click("Stop"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if stopped != "fedora" {
+		t.Fatalf("stopped host: %q", stopped)
+	}
+	if a.hostReady["fedora"] {
+		t.Fatal("the stopped server stayed ready")
+	}
+	if !a.hostStopped["fedora"] {
+		t.Fatal("the stopped server is not remembered as stopped")
+	}
+	if !tt.HasText("Start Server") {
+		t.Fatalf("a stopped server has no start button: %q", tt.Texts())
+	}
+	if !tt.HasText("Server stopped") {
+		t.Fatalf("the stop status is not on the page: %q", tt.Texts())
+	}
+}
+
 func TestSettingsTableRendersEveryGenericRow(t *testing.T) {
 	registerFonts()
 	a := newProjectApp(t)

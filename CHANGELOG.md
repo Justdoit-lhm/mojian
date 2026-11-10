@@ -6,6 +6,11 @@
   kills the SSH commands the attempt is waiting on, closes the card at
   once, and leaves the project that was on screen untouched. A result
   the cancelled attempt still produces is dropped.
+- Settings › Hosts now controls each server: **Stop Server** (after a
+  confirmation that its terminals end) and **Start Server** bring the
+  remote process down and back, and starting uploads a missing binary.
+  The server still survives Mojian and SSH disconnects while a terminal
+  is open, and exits by itself ten minutes after its last one.
 
 ## 0.2.13
 

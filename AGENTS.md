@@ -123,7 +123,7 @@ To add a fixture, register it in `cmd/harness/main.go` and add its factory in `c
 | `internal/welcome/` | Welcome and sample note text, in the platform's key spelling. |
 | `internal/app/settingsui/` | Settings window: search rail, table-driven pages, keyboard recorder, font picker. |
 | `internal/app/settings_host.go` | `settingsui.Host` adapter, Settings window wrapper and editor font helper. |
-| `internal/app/settings_hosts.go` | Hosts page; it drives host setup and stays app-side. |
+|`internal/app/settings_hosts.go`|Hosts page; it drives host setup, start and stop, and stays app-side.|
 | `internal/app/view.go` | Root view: title bar, workspace switch, pane overlays, error banner. |
 | `internal/app/splitter.go` | Draggable split dividers, share math, drag and keyboard resizing. |
 | `internal/app/pane.go` | Pane card, header, drag/drop and empty-pane picker. |
