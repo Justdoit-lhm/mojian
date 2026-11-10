@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.20
 
 - The session server caches a project listing for five seconds. File
   writes, mkdir, rename, remove, copy and exec clear it, and the app's
