@@ -23,6 +23,9 @@ func TestSSHPickerListsHosts(t *testing.T) {
 }
 
 func TestTerminalLayoutRoundTrip(t *testing.T) {
+	if !remoteSupported() {
+		t.Skip("remote terminals are unavailable")
+	}
 	dir := t.TempDir()
 	a := &app{workspace: &workspace{layoutPath: filepath.Join(dir, "layout.json"), store: &store{}}}
 	p := &pane{ID: nextID("p"), Term: &termTab{SID: "sess-1", Spec: termSpec{Host: "buildbox", Server: "buildbox"}}}

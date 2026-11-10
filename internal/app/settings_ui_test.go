@@ -299,6 +299,9 @@ func TestSettingsResetKeepsProjectsAndServers(t *testing.T) {
 }
 
 func TestHostSetUpButtonInstallsAndShowsStatus(t *testing.T) {
+	if !remoteSupported() {
+		t.Skip("remote projects are unavailable")
+	}
 	old := provisionRemoteFn
 	provisionRemoteFn = func(host string, existing *remote.Conn) (*remote.Setup, error) {
 		if host != "fedora" {
@@ -332,6 +335,9 @@ func TestHostSetUpButtonInstallsAndShowsStatus(t *testing.T) {
 }
 
 func TestHostStopServerButton(t *testing.T) {
+	if !remoteSupported() {
+		t.Skip("remote projects are unavailable")
+	}
 	oldProvision, oldStop := provisionRemoteFn, stopRemoteFn
 	provisionRemoteFn = func(host string, existing *remote.Conn) (*remote.Setup, error) {
 		return &remote.Setup{Path: "/home/me/.local/share/mojian/mojian-server"}, nil
@@ -384,6 +390,9 @@ func TestHostStopServerButton(t *testing.T) {
 }
 
 func TestRunningServerShowsStopAfterRestart(t *testing.T) {
+	if !remoteSupported() {
+		t.Skip("remote projects are unavailable")
+	}
 	old := hostServerRunningFn
 	hostServerRunningFn = func(ctx context.Context, host string) (bool, error) {
 		if host != "fedora" {
@@ -412,6 +421,9 @@ func TestRunningServerShowsStopAfterRestart(t *testing.T) {
 }
 
 func TestCheckHostsProbesEveryHostOnLaunch(t *testing.T) {
+	if !remoteSupported() {
+		t.Skip("remote projects are unavailable")
+	}
 	old := hostServerRunningFn
 	seen := map[string]bool{}
 	hostServerRunningFn = func(ctx context.Context, host string) (bool, error) {
