@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.16
 
 - Mojian checks every configured host's server in the background when it
   launches, before the saved project reconnects, so a server left running
