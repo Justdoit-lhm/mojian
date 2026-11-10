@@ -131,41 +131,16 @@ func (a *app) installLocalConn(client *session.Client) {
 // detachLocalTerminals keeps the panes but closes the views of terminals
 // this machine's server owned, so Start Server can attach fresh ones.
 func (a *app) detachLocalTerminals() {
-	each := func(w *workspace) {
-		for _, t := range w.tabs {
-			for _, p := range t.panes() {
-				if p.Term == nil || p.Term.Spec.Server != localServerID {
-					continue
-				}
-				detachTerminalView(p)
-				p.Term.Client = nil
-				p.Term.startErr = ""
-			}
-		}
-	}
-	each(a.workspace)
-	for _, w := range a.workspaces {
-		if w != a.workspace {
-			each(w)
-		}
-	}
+	a.eachTerminalOn(localServerID, func(p *pane) {
+		detachTerminalView(p)
+		p.Term.Client = nil
+		p.Term.startErr = ""
+	})
 }
 
 // resetLocalTerminals lets the panes of a stopped server try the new one.
 func (a *app) resetLocalTerminals() {
-	each := func(w *workspace) {
-		for _, t := range w.tabs {
-			for _, p := range t.panes() {
-				if p.Term != nil && p.Term.Spec.Server == localServerID {
-					p.Term.startErr = ""
-				}
-			}
-		}
-	}
-	each(a.workspace)
-	for _, w := range a.workspaces {
-		if w != a.workspace {
-			each(w)
-		}
-	}
+	a.eachTerminalOn(localServerID, func(p *pane) {
+		p.Term.startErr = ""
+	})
 }

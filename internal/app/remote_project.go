@@ -55,23 +55,18 @@ func (a *app) installRemoteConn(rc *remote.Conn) {
 	}
 }
 
-// failTerminalsOn ends the waiting state of terminals on host with the
-// connection error, so their Try Again is real rather than a spinner.
-func (a *app) failTerminalsOn(host string, err error) {
-	if err == nil {
-		return
-	}
+// eachTerminalOn calls fn for every terminal belonging to server in the
+// project on screen and in the cached projects.
+func (a *app) eachTerminalOn(server string, fn func(*pane)) {
 	each := func(ws *workspace) {
 		if ws == nil {
 			return
 		}
 		for _, t := range ws.tabs {
 			for _, p := range t.panes() {
-				if p.Term == nil || p.Term.Spec.Server != host {
-					continue
+				if p.Term != nil && p.Term.Spec.Server == server {
+					fn(p)
 				}
-				p.Term.connecting = false
-				p.Term.startErr = err.Error()
 			}
 		}
 	}
@@ -81,6 +76,18 @@ func (a *app) failTerminalsOn(host string, err error) {
 			each(ws)
 		}
 	}
+}
+
+// failTerminalsOn ends the waiting state of terminals on host with the
+// connection error, so their Try Again is real rather than a spinner.
+func (a *app) failTerminalsOn(host string, err error) {
+	if err == nil {
+		return
+	}
+	a.eachTerminalOn(host, func(p *pane) {
+		p.Term.connecting = false
+		p.Term.startErr = err.Error()
+	})
 }
 
 // detachTerminalsOn closes the views of terminals owned by host, keeping
@@ -102,22 +109,24 @@ func detachTerminalsOn(ws *workspace, host string, client *session.Client) {
 	}
 }
 
-// reconnectActiveRemoteAsync restores the control client of the project
-// on screen after a window reopen, without blocking the new window.
-func (a *app) reconnectActiveRemoteAsync() {
-	host := a.serverAlias
+// reconnectAsync dials host behind the loading card and hands the live
+// connection to ready. It reports whether a task was started.
+func (a *app) reconnectAsync(host, msg string, ready func(*remote.Conn)) bool {
 	if host == "" || a.remoteBusy {
-		return
+		return false
 	}
 	if existing := a.remoteForHost(host); existing != nil && existing.Healthy() {
 		a.keepRemote(host)
 		a.installRemoteConn(existing)
+		if ready != nil {
+			ready(existing)
+		}
 		a.invalidate()
-		return
+		return true
 	}
-	seq, win, ctx := a.beginRemoteTask("Reconnecting to " + a.hostLabel(host) + "…")
+	seq, win, ctx := a.beginRemoteTask(msg)
 	if seq == 0 {
-		return
+		return false
 	}
 	go func() {
 		rc, err := remote.DialContext(ctx, host)
@@ -135,10 +144,24 @@ func (a *app) reconnectActiveRemoteAsync() {
 			}
 			a.installRemoteConn(rc)
 			a.keepRemote(host)
+			if ready != nil {
+				ready(rc)
+			}
 			a.saveSettings()
 			a.invalidate()
 		})
 	}()
+	return true
+}
+
+// reconnectActiveRemoteAsync restores the control client of the project
+// on screen after a window reopen, without blocking the new window.
+func (a *app) reconnectActiveRemoteAsync() {
+	host := a.serverAlias
+	if host == "" {
+		return
+	}
+	a.reconnectAsync(host, "Reconnecting to "+a.hostLabel(host)+"…", nil)
 }
 
 // reconnectWorkspaceAsync reconnects before switching, behind the same
@@ -147,43 +170,14 @@ func (a *app) reconnectWorkspaceAsync(ws *workspace, host string) {
 	if ws == nil || a.remoteBusy {
 		return
 	}
-	existing := a.remoteForHost(host)
-	if existing != nil && existing.Healthy() {
-		a.keepRemote(host)
-		a.installRemoteConn(existing)
-		a.switchWorkspace(ws)
-		return
-	}
 	if err := a.saveNow(); err != nil {
 		a.dropPickerRemote()
 		a.fail(fmt.Errorf("could not save the open project: %w", err))
 		return
 	}
-	seq, win, ctx := a.beginRemoteTask("Reconnecting to " + a.hostLabel(host) + "…")
-	if seq == 0 {
-		return
-	}
-	go func() {
-		rc, err := remote.DialContext(ctx, host)
-		onWindow(win, func() {
-			if !a.endRemoteTask(seq) {
-				if rc != nil {
-					a.detachRemoteConn(rc)
-				}
-				return
-			}
-			if err != nil {
-				a.failTerminalsOn(host, err)
-				a.fail(err)
-				return
-			}
-			a.installRemoteConn(rc)
-			a.keepRemote(host)
-			a.switchWorkspace(ws)
-			a.saveSettings()
-			a.invalidate()
-		})
-	}()
+	a.reconnectAsync(host, "Reconnecting to "+a.hostLabel(host)+"…", func(*remote.Conn) {
+		a.switchWorkspace(ws)
+	})
 }
 
 // closeRemoteProject forgets one project from the remembered list. When

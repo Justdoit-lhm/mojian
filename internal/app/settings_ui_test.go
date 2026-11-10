@@ -317,7 +317,7 @@ func TestHostSetUpButtonInstallsAndShowsStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !a.hostReady["fedora"] {
+	if !a.hostStateFor("fedora").ready {
 		t.Fatal("the host was not marked ready")
 	}
 	if !strings.Contains(a.hostSetupMsg, "uploaded") {
@@ -366,10 +366,10 @@ func TestHostStopServerButton(t *testing.T) {
 	if stopped != "fedora" {
 		t.Fatalf("stopped host: %q", stopped)
 	}
-	if a.hostReady["fedora"] {
+	if a.hostStateFor("fedora").ready {
 		t.Fatal("the stopped server stayed ready")
 	}
-	if !a.hostStopped["fedora"] {
+	if !a.hostStateFor("fedora").stopped {
 		t.Fatal("the stopped server is not remembered as stopped")
 	}
 	if !tt.HasText("Start Server") {
@@ -397,8 +397,8 @@ func TestRunningServerShowsStopAfterRestart(t *testing.T) {
 	tt := ui.NewTester(a.settingsWindowView, 900, 1400)
 	tt.Frame()
 	tt.Frame()
-	if !a.hostRunning["fedora"] {
-		t.Fatalf("the probe did not find the running server: %+v", a.hostChecked)
+	if !a.hostStateFor("fedora").running {
+		t.Fatalf("the probe did not find the running server: %+v", a.hostStates)
 	}
 	if _, ok := tt.Find("Stop Server"); !ok {
 		t.Fatalf("a server left running has no stop button: %q", tt.Texts())
@@ -426,8 +426,8 @@ func TestCheckHostsProbesEveryHostOnLaunch(t *testing.T) {
 	if !seen["fedora"] || !seen["me@devbox"] {
 		t.Fatalf("launch checked %v", seen)
 	}
-	if !a.hostRunning["fedora"] || a.hostRunning["me@devbox"] {
-		t.Fatalf("launch status: %+v", a.hostRunning)
+	if !a.hostStateFor("fedora").running || a.hostStateFor("me@devbox").running {
+		t.Fatalf("launch status: %+v", a.hostStates)
 	}
 }
 

@@ -482,11 +482,9 @@ func (a *app) finishHostSetup(host string, setup *remote.Setup, err error) {
 			a.keepRemote(host)
 		}
 	}
-	if a.hostReady == nil {
-		a.hostReady = map[string]bool{}
-	}
-	a.hostReady[host] = true
-	delete(a.hostStopped, host)
+	st := a.hostStateFor(host)
+	st.ready = true
+	st.stopped = false
 	a.hostStopAddr = ""
 	a.setHostRunning(host, true)
 	state := "already running"
@@ -536,11 +534,9 @@ func (a *app) finishHostStop(host string, err error) {
 		a.invalidate()
 		return
 	}
-	if a.hostStopped == nil {
-		a.hostStopped = map[string]bool{}
-	}
-	a.hostStopped[host] = true
-	delete(a.hostReady, host)
+	st := a.hostStateFor(host)
+	st.ready = false
+	st.stopped = true
 	a.hostSetupErr = ""
 	a.hostSetupMsg = "Server stopped"
 	a.setHostRunning(host, false)

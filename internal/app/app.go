@@ -146,12 +146,7 @@ type app struct {
 	hostSetupBusy   bool
 	hostSetupMsg    string
 	hostSetupErr    string
-	hostReady       map[string]bool
-	hostStopped     map[string]bool
-	hostRunning     map[string]bool
-	hostChecked     map[string]bool
-	hostChecking    map[string]bool
-	hostCheckSeq    map[string]int
+	hostStates      map[string]*hostState
 	shortcutKeys    map[string]string
 	commands        *commands.Registry
 

@@ -143,11 +143,35 @@ func (a *app) hostSettingsRow(c *ui.Context, k *colors, host, label, detail stri
 	})
 }
 
-// hostSetupRow shows the server state and installs it on demand.
+// hostState is what the app knows about one host's server: whether this
+// session set it up or stopped it, and the last status probe.
+type hostState struct {
+	ready    bool
+	stopped  bool
+	running  bool
+	checked  bool
+	checking bool
+	checkSeq int
+}
+
+// hostStateFor returns host's state, creating it on first use.
+func (a *app) hostStateFor(host string) *hostState {
+	if a.hostStates == nil {
+		a.hostStates = map[string]*hostState{}
+	}
+	st := a.hostStates[host]
+	if st == nil {
+		st = &hostState{}
+		a.hostStates[host] = st
+	}
+	return st
+}
+
 func (a *app) hostSetupRow(c *ui.Context, k *colors, host string) {
+	st := a.hostStateFor(host)
 	busy := a.hostSetupBusy && a.hostSetupAddr == host
 	running := a.hostServerRunning(host)
-	if !busy && !running && !a.hostChecked[host] {
+	if !busy && !running && !st.checked {
 		a.later(func() { a.checkHostServer(host) })
 	}
 	msg := "Server not set up yet"
@@ -162,7 +186,7 @@ func (a *app) hostSetupRow(c *ui.Context, k *colors, host string) {
 	case a.hostSetupAddr == host && a.hostSetupMsg != "":
 		msg = a.hostSetupMsg
 		col = k.TextMuted
-	case a.hostChecking[host]:
+	case st.checking:
 		msg = "Checking server…"
 		col = k.TextMuted
 	case running:
@@ -189,7 +213,7 @@ func (a *app) hostSetupRow(c *ui.Context, k *colors, host string) {
 						a.hostStopAddr = host
 						a.invalidate()
 					}
-				case a.hostStopped[host]:
+				case st.stopped:
 					if settingsButton(c, "Start Server", false).Clicked() {
 						a.setUpHost(host)
 					}
@@ -266,7 +290,7 @@ func (a *app) localServerRow(c *ui.Context, k *colors) {
 // set up in this session, found by the status probe, or reached by a live
 // pooled connection.
 func (a *app) hostServerRunning(host string) bool {
-	if a.hostReady[host] || a.hostRunning[host] {
+	if st := a.hostStates[host]; st != nil && (st.ready || st.running) {
 		return true
 	}
 	rc := a.remoteConn(host)
@@ -288,22 +312,16 @@ func (a *app) checkHosts() {
 // socket, so a server left running from the last launch shows Stop
 // Server instead of Set Up Server.
 func (a *app) checkHostServer(host string) {
-	if host == "" || a.hostChecked[host] {
+	if host == "" {
 		return
 	}
-	if a.hostChecked == nil {
-		a.hostChecked = map[string]bool{}
+	st := a.hostStateFor(host)
+	if st.checked {
+		return
 	}
-	if a.hostChecking == nil {
-		a.hostChecking = map[string]bool{}
-	}
-	if a.hostCheckSeq == nil {
-		a.hostCheckSeq = map[string]int{}
-	}
-	a.hostChecked[host] = true
-	a.hostChecking[host] = true
-	a.hostCheckSeq[host]++
-	seq := a.hostCheckSeq[host]
+	st.checked, st.checking = true, true
+	st.checkSeq++
+	seq := st.checkSeq
 	if a.win == nil && a.settingsWin == nil {
 		running, _ := hostServerRunningFn(context.Background(), host)
 		a.finishHostCheck(host, seq, running)
@@ -318,36 +336,23 @@ func (a *app) checkHostServer(host string) {
 }
 
 func (a *app) finishHostCheck(host string, seq int, running bool) {
-	if a.hostCheckSeq[host] != seq {
+	st := a.hostStates[host]
+	if st == nil || st.checkSeq != seq {
 		return
 	}
-	if a.hostRunning == nil {
-		a.hostRunning = map[string]bool{}
-	}
-	a.hostRunning[host] = running
-	a.hostChecking[host] = false
+	st.running = running
+	st.checking = false
 	a.invalidate()
 }
 
 // setHostRunning records the result of an explicit Start or Stop and
 // cancels a status probe that was still in flight.
 func (a *app) setHostRunning(host string, running bool) {
-	if a.hostRunning == nil {
-		a.hostRunning = map[string]bool{}
-	}
-	if a.hostChecked == nil {
-		a.hostChecked = map[string]bool{}
-	}
-	if a.hostChecking == nil {
-		a.hostChecking = map[string]bool{}
-	}
-	if a.hostCheckSeq == nil {
-		a.hostCheckSeq = map[string]int{}
-	}
-	a.hostCheckSeq[host]++
-	a.hostRunning[host] = running
-	a.hostChecked[host] = true
-	a.hostChecking[host] = false
+	st := a.hostStateFor(host)
+	st.checkSeq++
+	st.running = running
+	st.checked = true
+	st.checking = false
 }
 
 func (a *app) hostEditRow(c *ui.Context, k *colors, host, label string) {
@@ -411,29 +416,9 @@ func (a *app) saveHostEdit(host string) {
 		if a.serverAlias == host {
 			a.serverAlias = addr
 		}
-		if a.hostReady[host] {
-			delete(a.hostReady, host)
-			a.hostReady[addr] = true
-		}
-		if a.hostStopped[host] {
-			delete(a.hostStopped, host)
-			a.hostStopped[addr] = true
-		}
-		if a.hostRunning[host] {
-			delete(a.hostRunning, host)
-			a.hostRunning[addr] = true
-		}
-		if a.hostChecked[host] {
-			delete(a.hostChecked, host)
-			a.hostChecked[addr] = true
-		}
-		if a.hostChecking[host] {
-			delete(a.hostChecking, host)
-			a.hostChecking[addr] = true
-		}
-		if seq := a.hostCheckSeq[host]; seq > 0 {
-			delete(a.hostCheckSeq, host)
-			a.hostCheckSeq[addr] = seq
+		if st := a.hostStates[host]; st != nil {
+			delete(a.hostStates, host)
+			a.hostStates[addr] = st
 		}
 		if a.hostStopAddr == host {
 			a.hostStopAddr = addr
@@ -474,12 +459,7 @@ func (a *app) removeHost(address string) {
 		a.hostService().RemoveProjects(address)
 		a.hostRemoveAddr = ""
 		a.hostStopAddr = ""
-		delete(a.hostReady, address)
-		delete(a.hostStopped, address)
-		delete(a.hostRunning, address)
-		delete(a.hostChecked, address)
-		delete(a.hostChecking, address)
-		delete(a.hostCheckSeq, address)
+		delete(a.hostStates, address)
 		delete(a.remoteKeep, address)
 		delete(a.remoteHomes, address)
 		if a.hostSetupAddr == address {
